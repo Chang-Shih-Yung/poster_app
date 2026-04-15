@@ -1,2 +1,2 @@
 -- Local dev seed. Run only against local supabase (supabase db reset).
--- For real dev project, seed via admin UI after signup.
+-- Actual seed data for remote lives in migrations/20260415000500_seed_posters.sql

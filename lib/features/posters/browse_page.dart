@@ -18,7 +18,6 @@ class _BrowsePageState extends ConsumerState<BrowsePage> {
   final _searchController = TextEditingController();
 
   final List<Poster> _items = [];
-  DateTime? _cursor;
   bool _loading = false;
   bool _end = false;
   String? _search;
@@ -50,18 +49,18 @@ class _BrowsePageState extends ConsumerState<BrowsePage> {
     if (_loading || _end) return;
     final seq = ++_requestSeq;
     final capturedSearch = _search;
-    final capturedCursor = _cursor;
+    final offset = _items.length;
     setState(() => _loading = true);
     try {
-      final page = await ref
-          .read(posterRepositoryProvider)
-          .listApproved(cursor: capturedCursor, search: capturedSearch);
+      final page = await ref.read(posterRepositoryProvider).listApproved(
+            filter: PosterFilter(search: capturedSearch),
+            offset: offset,
+          );
       if (!mounted || seq != _requestSeq) return;
       setState(() {
         final existing = _items.map((p) => p.id).toSet();
         _items.addAll(page.items.where((p) => !existing.contains(p.id)));
-        _cursor = page.nextCursor;
-        _end = page.nextCursor == null;
+        _end = !page.hasMore;
       });
     } catch (e) {
       if (mounted) {
@@ -77,7 +76,6 @@ class _BrowsePageState extends ConsumerState<BrowsePage> {
     _requestSeq++;
     setState(() {
       _items.clear();
-      _cursor = null;
       _end = false;
       _loading = false;
       _search = text.isEmpty ? null : text;

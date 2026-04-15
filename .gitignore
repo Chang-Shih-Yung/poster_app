@@ -11,21 +11,18 @@ build/
 .flutter-plugins-dependencies
 .metadata
 pubspec.lock
-
 # IDE
 .idea/
 .vscode/
 *.iml
-
 # Firebase (config files are NOT secrets, keep them in repo)
 .firebase/
 firebase-debug.log
 .firebaserc.local
-
 # Env
 .env
 .env.*
-
 # Supabase local state
 supabase/.temp/
 supabase/.branches/
+.gstack/
