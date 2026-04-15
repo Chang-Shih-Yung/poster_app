@@ -46,21 +46,68 @@ class _HomeShell extends StatelessWidget {
     return idx < 0 ? 0 : idx;
   }
 
+  static const _titles = {
+    '/browse': '探索',
+    '/upload': '投稿',
+    '/favorites': '收藏',
+    '/profile': '我的',
+  };
+
   @override
   Widget build(BuildContext context) {
     final location = GoRouterState.of(context).uri.toString();
     final index = _indexOf(location);
+    final theme = Theme.of(context);
+    final accent = theme.colorScheme.primary;
     return Scaffold(
-      appBar: AppBar(title: const Text('Poster App')),
+      appBar: AppBar(
+        titleSpacing: 20,
+        title: Row(
+          children: [
+            Text(
+              'POSTER',
+              style: theme.appBarTheme.titleTextStyle,
+            ),
+            Text(
+              '.',
+              style: theme.appBarTheme.titleTextStyle?.copyWith(color: accent),
+            ),
+            const Spacer(),
+            Text(
+              _titles[_tabs[index]] ?? '',
+              style: theme.textTheme.labelLarge?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+                letterSpacing: 2,
+              ),
+            ),
+          ],
+        ),
+      ),
       body: child,
       bottomNavigationBar: NavigationBar(
         selectedIndex: index,
         onDestinationSelected: (i) => context.go(_tabs[i]),
         destinations: const [
-          NavigationDestination(icon: Icon(Icons.search), label: '瀏覽'),
-          NavigationDestination(icon: Icon(Icons.upload), label: '上傳'),
-          NavigationDestination(icon: Icon(Icons.favorite), label: '收藏'),
-          NavigationDestination(icon: Icon(Icons.person), label: '我的'),
+          NavigationDestination(
+            icon: Icon(Icons.explore_outlined),
+            selectedIcon: Icon(Icons.explore),
+            label: '探索',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.add_box_outlined),
+            selectedIcon: Icon(Icons.add_box),
+            label: '投稿',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.favorite_border),
+            selectedIcon: Icon(Icons.favorite),
+            label: '收藏',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.person_outline),
+            selectedIcon: Icon(Icons.person),
+            label: '我的',
+          ),
         ],
       ),
     );

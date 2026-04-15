@@ -77,67 +77,128 @@ class _DetailBody extends ConsumerWidget {
       }
     }
 
+    final theme = Theme.of(context);
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          AspectRatio(
-            aspectRatio: 2 / 3,
-            child: CachedNetworkImage(
-              imageUrl: poster.posterUrl,
-              fit: BoxFit.contain,
-              placeholder: (_, _) =>
-                  const Center(child: CircularProgressIndicator()),
-              errorWidget: (_, _, _) => const Icon(Icons.broken_image),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: AspectRatio(
+              aspectRatio: 2 / 3,
+              child: CachedNetworkImage(
+                imageUrl: poster.posterUrl,
+                fit: BoxFit.cover,
+                placeholder: (_, _) => ColoredBox(
+                  color: theme.colorScheme.surfaceContainerHigh,
+                ),
+                errorWidget: (_, _, _) => ColoredBox(
+                  color: theme.colorScheme.surfaceContainerHigh,
+                  child: const Center(child: Icon(Icons.broken_image)),
+                ),
+              ),
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 20),
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
-                child: Text(poster.title,
-                    style: Theme.of(context).textTheme.headlineSmall),
+                child: Text(
+                  poster.title,
+                  style: theme.textTheme.displaySmall?.copyWith(height: 1.1),
+                ),
               ),
-              IconButton(
-                iconSize: 32,
-                icon: favIdsReady
-                    ? Icon(
-                        isFav ? Icons.favorite : Icons.favorite_border,
-                        color: isFav ? Colors.red : null,
-                      )
-                    : const SizedBox(
-                        width: 24,
-                        height: 24,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      ),
-                onPressed: favIdsReady ? toggleFav : null,
+              const SizedBox(width: 8),
+              _FavButton(
+                ready: favIdsReady,
+                isFav: isFav,
+                onTap: favIdsReady ? toggleFav : null,
               ),
             ],
           ),
           if (poster.year != null || poster.director != null) ...[
-            const SizedBox(height: 4),
+            const SizedBox(height: 8),
             Text(
               [
                 if (poster.year != null) '${poster.year}',
                 if (poster.director != null) poster.director!,
-              ].join(' · '),
-              style: Theme.of(context).textTheme.bodyMedium,
+              ].join('   ·   '),
+              style: theme.textTheme.titleSmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+                letterSpacing: 1.2,
+              ),
             ),
           ],
           if (poster.tags.isNotEmpty) ...[
-            const SizedBox(height: 12),
+            const SizedBox(height: 20),
             Wrap(
               spacing: 8,
+              runSpacing: 8,
               children: poster.tags
                   .map((t) => Chip(label: Text(t)))
                   .toList(growable: false),
             ),
           ],
-          const SizedBox(height: 12),
-          Text('瀏覽數：${poster.viewCount}',
-              style: Theme.of(context).textTheme.bodySmall),
+          const SizedBox(height: 24),
+          Row(
+            children: [
+              Icon(Icons.visibility_outlined,
+                  size: 16, color: theme.colorScheme.onSurfaceVariant),
+              const SizedBox(width: 6),
+              Text(
+                '${poster.viewCount} 次瀏覽',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
         ],
+      ),
+    );
+  }
+}
+
+class _FavButton extends StatelessWidget {
+  const _FavButton({
+    required this.ready,
+    required this.isFav,
+    required this.onTap,
+  });
+  final bool ready;
+  final bool isFav;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Material(
+      color: isFav
+          ? scheme.primary.withValues(alpha: 0.18)
+          : scheme.surfaceContainerHigh,
+      shape: const CircleBorder(),
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: ready
+              ? Icon(
+                  isFav ? Icons.favorite : Icons.favorite_border,
+                  color: isFav ? scheme.primary : scheme.onSurfaceVariant,
+                  size: 24,
+                )
+              : SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+        ),
       ),
     );
   }

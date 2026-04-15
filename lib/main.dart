@@ -25,6 +25,7 @@ class PosterApp extends StatelessWidget {
       title: 'Poster App',
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),
+      themeMode: ThemeMode.dark,
       routerConfig: appRouter,
       debugShowCheckedModeBanner: false,
     );

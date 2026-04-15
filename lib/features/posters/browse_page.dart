@@ -548,45 +548,77 @@ class _PosterCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: () => context.push('/poster/${poster.id}'),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Expanded(
-              child: CachedNetworkImage(
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: Material(
+        color: Theme.of(context).colorScheme.surfaceContainer,
+        child: InkWell(
+          onTap: () => context.push('/poster/${poster.id}'),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              CachedNetworkImage(
                 imageUrl: poster.thumbnailUrl ?? poster.posterUrl,
                 fit: BoxFit.cover,
-                placeholder: (_, _) =>
-                    const Center(child: CircularProgressIndicator()),
-                errorWidget: (_, _, _) => const ColoredBox(
-                  color: Colors.black12,
-                  child: Center(child: Icon(Icons.broken_image)),
+                placeholder: (_, _) => ColoredBox(
+                  color: Theme.of(context).colorScheme.surfaceContainerHigh,
+                ),
+                errorWidget: (_, _, _) => ColoredBox(
+                  color: Theme.of(context).colorScheme.surfaceContainerHigh,
+                  child: const Center(child: Icon(Icons.broken_image)),
                 ),
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    poster.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.titleSmall,
-                  ),
-                  if (poster.year != null)
-                    Text(
-                      '${poster.year}',
-                      style: Theme.of(context).textTheme.bodySmall,
+              Positioned.fill(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.transparent,
+                        Colors.transparent,
+                        Colors.black.withValues(alpha: 0.85),
+                      ],
+                      stops: const [0.0, 0.55, 1.0],
                     ),
-                ],
+                  ),
+                ),
               ),
-            ),
-          ],
+              Positioned(
+                left: 10,
+                right: 10,
+                bottom: 10,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      poster.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context)
+                          .textTheme
+                          .titleSmall
+                          ?.copyWith(color: Colors.white, height: 1.2),
+                    ),
+                    if (poster.year != null) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        '${poster.year}',
+                        style: Theme.of(context)
+                            .textTheme
+                            .labelSmall
+                            ?.copyWith(
+                              color: Colors.white.withValues(alpha: 0.7),
+                              letterSpacing: 1.5,
+                            ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
