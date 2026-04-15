@@ -25,3 +25,7 @@ firebase-debug.log
 # Env
 .env
 .env.*
+
+# Supabase local state
+supabase/.temp/
+supabase/.branches/

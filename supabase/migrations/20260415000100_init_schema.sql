@@ -4,6 +4,8 @@
 
 begin;
 
+create extension if not exists pg_trgm;
+
 create type poster_status as enum ('pending', 'approved', 'rejected');
 create type user_role as enum ('user', 'admin', 'owner');
 
@@ -51,8 +53,6 @@ create index posters_year_idx
 
 create index posters_title_trgm_idx
   on public.posters using gin (title gin_trgm_ops);
-
-create extension if not exists pg_trgm;
 
 create table public.favorites (
   user_id uuid not null references public.users(id) on delete cascade,
