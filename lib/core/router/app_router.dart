@@ -6,6 +6,7 @@ import '../../features/favorites/favorites_page.dart';
 import '../../features/posters/browse_page.dart';
 import '../../features/posters/poster_detail_page.dart';
 import '../../features/profile/profile_page.dart';
+import '../../features/submission/my_submissions_page.dart';
 import '../../features/submission/submission_page.dart';
 
 final appRouter = GoRouter(
@@ -26,6 +27,10 @@ final appRouter = GoRouter(
           PosterDetailPage(posterId: state.pathParameters['id']!),
     ),
     GoRoute(path: '/admin', builder: (_, _) => const AdminReviewPage()),
+    GoRoute(
+      path: '/me/submissions',
+      builder: (_, _) => const MySubmissionsPage(),
+    ),
   ],
 );
 
