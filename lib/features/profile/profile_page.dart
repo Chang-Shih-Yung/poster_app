@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../data/models/app_user.dart';
 import '../../data/providers/supabase_providers.dart';
 import '../../data/repositories/auth_repository.dart';
 
@@ -48,7 +50,7 @@ class _SignedInView extends ConsumerWidget {
   const _SignedInView({required this.email, required this.profile});
 
   final String email;
-  final dynamic profile;
+  final AppUser? profile;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -62,8 +64,16 @@ class _SignedInView extends ConsumerWidget {
           Text('Email: $email'),
           if (profile != null) ...[
             const SizedBox(height: 4),
-            Text('名稱: ${profile.displayName}'),
-            Text('角色: ${profile.role}'),
+            Text('名稱: ${profile!.displayName}'),
+            Text('角色: ${profile!.role}'),
+          ],
+          if (profile?.isAdmin == true) ...[
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              icon: const Icon(Icons.admin_panel_settings),
+              label: const Text('Admin 審核'),
+              onPressed: () => context.push('/admin'),
+            ),
           ],
           const Spacer(),
           OutlinedButton.icon(
