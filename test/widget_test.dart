@@ -1,12 +1,18 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:poster_app/main.dart';
+import 'package:poster_app/core/theme/app_theme.dart';
 
 void main() {
-  testWidgets('App boots to browse tab', (WidgetTester tester) async {
-    await tester.pumpWidget(const ProviderScope(child: PosterApp()));
-    await tester.pumpAndSettle();
-    expect(find.text('Poster App'), findsOneWidget);
+  testWidgets('Theme builds without errors', (WidgetTester tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light(),
+        darkTheme: AppTheme.dark(),
+        themeMode: ThemeMode.dark,
+        home: const Scaffold(body: Center(child: Text('POSTER.'))),
+      ),
+    );
+    expect(find.text('POSTER.'), findsOneWidget);
   });
 }

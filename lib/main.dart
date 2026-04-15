@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:sentry_flutter/sentry_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/env.dart';
@@ -13,7 +14,22 @@ Future<void> main() async {
     url: Env.supabaseUrl,
     anonKey: Env.supabaseAnonKey,
   );
-  runApp(const ProviderScope(child: PosterApp()));
+
+  if (Env.sentryDsn.isEmpty) {
+    runApp(const ProviderScope(child: PosterApp()));
+    return;
+  }
+
+  await SentryFlutter.init(
+    (options) {
+      options.dsn = Env.sentryDsn;
+      options.environment = Env.appEnv;
+      options.tracesSampleRate = Env.appEnv == 'prod' ? 0.2 : 1.0;
+      options.sendDefaultPii = false;
+    },
+    appRunner: () =>
+        runApp(const ProviderScope(child: PosterApp())),
+  );
 }
 
 class PosterApp extends StatelessWidget {
