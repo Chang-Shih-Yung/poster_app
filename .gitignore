@@ -1,0 +1,30 @@
+# macOS
+.DS_Store
+
+# Flutter / Dart
+.dart_tool/
+.packages
+.pub-cache/
+.pub/
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+.metadata
+pubspec.lock
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# Firebase
+.firebase/
+firebase-debug.log
+.firebaserc.local
+google-services.json
+GoogleService-Info.plist
+firebase_options.dart
+
+# Env
+.env
+.env.*

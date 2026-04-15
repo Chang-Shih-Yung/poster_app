@@ -78,15 +78,24 @@ lib/
 └── main.dart
 ```
 
-### Firestore 資料模型
-- `posters/{posterId}` — 已上架公開可讀
-  - title, year, director, tags[], posterUrl, thumbnailUrl, uploaderId, viewCount, createdAt
-- `submissions/{submissionId}` — 待審（本人 + admin 可讀）
-  - posterData, status (pending/approved/rejected), submitterId, reviewerId, reviewNote
-- `users/{userId}` — displayName, role (user/admin/owner), favorites[], submissionCount
+### Firestore 資料模型（v2 — 單一 collection 版）
+- `posters/{posterId}` — 所有海報資料（含待審）
+  - title, year, director, tags[], posterUrl, thumbnailUrl, uploaderId
+  - **status**: `pending` | `approved` | `rejected`
+  - reviewerId, reviewNote, reviewedAt
+  - createdAt, approvedAt
+  - viewCount（實際寫入 `posters/{id}/counters/shards/{0..9}` 分片子集合，避免單文件 1 write/sec 上限）
+- `users/{userId}` — displayName, role (user/admin/owner), submissionCount
 - `favorites/{userId}/items/{posterId}` — subcollection
 
-**分流策略**：submissions → Cloud Function 審核通過 → 複製到 posters + 刪除 submission
+**審核策略**：使用者建立 `posters/{id}` 時 status=pending，admin 直接 update status=approved，不搬資料。
+- 優點：無 race condition、無跨 collection 一致性問題、URL 穩定、admin 查詢簡單（status filter）
+- Security Rules：`allow read: if resource.data.status == 'approved' || request.auth.uid == resource.data.uploaderId || isAdmin()`
+- 公開查詢一律帶 `where('status', '==', 'approved')` + 複合索引
+
+### viewCount 分片計數器（Day 1）
+每張海報 `posters/{id}/counters/shards/{0..9}` 10 片，client 隨機選一片 +1。
+讀取時 sum 10 片（可快取）。避免單文件寫入熱點與計費爆炸。
 
 ### 權限模型
 - role 放 Firebase Custom Claims（JWT）
@@ -104,8 +113,19 @@ lib/
 - 未來接 Cloud Vision SafeSearch 過濾 NSFW
 
 ### 搜尋策略
-- 初期：Firestore 直接查
-- 資料量大後：切 Algolia 或 Typesense（repository 層抽象化）
+- **MVP**：Firestore 直接查（tags array-contains、title prefix、year/director equality）
+- **v2 遷移觸發條件**（任一達到即切 Algolia / Typesense）：
+  - posters 總數 > 5,000
+  - 使用者要求 fuzzy / 錯字容錯 / 全文搜尋
+  - 搜尋頁 p95 latency > 800ms
+- Repository 層抽象化（`PosterSearchRepository` interface），切換時只動 data layer
+
+### CI/CD 與環境（Day 0）
+- **三環境**：`banner-app-dev` / `banner-app-staging` / `banner-app-prod`（各自獨立 Firebase Project）
+- `flavor` 切換（Flutter `--dart-define=ENV=dev|staging|prod`）
+- GitHub Actions：push → test → deploy rules/functions 到 dev，PR 合併 main → staging，tag → prod
+- Firestore / Storage Rules 進 repo，每次 deploy 先跑 `@firebase/rules-unit-testing`
+- Firebase Emulator Suite 跑本地整合測試
 
 ## 已知風險
 1. 海報版權（使用者上傳可能盜版）
@@ -125,3 +145,219 @@ lib/
 8. 開發順序是否合理、有沒有被忽略的依賴
 9. 邊界情境：離線上傳、審核中海報被刪、admin 誤刪、圖片 CDN 失效
 10. 測試策略（Security Rules 測試、整合測試、E2E）
+
+---
+
+# 技術審查報告
+
+**審查日期**：2026-04-14
+**審查範圍**：MVP v1 架構、資安、資料模型、流程
+**審查模式**：FULL_REVIEW
+**結果**：15 個 issue（4 P1 / 4 P2 / 7 P3）+ 4 個 critical failure mode gaps
+
+## Step 0 — 範圍判斷
+
+**接受 MVP 範圍**。7 項功能（登入、瀏覽、搜尋、詳情、上傳、審核、收藏）合理。
+但有 3 個基礎建設必須 Day 0 補上：
+1. 測試策略（Security Rules 測試、Cloud Function 單測、E2E）
+2. CI/CD + 三環境分離（dev / staging / prod）
+3. 可觀測性（Crashlytics、Functions logs、預算警報）
+
+## 架構決策（已確認）
+
+| # | 決策 | 結果 |
+|---|------|------|
+| 1 | submissions + posters 雙 collection vs 單 collection + status | **單 collection + status**（避免 race condition） |
+| 2 | viewCount 計數 | **Day 1 shard counter**（10 片分片） |
+| 8 | 搜尋方案 | **Firestore MVP，v2 依觸發條件切 Algolia/Typesense** |
+| 4 | CI/CD + 多環境 | **Day 0 三專案分離 + GitHub Actions** |
+
+## 架構 Issues（剩餘 11 項 — TODO）
+
+### P1（上線前必處理）
+
+**#3 Storage 檔案與 Firestore 文件的 cascade delete**
+- 問題：海報文件刪除時，Storage 的原圖 + 縮圖不會自動刪，產生孤兒檔案 + 隱私外洩風險（GDPR 刪除權）。
+- 修：Cloud Function `onDelete` trigger，刪 poster 時同時刪 `posters/{id}/*` 全部 Storage 路徑。DMCA 下架走同一條。
+
+**#5 Custom Claims 不即時刷新**
+- 問題：admin 權限變動後，user JWT 最長 1 小時後才更新，期間權限不一致。
+- 修：admin 改權限時寫 `users/{uid}.claimsUpdatedAt`，client 偵測到就 `getIdToken(true)` 強制刷新。
+
+**#7 審計日誌 + soft delete**
+- 問題：admin 誤刪海報無法復原，也查不到誰刪了什麼。
+- 修：`audit_logs/{id}`（action, actorId, targetId, before, after, ts）；posters 加 `deletedAt`，查詢過濾。硬刪只由排程任務處理（30 天後）。
+
+**#12 Crashlytics + 基本可觀測性**
+- 問題：線上壞了不知道。
+- 修：Flutter Crashlytics + Cloud Functions logs 接 Cloud Logging + 預算警報（$5 / $20 / $50）+ App Check 異常警報。
+
+### P2（MVP 第 2 週內補）
+
+**#6 favorites 列表 N+1 查詢**
+- 問題：`favorites/{uid}/items` 只存 posterId，渲染列表要 N 次 `posters/{id}` 讀取。
+- 修：收藏時把 posterId + title + thumbnailUrl snapshot 存進 items。海報更新時 Cloud Function fan-out 更新收藏快照（或容忍 stale）。
+
+**#11 統一錯誤處理策略**
+- 問題：Firebase 錯誤（網路、權限、quota）散落各頁，UX 不一致。
+- 修：`AppException` 分類（network / auth / permission / notFound / quota / unknown）+ 全域 `ErrorBoundary` widget + Riverpod `AsyncValue.guard`。
+
+**#14 Firestore 複合索引規劃**
+- 問題：`where status == approved orderBy createdAt desc` 這種查詢要複合索引，沒建會 runtime error。
+- 修：`firestore.indexes.json` 進 repo，Day 1 先建：(status, createdAt)、(status, tags, createdAt)、(uploaderId, createdAt)、(status, year, createdAt)。
+
+**#15 cursor 分頁（非 offset）**
+- 問題：offset pagination 會隨 skip 數線性增加讀取費用。
+- 修：用 `startAfterDocument(lastDoc)`，每頁 20 筆，client 記 lastDoc。
+
+### P3（可延到 v2）
+
+**#9 Flutter Web bundle 過大**
+- Web 首次載入 2-3MB 很常見。修：`--web-renderer canvaskit` 評估、route-level deferred imports、CDN fingerprint。
+
+**#10 providers 放在 feature folder 還是 data/**
+- 建議：repository provider 放 `data/providers/`，UI state provider 放各 feature 內。避免循環依賴。
+
+**#13 改用 Firebase Extension: Resize Images**
+- 別自己寫縮圖 Cloud Function，官方 extension 已處理 format / size variants / EXIF 剝除。省工又穩。
+
+## Code Quality Issues
+
+1. **freezed + json_serializable 必須綁 CI**：PR 沒跑 `build_runner` 會讓 model 漂移。加 `dart run build_runner build --delete-conflicting-outputs` 進 CI check。
+2. **Riverpod provider 命名一致性**：`xxxProvider` vs `xxxNotifierProvider` 要有規範，否則 code review 會吵。
+3. **Secrets 管理**：Firebase config 不是 secret 可進 repo，但 API keys（Algolia 未來、第三方）必須走 GitHub Secrets + Firebase Functions config。
+
+## Test Coverage Gap
+
+**目標 27 條關鍵路徑，目前 0**。以下是 8 個 Security Rules critical paths（必須測）：
+
+| # | 路徑 | Rule 目標 |
+|---|------|----------|
+| 1 | 匿名讀 approved poster | ✅ 允許 |
+| 2 | 匿名讀 pending poster | ❌ 拒絕 |
+| 3 | uploader 讀自己的 pending | ✅ 允許 |
+| 4 | admin 讀任意 pending | ✅ 允許 |
+| 5 | 一般 user 改他人 poster | ❌ 拒絕 |
+| 6 | user 自己的 submission status=pending → approved | ❌ 拒絕（只能 admin / Function） |
+| 7 | user 讀他人 favorites | ❌ 拒絕 |
+| 8 | user 偽造 role=admin 寫 users/{self} | ❌ 拒絕 |
+
+工具：`@firebase/rules-unit-testing` + Jest，跑 in-memory emulator，每次 PR 必跑。
+
+## Performance Issues
+
+1. **Firestore 熱文件**：viewCount 已用 shard 解決。注意 `users/{uid}.submissionCount` 同樣要 shard 或用 Function 批次更新。
+2. **圖片 CDN**：Firebase Storage 直連沒 CDN，高流量頁用 Cloud CDN 或接 Cloudflare R2 + Image Resizing。
+3. **冷啟動**：Cloud Functions 冷啟 1-3 秒。審核 Function 用 `minInstances: 1`（月 ~$5 換 UX）。
+
+## Critical Failure Mode Gaps（必補）
+
+1. **離線上傳**：image_picker 選完檔斷網，Flutter 預設會 lost。用 `firebase_storage` 的 `resumable upload` + local queue。
+2. **審核中海報被使用者刪**：Cloud Function 要檢查文件存在，gracefully 結束，不丟 exception 卡重試迴圈。
+3. **admin 誤刪**：見 #7 soft delete + audit log。
+4. **圖片 CDN 失效**：`cached_network_image` 加 placeholder + retry，並設 `errorWidget` 顯示佔位圖而非崩潰。
+
+## Worktree 並行開發建議（5 Lane）
+
+```
+Lane A (基礎建設, Day 0-3)
+  ├─ Firebase projects × 3 + GitHub Actions
+  ├─ Security Rules 骨架 + 測試框架
+  └─ App Check + 預算警報
+
+Lane B (Auth + Model, Day 3-7)  [depends A]
+  ├─ Google Sign-In + Custom Claims
+  ├─ freezed models + repositories
+  └─ go_router + Riverpod scaffold
+
+Lane C (瀏覽/搜尋/詳情, Day 7-14)  [depends B]     Lane D (上傳 + 審核, Day 7-14)  [depends B]
+  ├─ 搜尋頁 + 列表分頁                              ├─ 上傳 form + image_cropper
+  ├─ 詳情頁 + viewCount shard                        ├─ submission 建立（status=pending）
+  └─ 收藏 + favorites snapshot                       └─ admin 審核 UI + Cloud Function
+
+Lane E (上線準備, Day 14-18)  [depends C, D]
+  ├─ Crashlytics + observability
+  ├─ E2E 測試
+  ├─ 隱私政策 + 刪除帳號 + DMCA 表單
+  └─ Store submission
+```
+
+## NOT in scope（明確排除）
+
+1. 排行榜 / 熱門排序（v2）
+2. 使用者互動（留言、按讚）（v3）
+3. 收藏清單分類（v2）
+4. 海報版本整理（v3）
+5. 進階篩選 UI（v2）
+6. 社群 feed（v3）
+7. 付費 / 贊助（未定）
+8. 多語系（目前只中文）
+9. 推播通知（v2，審核結果通知可進 MVP 但非必要）
+
+## 已存在可直接用的輪子
+
+- **firebase_ui_auth**：Google Sign-In UI 不用自己刻
+- **firebase-extensions: resize-images**：縮圖 pipeline 官方版
+- **firebase-extensions: delete-user-data**：GDPR 刪除帳號時一鍵刪所有 user 資料
+- **cached_network_image**：圖片快取 + placeholder
+- **image_cropper**：裁切 UI
+
+## 結語
+
+這個架構基本面 OK，Firebase + Flutter 對這個需求是合理選型。主要風險不在技術選型，在於：
+- **Security Rules 沒測就是定時炸彈**（P0 優先）
+- **成本攻擊**（App Check + 預算警報必開）
+- **版權與 GDPR**（soft delete + audit + DMCA 流程必備）
+
+先補 Day 0 基礎建設（三環境 + 測試 + CI/CD），再進 feature development。不要 YOLO 寫 rules 直接上線。
+
+
+---
+
+## 附錄：三個炸彈與 Day 0 的白話解釋
+
+### 炸彈 1：Security Rules 沒測
+
+Firebase 的權限不是寫在後端 code，是寫在 `firestore.rules` 檔案裡。例如：
+
+```
+match /posters/{id} {
+  allow read: if resource.data.status == 'approved';
+  allow write: if request.auth.token.role == 'admin';
+}
+```
+
+這是一段邏輯，會寫錯。寫錯的後果不是 500 error，而是「全世界都能讀 users collection」或「任何人能把自己改成 admin」。Rules 錯誤通常不會讓 app 壞掉，app 跑得很順，只是資料外洩，你自己測不出來。
+
+**解法**：用 `@firebase/rules-unit-testing` 寫測試，模擬「匿名使用者試圖讀 pending 海報 → 必須被拒絕」這種情境。每次改 rules 都跑一次。
+
+不測 = 用生產環境的真實使用者幫你做 QA。
+
+### 炸彈 2：成本攻擊
+
+Firebase 按讀寫次數計費。有人寫腳本對你的 API 狂打，一晚上可以刷出幾千美金帳單。這不是假設，是 Firebase 社群經典事故。
+
+**防禦**：
+- **App Check**：只有你家 app（經過 Google attestation）能打 API，腳本打不進來
+- **預算警報**：帳單超過 $5 / $20 / $50 先通知你，不要睡醒發現欠 Google $3000
+
+### 炸彈 3：GDPR / 版權流程
+
+- **GDPR（個資法）**：使用者有權要求「刪除我所有資料」。你要真的能一鍵刪乾淨，包括 Firestore + Storage + 收藏快照 + log。沒做好被檢舉會罰錢。
+- **版權**：使用者上傳盜版海報，版權方寄 DMCA 下架通知，你必須在時限內移除。沒做 = 平台連帶責任。
+
+這三件事都不是「功能」，demo 看不出來，容易被跳過。但上線後出事，每一件都是公司等級的麻煩。
+
+### 「Day 0」是什麼
+
+**Day 0** = 寫第一行 feature code 之前。
+**YOLO** = 先衝 feature，資安測試之後再補。
+
+不要先把上傳、搜尋、收藏做好，最後才想到要寫 rules 測試和 CI/CD。那時候：
+- Rules 已經長很複雜，補測試超痛
+- 沒有 staging 環境，bug 直接進 prod
+- App Check 還沒開，上線第一週就可能被刷爆
+
+**正確順序**：先花 2-3 天把地基做好（三環境、rules 測試框架、CI/CD、App Check、預算警報），再開始寫功能。後面每個 feature 都自動繼承這些防護。
+
+白話：**蓋房子先打地基，不要先搬沙發進客廳。**
