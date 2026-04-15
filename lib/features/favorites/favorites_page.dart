@@ -46,12 +46,14 @@ class FavoritesPage extends ConsumerWidget {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       Expanded(
-                        child: CachedNetworkImage(
-                          imageUrl: f.thumbnailUrl ?? '',
-                          fit: BoxFit.cover,
-                          errorWidget: (_, _, _) =>
-                              const ColoredBox(color: Colors.black12),
-                        ),
+                        child: f.thumbnailUrl == null
+                            ? const ColoredBox(color: Colors.black12)
+                            : CachedNetworkImage(
+                                imageUrl: f.thumbnailUrl!,
+                                fit: BoxFit.cover,
+                                errorWidget: (_, _, _) =>
+                                    const ColoredBox(color: Colors.black12),
+                              ),
                       ),
                       Padding(
                         padding: const EdgeInsets.all(8),

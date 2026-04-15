@@ -49,10 +49,9 @@ class _DetailBody extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(currentUserProvider);
     final favIdsAsync = ref.watch(favoriteIdsProvider);
-    final isFav = favIdsAsync.maybeWhen(
-      data: (ids) => ids.contains(poster.id),
-      orElse: () => false,
-    );
+    final favIds = favIdsAsync.asData?.value;
+    final isFav = favIds?.contains(poster.id) ?? false;
+    final favIdsReady = favIds != null;
 
     Future<void> toggleFav() async {
       if (user == null) {
@@ -102,11 +101,17 @@ class _DetailBody extends ConsumerWidget {
               ),
               IconButton(
                 iconSize: 32,
-                icon: Icon(
-                  isFav ? Icons.favorite : Icons.favorite_border,
-                  color: isFav ? Colors.red : null,
-                ),
-                onPressed: toggleFav,
+                icon: favIdsReady
+                    ? Icon(
+                        isFav ? Icons.favorite : Icons.favorite_border,
+                        color: isFav ? Colors.red : null,
+                      )
+                    : const SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                onPressed: favIdsReady ? toggleFav : null,
               ),
             ],
           ),
