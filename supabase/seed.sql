@@ -1,0 +1,2 @@
+-- Local dev seed. Run only against local supabase (supabase db reset).
+-- For real dev project, seed via admin UI after signup.

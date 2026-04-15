@@ -50,12 +50,13 @@
 
 ### 技術棧
 - **前端**：Flutter（iOS / Android / Web 三端）
-- **後端**：Firebase BaaS
-  - Auth：Google 登入 + Custom Claims（role）
-  - Firestore：海報 / 使用者 / 投稿資料
-  - Storage：海報圖片
-  - Cloud Functions：審核流程、權限檢查、縮圖產生
-  - Hosting：admin 後台（可選）
+- **後端**：Supabase（Spark/Free plan，不綁卡）
+  - Auth：Google OAuth，role 放 `public.users.role`（user/admin/owner）
+  - Postgres：海報 / 使用者 / 投稿 / 收藏 / audit_logs
+  - Storage：海報圖片（`posters` bucket，10MB/張）
+  - RLS：Row Level Security 取代 Firestore rules
+  - RPC：`SECURITY DEFINER` 函式處理審核、計數等原子操作
+  - Edge Functions：避開，改用 RPC（對齊 Nexus_Finance 慣例）
 
 ### 套件選型
 - 狀態管理：Riverpod
@@ -78,54 +79,57 @@ lib/
 └── main.dart
 ```
 
-### Firestore 資料模型（v2 — 單一 collection 版）
-- `posters/{posterId}` — 所有海報資料（含待審）
-  - title, year, director, tags[], posterUrl, thumbnailUrl, uploaderId
-  - **status**: `pending` | `approved` | `rejected`
-  - reviewerId, reviewNote, reviewedAt
-  - createdAt, approvedAt
-  - viewCount（實際寫入 `posters/{id}/counters/shards/{0..9}` 分片子集合，避免單文件 1 write/sec 上限）
-- `users/{userId}` — displayName, role (user/admin/owner), submissionCount
-- `favorites/{userId}/items/{posterId}` — subcollection
+### Postgres 資料模型（單表 + status 版）
+- `public.posters` — 所有海報（含待審）
+  - id uuid, title, year, director, tags text[], poster_url, thumbnail_url, uploader_id
+  - **status**: enum `poster_status` = pending | approved | rejected
+  - reviewer_id, review_note, reviewed_at
+  - view_count bigint（Postgres `UPDATE ... SET view_count = view_count + 1` 無熱點問題，不需 shard）
+  - created_at, approved_at, deleted_at（soft delete）
+- `public.users` — id (FK auth.users), display_name, avatar_url, role (user/admin/owner), submission_count
+- `public.favorites` — (user_id, poster_id) 複合主鍵，存 poster_title + thumbnail snapshot
+- `public.audit_logs` — actor_id, action, target_table, target_id, before/after jsonb
 
-**審核策略**：使用者建立 `posters/{id}` 時 status=pending，admin 直接 update status=approved，不搬資料。
-- 優點：無 race condition、無跨 collection 一致性問題、URL 穩定、admin 查詢簡單（status filter）
-- Security Rules：`allow read: if resource.data.status == 'approved' || request.auth.uid == resource.data.uploaderId || isAdmin()`
-- 公開查詢一律帶 `where('status', '==', 'approved')` + 複合索引
+**審核策略**：單表 + status 欄位，RLS 保證只有 admin 能把 pending → approved。
+- RLS 範例：`using (status = 'approved' or uploader_id = auth.uid() or is_admin())`
+- 公開查詢：`.from('posters').select().eq('status','approved').is_('deleted_at', null)` + 索引 `(status, created_at desc) where deleted_at is null`
 
-### viewCount 分片計數器（Day 1）
-每張海報 `posters/{id}/counters/shards/{0..9}` 10 片，client 隨機選一片 +1。
-讀取時 sum 10 片（可快取）。避免單文件寫入熱點與計費爆炸。
+### view_count（Postgres 版）
+Postgres MVCC 天生支援高併發 `UPDATE`，海報頁載入時一行 RPC：
+`update posters set view_count = view_count + 1 where id = $1`。
+不需要 Firestore 的分片計數器。真的變熱點（單張海報 >100 writes/sec）再引入計數分表。
 
 ### 權限模型
-- role 放 Firebase Custom Claims（JWT）
-- `posters`：所有人可讀，只有 admin / Function 可寫
-- `submissions`：只有本人與 admin 可讀，本人可建立，admin 可更新狀態
+- role 放 `public.users.role`，`is_admin()` helper function（SECURITY DEFINER）
+- RLS 直接對 `auth.uid()` 比對
+- 審核、刪除、改 role 等敏感操作走 RPC（SECURITY DEFINER）
 
 ### 資安措施（已規劃）
-- Security Rules 嚴格檢查
-- Storage 檔案大小 / 類型限制
-- App Check（防腳本刷爆帳單）
-- Firebase 預算警報
-- Cloud Function 自動產縮圖
-- 隱私政策 + 刪除帳號功能
+- RLS policies 嚴格檢查（每張表都開 RLS）
+- Storage bucket policy：檔案大小 10MB、allowed MIME 白名單、upload 路徑綁 uid
+- Supabase rate limiting + Captcha（防腳本刷爆）
+- Free plan 本身有額度上限（5GB storage / 500MB DB），不會被刷出天價帳單
+- 縮圖：Supabase Storage 內建 image transform（query param：`?width=400`）
+- 隱私政策 + 刪除帳號功能（`delete from auth.users` 會 cascade 清乾淨）
 - DMCA 檢舉機制
-- 未來接 Cloud Vision SafeSearch 過濾 NSFW
+- 未來 NSFW 過濾可走 Edge Function + 第三方 API
 
 ### 搜尋策略
-- **MVP**：Firestore 直接查（tags array-contains、title prefix、year/director equality）
-- **v2 遷移觸發條件**（任一達到即切 Algolia / Typesense）：
-  - posters 總數 > 5,000
-  - 使用者要求 fuzzy / 錯字容錯 / 全文搜尋
-  - 搜尋頁 p95 latency > 800ms
+- **MVP**：Postgres 直接查
+  - tags：`where tags && array['諾蘭']`（GIN index 已建）
+  - 標題模糊：`where title ilike '%XXX%'` + `pg_trgm` GIN index
+  - 年份/導演：equality
+- **v2 升級**（資料量大再處理）：
+  - Postgres Full Text Search（`to_tsvector`）或
+  - 切 Typesense / Meilisearch（self-host 免費）
 - Repository 層抽象化（`PosterSearchRepository` interface），切換時只動 data layer
 
 ### CI/CD 與環境（Day 0）
-- **三環境**：`banner-app-dev` / `banner-app-staging` / `banner-app-prod`（各自獨立 Firebase Project）
-- `flavor` 切換（Flutter `--dart-define=ENV=dev|staging|prod`）
-- GitHub Actions：push → test → deploy rules/functions 到 dev，PR 合併 main → staging，tag → prod
-- Firestore / Storage Rules 進 repo，每次 deploy 先跑 `@firebase/rules-unit-testing`
-- Firebase Emulator Suite 跑本地整合測試
+- **三環境**：`poster-app-dev` / `poster-app-staging` / `poster-app-prod`（各自獨立 Supabase Project，Free plan 每個帳號上限 2，另 2 個晚點再開）
+- `--dart-define` 切 `SUPABASE_URL` / `SUPABASE_ANON_KEY`
+- GitHub Actions：push → flutter test + `supabase db push` 到 dev，PR 合併 main → staging，tag → prod
+- Migration 進 repo（`supabase/migrations/`），用 `supabase db push` 部署
+- 本地測試：`supabase start` 跑本地 Docker stack（Postgres + Auth + Storage + Studio）
 
 ## 已知風險
 1. 海報版權（使用者上傳可能盜版）

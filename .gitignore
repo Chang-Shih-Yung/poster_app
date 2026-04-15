@@ -17,13 +17,10 @@ pubspec.lock
 .vscode/
 *.iml
 
-# Firebase
+# Firebase (config files are NOT secrets, keep them in repo)
 .firebase/
 firebase-debug.log
 .firebaserc.local
-google-services.json
-GoogleService-Info.plist
-firebase_options.dart
 
 # Env
 .env
