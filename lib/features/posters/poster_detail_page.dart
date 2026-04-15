@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/models/poster.dart';
+import '../../data/providers/supabase_providers.dart';
+import '../../data/repositories/favorite_repository.dart';
 import '../../data/repositories/poster_repository.dart';
 
 final _posterByIdProvider =
@@ -10,12 +12,11 @@ final _posterByIdProvider =
   final repo = ref.watch(posterRepositoryProvider);
   final p = await repo.getById(id);
   if (p != null && p.status == 'approved') {
-    unawaited(repo.incrementViewCount(id));
+    // Fire and forget — view count is non-critical.
+    repo.incrementViewCount(id);
   }
   return p;
 });
-
-void unawaited(Future<void> f) {}
 
 class PosterDetailPage extends ConsumerWidget {
   const PosterDetailPage({super.key, required this.posterId});
@@ -40,12 +41,43 @@ class PosterDetailPage extends ConsumerWidget {
   }
 }
 
-class _DetailBody extends StatelessWidget {
+class _DetailBody extends ConsumerWidget {
   const _DetailBody({required this.poster});
   final Poster poster;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final user = ref.watch(currentUserProvider);
+    final favIdsAsync = ref.watch(favoriteIdsProvider);
+    final isFav = favIdsAsync.maybeWhen(
+      data: (ids) => ids.contains(poster.id),
+      orElse: () => false,
+    );
+
+    Future<void> toggleFav() async {
+      if (user == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('請先到「我的」tab 登入')),
+        );
+        return;
+      }
+      final repo = ref.read(favoriteRepositoryProvider);
+      try {
+        if (isFav) {
+          await repo.remove(user.id, poster.id);
+        } else {
+          await repo.add(user.id, poster);
+        }
+        ref.invalidate(favoriteIdsProvider);
+        ref.invalidate(favoritesProvider);
+      } catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context)
+              .showSnackBar(SnackBar(content: Text('失敗：$e')));
+        }
+      }
+    }
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -62,8 +94,22 @@ class _DetailBody extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 16),
-          Text(poster.title,
-              style: Theme.of(context).textTheme.headlineSmall),
+          Row(
+            children: [
+              Expanded(
+                child: Text(poster.title,
+                    style: Theme.of(context).textTheme.headlineSmall),
+              ),
+              IconButton(
+                iconSize: 32,
+                icon: Icon(
+                  isFav ? Icons.favorite : Icons.favorite_border,
+                  color: isFav ? Colors.red : null,
+                ),
+                onPressed: toggleFav,
+              ),
+            ],
+          ),
           if (poster.year != null || poster.director != null) ...[
             const SizedBox(height: 4),
             Text(
