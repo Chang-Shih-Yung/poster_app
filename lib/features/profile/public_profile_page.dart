@@ -7,8 +7,11 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/shimmer_placeholder.dart';
 import '../../data/models/poster.dart';
+import '../../data/models/social.dart';
+import '../../data/repositories/follow_repository.dart';
 import '../../data/repositories/poster_repository.dart';
 import '../../data/repositories/user_repository.dart';
+import 'follow_pill.dart';
 
 /// Lists approved posters for a user. Uses a DB-indexed query on uploader_id
 /// (O(log N) via index) instead of paging all posters client-side.
@@ -41,16 +44,18 @@ class PublicProfilePage extends ConsumerWidget {
   }
 }
 
-class _ProfileBody extends StatelessWidget {
+class _ProfileBody extends ConsumerWidget {
   const _ProfileBody({required this.profile, required this.postersAsync});
   final PublicProfile profile;
   final AsyncValue<List<Poster>> postersAsync;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final topInset = MediaQuery.paddingOf(context).top;
     final bottomInset = MediaQuery.paddingOf(context).bottom;
     final theme = Theme.of(context);
+    final statsAsync = ref.watch(userRelationshipStatsProvider(profile.id));
+    final stats = statsAsync.asData?.value;
 
     return CustomScrollView(
       slivers: [
@@ -77,19 +82,33 @@ class _ProfileBody extends StatelessWidget {
                               fontWeight: FontWeight.w600,
                             ),
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            '${profile.approvedPosterCount} 張已通過 · '
-                            '${profile.submissionCount} 則投稿',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: AppTheme.textMute,
+                          if (stats?.isFollowingMe == true) ...[
+                            const SizedBox(height: 4),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: AppTheme.chipBg,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                '追蹤你',
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  color: AppTheme.textMute,
+                                  fontSize: 10,
+                                ),
+                              ),
                             ),
-                          ),
+                          ],
                         ],
                       ),
                     ),
+                    FollowPill(targetUserId: profile.id),
                   ],
                 ),
+                // Stats row — 4 numbers: followers, following, approved, submissions.
+                const SizedBox(height: 14),
+                _StatsRow(profile: profile, stats: stats),
                 if (profile.bio != null && profile.bio!.isNotEmpty) ...[
                   const SizedBox(height: 16),
                   Text(
@@ -230,6 +249,42 @@ class _Err extends StatelessWidget {
           textAlign: TextAlign.center,
         ),
       ),
+    );
+  }
+}
+
+/// Stats row: follower · following · approved · submissions.
+/// Renders even before stats load — shows approved/submissions from profile.
+class _StatsRow extends StatelessWidget {
+  const _StatsRow({required this.profile, this.stats});
+  final PublicProfile profile;
+  final UserRelationshipStats? stats;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    Widget stat(String n, String label) => Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(n,
+                style: theme.textTheme.titleMedium
+                    ?.copyWith(fontWeight: FontWeight.w600)),
+            Text(label,
+                style: theme.textTheme.labelSmall
+                    ?.copyWith(color: AppTheme.textFaint)),
+          ],
+        );
+
+    return Row(
+      children: [
+        stat('${stats?.followerCount ?? "—"}', '追蹤者'),
+        const SizedBox(width: 24),
+        stat('${stats?.followingCount ?? "—"}', '追蹤中'),
+        const SizedBox(width: 24),
+        stat('${profile.approvedPosterCount}', '已通過'),
+        const SizedBox(width: 24),
+        stat('${profile.submissionCount}', '投稿'),
+      ],
     );
   }
 }

@@ -35,6 +35,10 @@ class Poster {
     this.favoriteCount = 0,
     this.approvedAt,
     this.deletedAt,
+    // Optional social/denorm fields — present when fetched via RPCs that
+    // join users, absent in plain posters.* queries. Never persisted.
+    this.uploaderName,
+    this.uploaderAvatar,
   });
 
   factory Poster.fromRow(Map<String, dynamic> row) {
@@ -88,6 +92,8 @@ class Poster {
       deletedAt: row['deleted_at'] != null
           ? DateTime.parse(row['deleted_at'] as String)
           : null,
+      uploaderName: row['uploader_name'] as String?,
+      uploaderAvatar: row['uploader_avatar'] as String?,
     );
   }
 
@@ -126,4 +132,8 @@ class Poster {
   final int favoriteCount;
   final DateTime? approvedAt;
   final DateTime? deletedAt;
+  // Social RPC fields (never persisted; only set when fetched via
+  // recent_approved_feed / trending_favorites / follow_feed).
+  final String? uploaderName;
+  final String? uploaderAvatar;
 }

@@ -168,16 +168,6 @@ class PosterRepository {
         .toList();
   }
 
-  /// Social activity feed: recent posters from public users.
-  /// Returns posters with uploader metadata attached in each row.
-  Future<List<Poster>> socialActivityFeed({int limit = 12}) async {
-    final result =
-        await _client.rpc('social_activity_feed', params: {'p_limit': limit});
-    return (result as List)
-        .map((r) => Poster.fromRow(r as Map<String, dynamic>))
-        .toList();
-  }
-
   /// Home sections via single RPC (review #10). 1 round-trip for all sections.
   Future<List<HomeSection>> homeSections({int limit = 10}) async {
     final result = await _client.rpc('home_sections', params: {'p_limit': limit});

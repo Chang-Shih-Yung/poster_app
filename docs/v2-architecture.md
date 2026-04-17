@@ -364,7 +364,7 @@ ALTER TABLE favorites DROP COLUMN IF EXISTS poster_thumbnail_url;
 - [x] WorkRepository（CRUD, search by title_zh + year）
 - [x] SubmissionRepository（取代 poster_upload_repository）
 - [x] ViewRepository（call dedup RPC + ⚠️ session-level Set 擋重複）
-- [ ] UserRepository（public profiles, search users）← EPIC 7
+- [x] UserRepository（public profiles, search users）← EPIC 7 完成
 - [x] 更新 PosterRepository（join works, 用 list_favorites_with_posters RPC）
 - [x] 更新 FavoriteRepository（改用 toggle_favorite RPC，移除 denorm 寫入）
 - [x] 測試：每個 model 的 fromRow/toJson round-trip 測試（35 tests passing）
@@ -426,6 +426,72 @@ ALTER TABLE favorites DROP COLUMN IF EXISTS poster_thumbnail_url;
 - [x] full-text search on works（title_zh, title_en via ilike + trgm）
 - [x] full-text search on posters（title, poster_name, channel_name）
 - [x] unified search page：grouped results（works, posters, users）
+
+### EPIC 11: Social Signals & Follows（NEW — 2026-04-17）
+
+**目標**：把 home page 從「一堆海報」升級成「能看到誰、在做什麼、為什麼重要」。
+Spotify 風格 actor-first sections + follow graph 預留。
+
+**Schema**：
+- 新表 `follows (follower_id, followee_id, created_at)` — composite PK，CHECK 防自追
+- RLS：公開 graph（任何人可讀），本人可寫/刪自己的
+- Index: `idx_follows_followee`（反查「誰追蹤我」）
+- **不**加 users.follower_count/following_count denorm 欄位（review #5 教訓）
+
+**設計決定**：
+1. follows 是公開 graph（IG/Twitter 模式），不做隱私追蹤
+2. 防自追：DB CHECK + RPC 擋 + UI hide 三層
+3. User 切回 `is_public=false` 時保留 follows 紀錄，只是 feed 不顯示其活動
+4. 「追蹤的人最近在收」section 放熱門下面、編輯策展上面；登入+有追蹤才顯示
+
+**RPCs**：
+- [x] `toggle_follow(p_user_id) → bool` — 追蹤/取消
+- [x] `trending_favorites(p_days=7, p_limit=10)` — 本週最多人收藏 + top 3 collector avatars
+- [x] `active_collectors(p_days=7, p_limit=12)` — 最近活躍公開用戶 + 各自最近 3 張收藏縮圖
+- [x] `follow_feed(p_limit=20)` — 我追蹤的人最近 favorites + submissions
+- [x] `user_relationship_stats(p_user_id) → jsonb` — {follower_count, following_count, is_following_me, am_i_following}
+- [x] rename `social_activity_feed` → `recent_approved_feed`
+
+**Repositories + Models**：
+- [x] `FollowRepository`（toggle / stats）
+- [x] `SocialRepository`（trending / active_collectors / follow_feed / recent_approved_feed）
+- [x] Models: `TrendingPoster`, `CollectorPreview`, `MiniUser`, `UserRelationshipStats`, `FollowActivity`, `PosterThumb`
+- [x] Poster model 擴充 `uploaderName` / `uploaderAvatar`（optional，從 social RPC 帶回）
+
+**UI**：
+- [x] `_FeedCard` 右下角加 22px uploader avatar overlay + 獨立 tap 跳 /user/:id
+- [x] Home 重排 sections：熱門 → 追蹤的人最近在收（空則隱） → 本週最多人收藏 → 活躍收藏家 → 編輯策展 → 剛上架（rename from 社群動態）→ 最新上架
+- [x] 新 section：本週最多人收藏（`_TrendingRow` + `_TrendingCard` + `_AvatarStack` 疊頭像）
+- [x] 新 section：活躍收藏家（`_CollectorsRow` + `_CollectorCard`：48px 大頭像 + 名字 + N 次活動 + 底部 3 張 mini-thumb）
+- [x] 新 section：追蹤的人最近在收（`_FollowFeedRow`，重用 `_FeedCard` 但注入 actor 資訊）
+- [x] `FollowPill` widget — outlined 未追蹤 / filled 追蹤中 / 動畫過渡 / 樂觀更新 + 失敗回滾
+- [x] Integrate follow pill 到 PublicProfilePage 頭像旁 + SearchPage `_UserTile` trailing（compact 模式）
+- [x] PublicProfilePage 加統計列：「追蹤者 · 追蹤中 · 已通過 · 投稿」4 欄數字 + 「追蹤你」reverse tag
+
+**Performance 預留**：
+- 現在 scale sub-100ms 夠用
+- 未來到 100k favorites/day 需要：`idx_favorites_created_at`（partial: last 30d）+ `trending_favorites` 升級為 materialized view
+
+**Jira Task 拆解**：
+
+| # | 任務 | 狀態 | 預估 |
+|---|------|------|------|
+| 11-1 | Schema migration: follows + RLS + indexes | ✅ | S |
+| 11-2 | 6 RPCs (toggle_follow, trending_favorites, active_collectors, follow_feed, user_relationship_stats, rename) | ✅ | M |
+| 11-3 | Dart models + FollowRepository + SocialRepository | ✅ | M |
+| 11-4 | `_FeedCard` uploader avatar overlay | ✅ | XS |
+| 11-5 | Home: 重排 + 3 新 section + 空態處理 | ✅ | M |
+| 11-6 | `_CollectorCard` 新卡型 | ✅ | S |
+| 11-7 | `_FollowPill` + integrate PublicProfile + SearchPage | ✅ | S |
+| 11-8 | PublicProfilePage 統計列 | ✅ | XS |
+| 11-9 | Tests: models fromRow + RPC param shape | ✅ | S |
+| 11-10 | 更新 v2-architecture.md + audit 表 | ✅ | XS |
+
+**驗證**：flutter analyze 0 errors / 0 warnings, flutter test **72/72 pass**
+
+執行順序：11-1 → 11-2 → 11-3 → (11-4 // 11-5 // 11-6 // 11-7) → 11-8 → 11-9 → 11-10
+
+---
 
 ### EPIC 10: Polish & Tech Debt
 

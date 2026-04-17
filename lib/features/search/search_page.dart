@@ -11,6 +11,7 @@ import '../../data/models/app_user.dart';
 import '../../data/models/poster.dart';
 import '../../data/models/work.dart';
 import '../../data/repositories/search_repository.dart';
+import '../profile/follow_pill.dart';
 
 /// /search — unified search across works, posters, users.
 /// Debounces input by 250ms to avoid hammering the RPC.
@@ -391,8 +392,9 @@ class _UserTile extends StatelessWidget {
                   ],
                 ),
               ),
-              Icon(LucideIcons.chevronRight,
-                  size: 14, color: AppTheme.textFaint),
+              // Replace the chevron with a follow pill: more actionable,
+              // still leaves whole row tappable for navigation.
+              FollowPill(targetUserId: user.id, compact: true),
             ],
           ),
         ),
