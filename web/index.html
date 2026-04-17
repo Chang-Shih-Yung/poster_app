@@ -1,46 +1,116 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh-Hant">
 <head>
-  <!--
-    If you are serving your web app in a path other than the root, change the
-    href value below to reflect the base path you are serving from.
-
-    The path provided below has to start and end with a slash "/" in order for
-    it to work correctly.
-
-    For more details:
-    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
-
-    This is a placeholder for base href that will be replaced by the value of
-    the `--base-href` argument provided to `flutter build`.
-  -->
   <base href="$FLUTTER_BASE_HREF">
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
+  <meta name="description" content="POSTER. — 電影海報收藏資料庫">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="poster_app">
+  <meta name="apple-mobile-web-app-title" content="POSTER.">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
-  <title>poster_app</title>
+  <title>POSTER.</title>
   <link rel="manifest" href="manifest.json">
+
+  <!--
+    First-paint styling (EPIC 12). Matches AppTheme.bg (#050506) so the
+    browser doesn't flash white while Flutter + CanvasKit + fonts are
+    booting. Splash element is removed once Flutter's glass-pane appears.
+  -->
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      background-color: #050506;
+      overflow: hidden;
+    }
+    #splash {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background-color: #050506;
+      color: #ffffff;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI",
+                   "PingFang TC", "Microsoft JhengHei", sans-serif;
+      z-index: 9999;
+      transition: opacity 400ms ease-out;
+    }
+    #splash .wordmark {
+      font-size: 20px;
+      font-weight: 600;
+      letter-spacing: 4px;
+      margin-bottom: 18px;
+      opacity: 0.9;
+    }
+    #splash .subtitle {
+      font-size: 12px;
+      font-weight: 400;
+      letter-spacing: 1px;
+      opacity: 0.35;
+      margin-bottom: 28px;
+    }
+    #splash .spinner {
+      width: 20px;
+      height: 20px;
+      border: 2px solid rgba(255, 255, 255, 0.15);
+      border-top-color: rgba(255, 255, 255, 0.55);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    #splash.fade {
+      opacity: 0;
+      pointer-events: none;
+    }
+  </style>
 </head>
 <body>
-  <!--
-    You can customize the "flutter_bootstrap.js" script.
-    This is useful to provide a custom configuration to the Flutter loader
-    or to give the user feedback during the initialization process.
+  <div id="splash">
+    <div class="wordmark">POSTER.</div>
+    <div class="subtitle">探索電影海報的世界</div>
+    <div class="spinner"></div>
+  </div>
 
-    For more details:
-    * https://docs.flutter.dev/platform-integration/web/initialization
-  -->
+  <script>
+    // Remove splash once Flutter paints. main.dart has no direct JS hook,
+    // so we watch for <flt-glass-pane> / <flutter-view> in the DOM —
+    // those appear after Flutter's first frame. Safety net: 10s timeout.
+    (function () {
+      var splash = document.getElementById('splash');
+      var removed = false;
+      function kill() {
+        if (removed || !splash) return;
+        removed = true;
+        splash.classList.add('fade');
+        setTimeout(function () {
+          if (splash && splash.parentNode) splash.parentNode.removeChild(splash);
+          document.body.style.overflow = '';
+        }, 450);
+      }
+      var obs = new MutationObserver(function () {
+        if (document.querySelector('flt-glass-pane, flutter-view')) {
+          kill();
+          obs.disconnect();
+        }
+      });
+      obs.observe(document.body, { childList: true, subtree: true });
+      setTimeout(kill, 10000);
+    })();
+  </script>
+
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

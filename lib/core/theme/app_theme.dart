@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+// google_fonts dropped 2026-04-17 — was causing first-paint CJK tofu (□□□)
+// because fonts were fetched from CDN after initial render. NotoSansTC is
+// now bundled as local asset in pubspec.yaml.
 
 /// v4 "Transparent Minimal" theme.
 ///
@@ -49,18 +51,16 @@ class AppTheme {
 
   static TextTheme _textTheme() {
     final base = ThemeData.dark().textTheme;
-    // Geist for latin, Noto Sans TC for CJK. Flutter picks per glyph via
-    // fallback list. Geist is primary; NotoSansTC provides CJK.
+    // NotoSansTC as primary — bundled local asset, no CDN fetch, no tofu.
+    // CanvasKit synthesizes FontWeight.w600 from the Medium (w500) we ship;
+    // close enough visually, saves ~4.5MB vs bundling a third weight.
     TextStyle style(TextStyle? s, {double? size, FontWeight? w, double? ls}) {
-      return GoogleFonts.getFont(
-        'Geist',
-        textStyle: s,
+      return (s ?? const TextStyle()).copyWith(
+        fontFamily: 'NotoSansTC',
         fontSize: size,
         fontWeight: w,
         letterSpacing: ls,
         color: text,
-      ).copyWith(
-        fontFamilyFallback: [GoogleFonts.notoSansTc().fontFamily!],
       );
     }
 

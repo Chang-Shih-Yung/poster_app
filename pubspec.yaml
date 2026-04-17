@@ -45,7 +45,7 @@ dependencies:
   uuid: ^4.5.3
   shared_preferences: ^2.5.5
   shimmer: ^3.0.0
-  google_fonts: ^8.0.2
+  # google_fonts dropped — see EPIC 12 / app_theme.dart
   sentry_flutter: ^8.14.2
   phosphor_flutter: ^2.1.0
   animations: ^2.0.11
@@ -84,6 +84,28 @@ flutter:
   # assets:
   #   - images/a_dot_burr.jpeg
   #   - images/a_dot_ham.jpeg
+
+  fonts:
+    # Local CJK font — bundled as asset to avoid tofu (□) on first paint.
+    # google_fonts CDN was fetched too late, so CanvasKit rendered CJK as
+    # missing-glyph boxes for ~2 seconds on cold load.
+    #
+    # Noto Sans TC subset (~4.4MB per weight, down from ~7MB original):
+    #   - U+0020-007F Basic Latin
+    #   - U+00A0-00FF Latin-1 supplement
+    #   - U+2013-203F, U+FF00-FFEF typography + fullwidth
+    #   - U+3000-303F CJK symbols + punctuation
+    #   - U+4E00-9FA5 CJK Unified Ideographs (common Han)
+    #
+    # Weights: 400 (Regular) + 500 (Medium). Theme uses w400/w500/w600,
+    # and w600 falls back to the nearest Medium — close enough visually,
+    # saves 4.5MB over bundling a third weight.
+    - family: NotoSansTC
+      fonts:
+        - asset: assets/fonts/NotoSansTC-Regular.otf
+          weight: 400
+        - asset: assets/fonts/NotoSansTC-Medium.otf
+          weight: 500
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
