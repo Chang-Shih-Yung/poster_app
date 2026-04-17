@@ -14,6 +14,7 @@ class PosterFilter {
     this.director,
     this.yearMin,
     this.yearMax,
+    this.favoritesOf,
   });
 
   final PosterSort sortBy;
@@ -22,6 +23,9 @@ class PosterFilter {
   final String? director;
   final int? yearMin;
   final int? yearMax;
+
+  /// When set, only return posters favorited by this user ID.
+  final String? favoritesOf;
 
   bool get hasAdvanced =>
       tags.isNotEmpty ||
@@ -34,12 +38,45 @@ class PosterFilter {
       ((director != null && director!.trim().isNotEmpty) ? 1 : 0) +
       (yearMin != null ? 1 : 0) +
       (yearMax != null ? 1 : 0);
+
+  PosterFilter copyWith({
+    PosterSort? sortBy,
+    String? search,
+    List<String>? tags,
+    String? director,
+    int? yearMin,
+    int? yearMax,
+    String? favoritesOf,
+    bool clearSearch = false,
+    bool clearDirector = false,
+    bool clearYearMin = false,
+    bool clearYearMax = false,
+    bool clearFavoritesOf = false,
+  }) {
+    return PosterFilter(
+      sortBy: sortBy ?? this.sortBy,
+      search: clearSearch ? null : (search ?? this.search),
+      tags: tags ?? this.tags,
+      director: clearDirector ? null : (director ?? this.director),
+      yearMin: clearYearMin ? null : (yearMin ?? this.yearMin),
+      yearMax: clearYearMax ? null : (yearMax ?? this.yearMax),
+      favoritesOf:
+          clearFavoritesOf ? null : (favoritesOf ?? this.favoritesOf),
+    );
+  }
 }
 
 class PosterPage {
   const PosterPage({required this.items, required this.hasMore});
   final List<Poster> items;
   final bool hasMore;
+}
+
+/// A home section returned by home_sections() RPC.
+class HomeSection {
+  const HomeSection({required this.key, required this.items});
+  final String key;
+  final List<Poster> items;
 }
 
 class PosterRepository {
@@ -53,6 +90,19 @@ class PosterRepository {
     PosterFilter filter = const PosterFilter(),
     int offset = 0,
   }) async {
+    // Favorites filter: use RPC instead of IN clause (review #11).
+    if (filter.favoritesOf != null) {
+      final rows = await _client.rpc('list_favorites_with_posters', params: {
+        'p_user_id': filter.favoritesOf,
+        'p_offset': offset,
+        'p_limit': _pageSize,
+      });
+      final items = (rows as List)
+          .map((r) => Poster.fromRow(r as Map<String, dynamic>))
+          .toList();
+      return PosterPage(items: items, hasMore: items.length == _pageSize);
+    }
+
     var query = _client
         .from('posters')
         .select()
@@ -68,9 +118,15 @@ class PosterRepository {
 
     final search = filter.search?.trim();
     if (search != null && search.isNotEmpty) {
-      query = query.or(
-        'title.ilike.%$search%,director.ilike.%$search%,tags.cs.{$search}',
-      );
+      // Sanitize: PostgREST `or` uses commas + parens as separators.
+      // Strip them to prevent query-injection via user-typed search strings.
+      final safe =
+          search.replaceAll(RegExp(r'[,()]'), '').replaceAll('%', r'\%');
+      if (safe.isNotEmpty) {
+        query = query.or(
+          'title.ilike.%$safe%,director.ilike.%$safe%,tags.cs.{$safe}',
+        );
+      }
     }
 
     if (filter.tags.isNotEmpty) {
@@ -104,39 +160,35 @@ class PosterRepository {
     return PosterPage(items: items, hasMore: items.length == _pageSize);
   }
 
-  Future<List<Poster>> listMine(String userId, {String? statusFilter}) async {
-    var query = _client
-        .from('posters')
-        .select()
-        .eq('uploader_id', userId)
-        .isFilter('deleted_at', null);
-    if (statusFilter != null) {
-      query = query.eq('status', statusFilter);
-    }
-    final rows = await query.order('created_at', ascending: false);
+  /// Top tags via SQL RPC (review #8). Replaces client-side 500-row fetch.
+  Future<List<String>> topTags({int limit = 20}) async {
+    final rows = await _client.rpc('top_tags', params: {'p_limit': limit});
     return (rows as List)
+        .map((r) => (r as Map<String, dynamic>)['tag'] as String)
+        .toList();
+  }
+
+  /// Social activity feed: recent posters from public users.
+  /// Returns posters with uploader metadata attached in each row.
+  Future<List<Poster>> socialActivityFeed({int limit = 12}) async {
+    final result =
+        await _client.rpc('social_activity_feed', params: {'p_limit': limit});
+    return (result as List)
         .map((r) => Poster.fromRow(r as Map<String, dynamic>))
         .toList();
   }
 
-  Future<List<String>> topTags({int limit = 20}) async {
-    final rows = await _client
-        .from('posters')
-        .select('tags')
-        .eq('status', 'approved')
-        .isFilter('deleted_at', null)
-        .limit(500);
-    final counts = <String, int>{};
-    for (final r in rows as List) {
-      final tags = (r as Map<String, dynamic>)['tags'] as List? ?? const [];
-      for (final t in tags) {
-        final s = t.toString();
-        counts[s] = (counts[s] ?? 0) + 1;
-      }
-    }
-    final sorted = counts.entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
-    return sorted.take(limit).map((e) => e.key).toList();
+  /// Home sections via single RPC (review #10). 1 round-trip for all sections.
+  Future<List<HomeSection>> homeSections({int limit = 10}) async {
+    final result = await _client.rpc('home_sections', params: {'p_limit': limit});
+    final sections = result as List;
+    return sections.map((s) {
+      final map = s as Map<String, dynamic>;
+      final items = (map['items'] as List)
+          .map((r) => Poster.fromRow(r as Map<String, dynamic>))
+          .toList();
+      return HomeSection(key: map['key'] as String, items: items);
+    }).toList();
   }
 
   Future<Poster?> getById(String id) async {
@@ -149,8 +201,35 @@ class PosterRepository {
     return Poster.fromRow(row);
   }
 
-  Future<void> incrementViewCount(String id) async {
-    await _client.rpc('increment_poster_view_count', params: {'poster_id': id});
+  /// List approved posters by a given uploader, newest first.
+  /// Used by public profile pages (/user/:id).
+  Future<List<Poster>> listByUploader(String uploaderId,
+      {int limit = 60}) async {
+    final rows = await _client
+        .from('posters')
+        .select()
+        .eq('uploader_id', uploaderId)
+        .eq('status', 'approved')
+        .isFilter('deleted_at', null)
+        .order('created_at', ascending: false)
+        .limit(limit);
+    return (rows as List)
+        .map((r) => Poster.fromRow(r as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// List all approved posters for a given work, newest first.
+  Future<List<Poster>> listByWorkId(String workId) async {
+    final rows = await _client
+        .from('posters')
+        .select()
+        .eq('work_id', workId)
+        .eq('status', 'approved')
+        .isFilter('deleted_at', null)
+        .order('created_at', ascending: false);
+    return (rows as List)
+        .map((r) => Poster.fromRow(r as Map<String, dynamic>))
+        .toList();
   }
 }
 
@@ -158,13 +237,11 @@ final posterRepositoryProvider = Provider<PosterRepository>((ref) {
   return PosterRepository(ref.watch(supabaseClientProvider));
 });
 
-final topTagsProvider = FutureProvider<List<String>>((ref) async {
-  return ref.watch(posterRepositoryProvider).topTags();
+final postersByWorkIdProvider =
+    FutureProvider.autoDispose.family<List<Poster>, String>((ref, workId) async {
+  return ref.watch(posterRepositoryProvider).listByWorkId(workId);
 });
 
-final mySubmissionsProvider =
-    FutureProvider.autoDispose<List<Poster>>((ref) async {
-  final user = ref.watch(currentUserProvider);
-  if (user == null) return const [];
-  return ref.watch(posterRepositoryProvider).listMine(user.id);
+final topTagsProvider = FutureProvider<List<String>>((ref) async {
+  return ref.watch(posterRepositoryProvider).topTags();
 });

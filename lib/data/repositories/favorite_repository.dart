@@ -9,6 +9,7 @@ class FavoriteRepository {
   FavoriteRepository(this._client);
   final SupabaseClient _client;
 
+  /// List favorite records for a user.
   Future<List<Favorite>> list(String userId) async {
     final rows = await _client
         .from('favorites')
@@ -20,6 +21,7 @@ class FavoriteRepository {
         .toList();
   }
 
+  /// List only poster IDs (lightweight, for heart icon state).
   Future<Set<String>> listIds(String userId) async {
     final rows = await _client
         .from('favorites')
@@ -30,15 +32,43 @@ class FavoriteRepository {
         .toSet();
   }
 
+  /// List favorites with full poster data via RPC (review #11).
+  /// Replaces the old IN-clause approach.
+  Future<List<Poster>> listWithPosters(
+    String userId, {
+    int offset = 0,
+    int limit = 20,
+  }) async {
+    final rows = await _client.rpc('list_favorites_with_posters', params: {
+      'p_user_id': userId,
+      'p_offset': offset,
+      'p_limit': limit,
+    });
+    return (rows as List)
+        .map((r) => Poster.fromRow(r as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Toggle favorite via RPC (review #4: race-safe).
+  /// Returns true if now favorited, false if unfavorited.
+  Future<bool> toggle(String posterId) async {
+    final result = await _client.rpc('toggle_favorite', params: {
+      'p_poster_id': posterId,
+    });
+    return result as bool;
+  }
+
+  /// Legacy add — kept for V1 compat during migration.
+  @Deprecated('Use toggle() instead')
   Future<void> add(String userId, Poster poster) async {
     await _client.from('favorites').upsert({
       'user_id': userId,
       'poster_id': poster.id,
-      'poster_title': poster.title,
-      'poster_thumbnail_url': poster.thumbnailUrl ?? poster.posterUrl,
     });
   }
 
+  /// Legacy remove — kept for V1 compat during migration.
+  @Deprecated('Use toggle() instead')
   Future<void> remove(String userId, String posterId) async {
     await _client
         .from('favorites')
