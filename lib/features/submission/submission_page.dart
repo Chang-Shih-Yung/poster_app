@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -897,25 +899,44 @@ class _WorkTitleAutocomplete extends StatefulWidget {
 class _WorkTitleAutocompleteState extends State<_WorkTitleAutocomplete> {
   List<Work> _suggestions = [];
   bool _showSuggestions = false;
+  Timer? _debounce;
+  int _requestId = 0;
 
-  Future<void> _onChanged(String value) async {
-    if (value.trim().length < 2) {
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    super.dispose();
+  }
+
+  /// Debounce keystrokes (250ms) before querying the DB, and guard against
+  /// stale responses via _requestId so a slow earlier query can't clobber
+  /// the suggestions for a later keystroke.
+  void _onChanged(String value) {
+    _debounce?.cancel();
+    final trimmed = value.trim();
+    if (trimmed.length < 2) {
       setState(() {
         _suggestions = [];
         _showSuggestions = false;
       });
       return;
     }
-    try {
-      final results =
-          await widget.workRepo.search(titleZh: value.trim(), limit: 5);
-      if (mounted) {
+    _debounce = Timer(const Duration(milliseconds: 250), () async {
+      final id = ++_requestId;
+      try {
+        final results =
+            await widget.workRepo.search(titleZh: trimmed, limit: 5);
+        if (!mounted || id != _requestId) return;
         setState(() {
           _suggestions = results;
           _showSuggestions = results.isNotEmpty;
         });
+      } catch (e) {
+        // Don't crash the form on a transient search hiccup, but surface it.
+        // ignore: avoid_print
+        print('work autocomplete search failed: $e');
       }
-    } catch (_) {}
+    });
   }
 
   @override

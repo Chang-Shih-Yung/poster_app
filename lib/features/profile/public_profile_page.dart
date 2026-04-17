@@ -139,8 +139,8 @@ class _ProfileBody extends StatelessWidget {
               padding: EdgeInsets.fromLTRB(16, 12, 16, bottomInset + 32),
               sliver: SliverGrid(
                 gridDelegate:
-                    const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
+                    const SliverGridDelegateWithMaxCrossAxisExtent(
+                  maxCrossAxisExtent: 200,
                   mainAxisSpacing: 12,
                   crossAxisSpacing: 12,
                   childAspectRatio: 0.66,

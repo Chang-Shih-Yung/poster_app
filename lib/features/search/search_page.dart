@@ -43,6 +43,9 @@ class _SearchPageState extends ConsumerState<SearchPage> {
   }
 
   void _onChanged(String v) {
+    // Rebuild immediately so the clear-X suffix icon tracks keystrokes;
+    // debounce only the actual search RPC so we don't hammer the DB.
+    setState(() {});
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 250), () {
       if (mounted) setState(() => _effectiveQuery = v.trim());

@@ -70,8 +70,9 @@ class MyFavoritesPage extends ConsumerWidget {
           },
           child: GridView.builder(
             padding: const EdgeInsets.fromLTRB(16, 80, 16, 40),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
+            // Responsive cell width — 2 cols on phone, more on wide viewports.
+            gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+              maxCrossAxisExtent: 200,
               childAspectRatio: 2 / 3,
               mainAxisSpacing: 12,
               crossAxisSpacing: 12,

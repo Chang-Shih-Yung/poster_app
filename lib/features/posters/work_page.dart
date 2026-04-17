@@ -127,9 +127,12 @@ class _WorkBody extends StatelessWidget {
             return SliverPadding(
               padding: EdgeInsets.fromLTRB(16, 0, 16, bottomInset + 32),
               sliver: SliverGrid(
+                // Responsive: each cell ~180 wide → 2 cols on phone,
+                // 4-6 on desktop. Avoids the 2-col-stretched-forever look
+                // that Flutter's fixed count produces on wide viewports.
                 gridDelegate:
-                    const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
+                    const SliverGridDelegateWithMaxCrossAxisExtent(
+                  maxCrossAxisExtent: 200,
                   mainAxisSpacing: 12,
                   crossAxisSpacing: 12,
                   childAspectRatio: 0.66,
