@@ -65,6 +65,23 @@ class TagRepository {
         .toList(growable: false);
   }
 
+  /// All canonical, non-deprecated tags across every category. Used by
+  /// the merge picker's manual search — admin needs to pick a target tag
+  /// that may live in a different category from the suggestion's origin.
+  Future<List<Tag>> listAllCanonical({int limit = 500}) async {
+    final rows = await _client
+        .from('tags')
+        .select()
+        .eq('deprecated', false)
+        .eq('is_other_fallback', false)
+        .order('poster_count', ascending: false)
+        .order('label_zh')
+        .limit(limit);
+    return (rows as List)
+        .map((r) => Tag.fromRow(r as Map<String, dynamic>))
+        .toList(growable: false);
+  }
+
   /// Find similar existing tags by similarity score (pg_trgm + CJK substring).
   /// Returns tags with `similarity` ≥ 0.25.
   ///
@@ -157,6 +174,12 @@ final tagSearchProvider =
 final tagsForPosterProvider =
     FutureProvider.autoDispose.family<List<Tag>, String>((ref, posterId) async {
   return ref.watch(tagRepositoryProvider).listForPoster(posterId);
+});
+
+/// All canonical tags across categories — used by merge picker's manual
+/// search. Cached since taxonomy rarely changes.
+final allCanonicalTagsProvider = FutureProvider<List<Tag>>((ref) async {
+  return ref.watch(tagRepositoryProvider).listAllCanonical();
 });
 
 /// Tag browse page: {tag, posters[]}.

@@ -27,6 +27,14 @@ class AdminTagSuggestionsPage extends ConsumerWidget {
         backgroundColor: AppTheme.bg,
         actions: [
           IconButton(
+            icon: const Icon(LucideIcons.list),
+            tooltip: '分類一覽',
+            onPressed: () => showDialog<void>(
+              context: context,
+              builder: (_) => const _TaxonomyOverviewDialog(),
+            ),
+          ),
+          IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: () => ref.invalidate(pendingTagSuggestionsProvider),
           ),
@@ -484,8 +492,18 @@ class _MergePickerState extends ConsumerState<_MergePicker> {
         crossCategory: true,
       ),
     ));
-    // Manual search falls back to same category when no typed query.
-    final tagsAsync = ref.watch(tagsByCategoryProvider(widget.categoryId));
+    // Manual search across ALL canonical tags (not just suggestion's
+    // category). Admin often needs to pick a target in a different facet
+    // — e.g. legacy-migrated "諾蘭" is in 編輯精選 but belongs in 設計師.
+    final tagsAsync = ref.watch(allCanonicalTagsProvider);
+    final catsAsync = ref.watch(tagCategoriesProvider);
+    final cats = catsAsync.asData?.value ?? const <TagCategory>[];
+    String? categoryTitle(String categoryId) {
+      for (final c in cats) {
+        if (c.id == categoryId) return c.titleZh;
+      }
+      return null;
+    }
 
     return AlertDialog(
       title: const Text('合併到哪一個既有分類？'),
@@ -497,7 +515,30 @@ class _MergePickerState extends ConsumerState<_MergePicker> {
             // ─── System recommendations ────────────────────────────────
             suggestionsAsync.maybeWhen(
               data: (matches) {
-                if (matches.isEmpty) return const SizedBox.shrink();
+                if (matches.isEmpty) {
+                  return Container(
+                    padding: const EdgeInsets.all(10),
+                    margin: const EdgeInsets.only(bottom: 10),
+                    decoration: BoxDecoration(
+                      color: AppTheme.chipBg,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(LucideIcons.info,
+                            size: 13, color: AppTheme.textFaint),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            '系統在全站分類中找不到相似的既有分類，請自行搜尋挑選。',
+                            style: theme.textTheme.labelSmall
+                                ?.copyWith(color: AppTheme.textFaint),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }
                 final top = matches.take(3).toList();
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -576,9 +617,37 @@ class _MergePickerState extends ConsumerState<_MergePicker> {
                     itemCount: filtered.length,
                     itemBuilder: (_, i) {
                       final t = filtered[i];
+                      final catName = categoryTitle(t.categoryId);
                       return ListTile(
                         dense: true,
-                        title: Text(t.labelZh),
+                        title: Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                t.labelZh,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            if (catName != null) ...[
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 5, vertical: 1),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.chipBg,
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  catName,
+                                  style: theme.textTheme.labelSmall?.copyWith(
+                                    color: AppTheme.textMute,
+                                    fontSize: 10,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
                         subtitle: Text(
                           [t.labelEn, '${t.posterCount} 張'].join(' · '),
                           style: Theme.of(context).textTheme.bodySmall,
@@ -867,6 +936,180 @@ class _RecommendedMatchTile extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// 分類一覽 — admin 可以在做決策前看完整 taxonomy。
+/// 10 個 category 摺疊展開，每個裡面是 canonical tags (含別名 + 海報數)。
+class _TaxonomyOverviewDialog extends ConsumerWidget {
+  const _TaxonomyOverviewDialog();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final catsAsync = ref.watch(tagCategoriesProvider);
+    final tagsAsync = ref.watch(allCanonicalTagsProvider);
+
+    return Dialog(
+      backgroundColor: AppTheme.bg,
+      child: Container(
+        width: 500,
+        constraints: const BoxConstraints(maxHeight: 640),
+        padding: const EdgeInsets.fromLTRB(18, 18, 18, 10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(LucideIcons.list, size: 16, color: AppTheme.textMute),
+                const SizedBox(width: 6),
+                Text(
+                  '分類一覽',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '目前官方有 10 大類別，下面是所有 canonical 分類與其別名。審稿前可以先看一下。',
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: AppTheme.textMute),
+            ),
+            const SizedBox(height: 12),
+            Expanded(
+              child: catsAsync.when(
+                loading: () =>
+                    const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                error: (e, _) => Text('載入失敗：$e'),
+                data: (cats) => tagsAsync.when(
+                  loading: () => const Center(
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                  error: (e, _) => Text('載入失敗：$e'),
+                  data: (allTags) {
+                    // Group tags by category
+                    final byCategory = <String, List<Tag>>{};
+                    for (final t in allTags) {
+                      byCategory.putIfAbsent(t.categoryId, () => []).add(t);
+                    }
+                    return ListView.builder(
+                      itemCount: cats.length,
+                      itemBuilder: (_, i) {
+                        final c = cats[i];
+                        final tags = byCategory[c.id] ?? const [];
+                        return _CategoryBlock(category: c, tags: tags);
+                      },
+                    );
+                  },
+                ),
+              ),
+            ),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('關閉'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CategoryBlock extends StatefulWidget {
+  const _CategoryBlock({required this.category, required this.tags});
+  final TagCategory category;
+  final List<Tag> tags;
+
+  @override
+  State<_CategoryBlock> createState() => _CategoryBlockState();
+}
+
+class _CategoryBlockState extends State<_CategoryBlock> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          InkWell(
+            onTap: () => setState(() => _expanded = !_expanded),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+              child: Row(
+                children: [
+                  Icon(
+                    _expanded
+                        ? LucideIcons.chevronDown
+                        : LucideIcons.chevronRight,
+                    size: 14,
+                    color: AppTheme.textMute,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    widget.category.titleZh,
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    '${widget.tags.length} 個分類',
+                    style: theme.textTheme.labelSmall
+                        ?.copyWith(color: AppTheme.textFaint),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (_expanded && widget.tags.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 4, 10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (final t in widget.tags)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 3),
+                      child: RichText(
+                        text: TextSpan(
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: AppTheme.textMute,
+                          ),
+                          children: [
+                            TextSpan(
+                              text: t.labelZh,
+                              style: TextStyle(
+                                color: AppTheme.text,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            if (t.labelEn.isNotEmpty && t.labelEn != t.labelZh)
+                              TextSpan(text: ' · ${t.labelEn}'),
+                            if (t.aliases.isNotEmpty)
+                              TextSpan(
+                                text: ' · 別名：${t.aliases.join(" / ")}',
+                                style: TextStyle(color: AppTheme.textFaint),
+                              ),
+                            TextSpan(text: '  （${t.posterCount} 張）'),
+                          ],
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+        ],
       ),
     );
   }
