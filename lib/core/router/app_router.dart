@@ -60,10 +60,12 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/library', redirect: (_, _) => '/'),
       GoRoute(path: '/browse', redirect: (_, _) => '/'),
 
-      // Sub-pages: back arrow top-left.
+      // Sub-pages: floating back arrow top-left for pages without their
+      // own header. v13 pages with sticky black headers (/upload,
+      // /profile/edit) skip the floating back so we don't double up.
       GoRoute(
         path: '/upload',
-        builder: (_, _) => const _BackablePage(child: SubmissionPage()),
+        builder: (_, _) => const SubmissionPage(),
       ),
       GoRoute(
         path: '/upload/batch',
@@ -75,7 +77,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/profile/edit',
-        builder: (_, _) => const _BackablePage(child: ProfileEditPage()),
+        builder: (_, _) => const ProfileEditPage(),
       ),
       GoRoute(
         path: '/me/submissions',

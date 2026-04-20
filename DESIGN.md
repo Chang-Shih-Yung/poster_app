@@ -1,4 +1,60 @@
-# POSTER. — Design System v11
+# POSTER. — Design System v13
+
+> **設計參考：** Apple iOS 18 liquid glass · Spotify masonry · Pinterest grid
+> **核心美學：** Cool Ink + 玻璃質感 + 浮島膠囊 + editorial 大字 + 全螢幕沉浸
+> **一句話原則：** 海報是主角，UI 是空氣。
+
+---
+
+## v13 變更（2026-04-20）
+
+從 v11/v12 的「純黑極簡」進化到 **Cool Ink + Liquid Glass**。下半部 v11 章節保留為歷史紀錄；以下是 v13 新增 / 取代的部分。
+
+### v13 設計原則
+1. **分層沉浸**：Canvas（滿版圖）/ Chrome（玻璃 strip）/ Overlay（浮島膠囊）三層分明。chrome 不擋圖、不爭主角。
+2. **Cool Ink 不純黑**：背景從 `#050506` → `#0D1116`。微藍底色讓玻璃模糊讀起來像「環境光」而非「灰霧」。
+3. **玻璃就是分隔線**：頂部 sticky chrome、底部浮島 tab bar、詳情頁 Fuji 抽屜，都用 20px backdrop blur + 0.55 tint + 1px line2 border + 1px inset highlight + 0/8/32 rgba 0,0,0,0.4 shadow 的 Glass 配方。其他 surface 仍 flat。
+4. **浮島 tab bar**：底部 nav 從滿版橫條 → 28dp 上提的玻璃膠囊，2 顆 44dp 圓形 icon（home + heart）。active = 白底黑 icon；heart active 用 Material `Icons.favorite` 填色（Lucide stroke-only）。
+5. **Editorial 大字**：詳情頁標題 32px / 36px、登入 brand `POSTER.` letter-spacing 6。其餘字級沿用 v11。
+6. **全螢幕詳情**：v12 的 hero + sliver 結構 → v13 **Fuji 抽屜**：海報滿版底圖 + 底部浮著 24px radius 玻璃 panel（年份 / 瀏覽 / 收藏 + 加入收藏白膠囊 + share + maximize）。
+7. **長按收藏**：M / S / L 模式所有海報卡片都 `onLongPress` toggle 收藏，配 medium haptic + toast。
+8. **Pinterest 瀑布流**：M 模式從固定 ratio 2 欄 → 兩欄不等高（aspect ratio 從 poster.id deterministic 取 0.56-1.33）。
+9. **Page-view L 模式**：原本就有 PageView，v13 加上長按收藏 + 黑色頂部漸層讓 chrome 在亮圖上仍可讀。
+10. **Sticky black header**：所有 form 子頁（/upload, /profile/edit）共用 `StickyHeader` widget — 圓形返回鈕 + 標題 + 白色 30dp 儲存膠囊。
+
+### v13 新 token
+
+| Token | 值 | 用途 |
+|---|---|---|
+| `bg` | `#0D1116` | Cool Ink 主背景（取代純黑 `#050506`） |
+| `ink2` | `#10151B` | 微抬升 surface |
+| `ink3` | `#161C24` | 卡片底色 |
+| `surfaceGlass` | `rgba(20,24,32,0.55)` | Glass 預設 fill（取代 v11 的 `rgba(20,20,22,0.55)`） |
+
+### v13 新 widget
+
+| Widget | 路徑 | 用途 |
+|---|---|---|
+| `Glass` | `core/widgets/glass.dart` | Liquid-glass surface（blur + tint + border + inset highlight + shadow） |
+| `GlassButton` | 同上 | 圓形玻璃 icon button（chevronDown / heart / search / share / maximize / +） |
+| `StickyHeader` | `core/widgets/sticky_header.dart` | 子頁黏頂 black header（◀ + 標題 + 白色儲存膠囊） |
+
+### v13 改寫的螢幕
+
+| Screen | v11/12 | v13 |
+|---|---|---|
+| 探索 (`/`) | SliverToBoxAdapter top bar | `SliverPersistentHeader` + 玻璃 strip + GlassButton 搜尋/+ |
+| 我的 (`/library` 路由 → 我的 tab) | 固定 ratio grid + 上 chrome 文字按鈕 | 玻璃 strip 包整個 chrome + Pinterest masonry M + 長按收藏 |
+| 海報詳情 (`/poster/:id`) | Hero + 漸層 + Wind Rises 欄位 | Fuji 抽屜：滿版底圖 + 玻璃 panel + 32px 大標 + 統計列 + 加入收藏白膠囊 |
+| 個人頁 (`/profile`) | 56dp avatar 卡片 + 標籤 row | 64dp horizontal avatar + bio inline + 編輯膠囊 inline |
+| 編輯個人檔案 (`/profile/edit`) | 黑色標題 + bottom 儲存按鈕 | StickyHeader：◀ + 編輯個人檔案 + 白色儲存膠囊 |
+| 上傳 (`/upload`) | 浮動返回箭頭 + bottom 送出 | StickyHeader：◀ + 上傳海報 + 白色送出膠囊 |
+| 登入 (`/signin`) | 純黑 + 文字 + 白膠囊 | RadialGradient (`#1A2230` → `#0D1116`) + 環境光 + `POSTER.` letter-spacing 6 |
+| Bottom nav | 滿版 Container + 2 文字 tab | 浮島玻璃膠囊 + 2 圓形 icon (home + heart) |
+
+---
+
+# POSTER. — Design System v11（保留作為歷史）
 
 > **設計參考：** Spotify Music App (Figma Community)
 > **核心美學：** 單頁圖庫。圓潤溫暖。零導航成本。

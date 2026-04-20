@@ -19,44 +19,86 @@ class SigninPage extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: AppTheme.bg,
-      body: Padding(
-        padding: EdgeInsets.fromLTRB(24, 0, 24, bottomInset + 40),
-        child: Column(
-          children: [
-            const Spacer(flex: 3),
-
-            // Brand.
-            Text(
-              'POSTER.',
-              style: theme.textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w600,
-                letterSpacing: 2.0,
-                color: Colors.white,
+      // v13: ambient radial gradient (Cool Ink with a hint of warm
+      // blue light at top-left + dusky blue at bottom-right). The
+      // background does the visual lifting; copy stays minimal.
+      body: Stack(
+        children: [
+          const Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: RadialGradient(
+                  center: Alignment(-0.4, -0.7),
+                  radius: 1.1,
+                  colors: [Color(0xFF1A2230), Color(0xFF0D1116)],
+                  stops: [0.0, 0.55],
+                ),
               ),
             ),
-            const SizedBox(height: 12),
-
-            // One-liner.
-            Text(
-              '探索電影海報的世界',
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: AppTheme.textMute,
+          ),
+          // Soft secondary glow bottom-right to give depth without
+          // introducing accent colour.
+          Positioned.fill(
+            child: IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: RadialGradient(
+                    center: const Alignment(0.7, 0.9),
+                    radius: 0.9,
+                    colors: [
+                      const Color(0xFF5078C8).withValues(alpha: 0.18),
+                      Colors.transparent,
+                    ],
+                    stops: const [0.0, 0.5],
+                  ),
+                ),
               ),
             ),
-
-            const Spacer(flex: 4),
-
-            // Google sign-in CTA.
-            _WhitePill(
-              label: '使用 Google 登入',
-              icon: PhosphorIconsRegular.googleLogo,
-              onTap: () {
-                HapticFeedback.selectionClick();
-                ref.read(authRepositoryProvider).signInWithGoogle();
-              },
+          ),
+          Padding(
+            padding: EdgeInsets.fromLTRB(32, 0, 32, bottomInset + 40),
+            child: Column(
+              children: [
+                const Spacer(flex: 3),
+                // Brand — wide letter-spacing per v13 spec.
+                Text(
+                  'POSTER.',
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontSize: 26,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 6,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  '探索電影海報的世界',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: AppTheme.textMute,
+                  ),
+                ),
+                const Spacer(flex: 4),
+                _WhitePill(
+                  label: '使用 Google 登入',
+                  icon: PhosphorIconsRegular.googleLogo,
+                  onTap: () {
+                    HapticFeedback.selectionClick();
+                    ref.read(authRepositoryProvider).signInWithGoogle();
+                  },
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  '繼續即同意條款',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: AppTheme.textFaint,
+                    letterSpacing: 0.5,
+                    fontSize: 11,
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -80,8 +122,9 @@ class _WhitePill extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(999),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 16),
+        child: SizedBox(
+          width: double.infinity,
+          height: 52,
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -92,6 +135,7 @@ class _WhitePill extends StatelessWidget {
                 style: Theme.of(context).textTheme.labelLarge?.copyWith(
                       color: Colors.black,
                       fontWeight: FontWeight.w600,
+                      letterSpacing: 0.2,
                     ),
               ),
             ],

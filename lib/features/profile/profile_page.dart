@@ -143,6 +143,9 @@ class _SignedInView extends ConsumerWidget {
   }
 }
 
+/// v13 identity row — IG-style: 64×64 avatar + name/bio + inline 編輯 pill.
+/// No card chrome (lets the cool ink background read as primary), only
+/// a hairline at the bottom to mark the section break.
 class _IdentityCard extends StatelessWidget {
   const _IdentityCard({required this.email, required this.profile});
   final String email;
@@ -154,20 +157,22 @@ class _IdentityCard extends StatelessWidget {
     final displayName = profile?.displayName.trim() ?? '';
     final name = displayName.isNotEmpty ? displayName : email.split('@').first;
     final avatar = profile?.avatarUrl;
+    final bio = profile?.bio?.trim();
 
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: AppTheme.surfaceRaised,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: AppTheme.line1),
-      ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          ClipOval(
-            child: SizedBox(
-              width: 56,
-              height: 56,
+          // 64×64 avatar with subtle line border (v13 spec).
+          Container(
+            width: 64,
+            height: 64,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(color: AppTheme.line2),
+            ),
+            child: ClipOval(
               child: avatar != null
                   ? CachedNetworkImage(
                       imageUrl: avatar,
@@ -177,51 +182,102 @@ class _IdentityCard extends StatelessWidget {
                   : _AvatarFallback(name: name),
             ),
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  name,
-                  style: theme.textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  email,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: AppTheme.textMute,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                if (profile?.isAdmin == true) ...[
-                  const SizedBox(height: 6),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: AppTheme.chipBgStrong,
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Text(
-                      'ADMIN',
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        letterSpacing: 1.6,
-                        fontWeight: FontWeight.w600,
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        name,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: -0.2,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
+                    if (profile?.isAdmin == true) ...[
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: AppTheme.chipBgStrong,
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          'ADMIN',
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            fontSize: 9,
+                            letterSpacing: 1.4,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  bio?.isNotEmpty == true ? bio! : email,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: AppTheme.textMute,
+                    height: 1.4,
                   ),
-                ],
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ],
             ),
           ),
+          const SizedBox(width: 12),
+          // Inline 編輯 pill — direct affordance, no need to scroll.
+          const _EditPill(),
         ],
+      ),
+    );
+  }
+}
+
+/// v13 inline 編輯 pill — opens /profile/edit. Sits on the right side
+/// of the identity row.
+class _EditPill extends StatelessWidget {
+  const _EditPill();
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppTheme.chipBg,
+      borderRadius: BorderRadius.circular(999),
+      child: InkWell(
+        onTap: () {
+          HapticFeedback.selectionClick();
+          GoRouter.of(context).push('/profile/edit');
+        },
+        borderRadius: BorderRadius.circular(999),
+        child: Container(
+          height: 30,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: AppTheme.line2),
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            '編輯',
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  fontWeight: FontWeight.w500,
+                  fontSize: 12,
+                  letterSpacing: 0,
+                ),
+          ),
+        ),
       ),
     );
   }

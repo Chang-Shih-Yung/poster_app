@@ -11,6 +11,7 @@ import '../../core/constants/enums.dart';
 import '../../core/constants/region_labels.dart';
 import '../../core/services/image_compressor.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/sticky_header.dart';
 import '../../data/models/work.dart';
 import '../../data/providers/supabase_providers.dart';
 import '../../data/repositories/submission_repository.dart';
@@ -303,17 +304,39 @@ class _SubmissionPageState extends ConsumerState<SubmissionPage> {
   Widget build(BuildContext context) {
     final signedIn = ref.watch(currentUserProvider) != null;
     if (!signedIn) {
-      return Center(
-        child: Text('請先登入才能上傳',
-            style: TextStyle(color: AppTheme.textMute)),
+      return Scaffold(
+        backgroundColor: AppTheme.bg,
+        body: Center(
+          child: Text('請先登入才能上傳',
+              style: TextStyle(color: AppTheme.textMute)),
+        ),
       );
     }
 
     final topInset = MediaQuery.paddingOf(context).top;
     final theme = Theme.of(context);
 
+    return Scaffold(
+      backgroundColor: AppTheme.bg,
+      body: Stack(
+        children: [
+          _buildScrollableForm(topInset, theme),
+          // v13 sticky header — back arrow + 上傳海報 title + 送出 pill.
+          StickyHeader(
+            title: '上傳海報',
+            actionLabel: '送出',
+            actionLoading: _submitting || _compressing,
+            onAction: (_submitting || _compressing) ? null : _showPreview,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildScrollableForm(double topInset, ThemeData theme) {
     return SingleChildScrollView(
-      padding: EdgeInsets.fromLTRB(20, topInset + 64, 20, 40),
+      padding: EdgeInsets.fromLTRB(
+          20, topInset + 70, 20, 40), // header height = 60 + buffer
       child: Form(
         key: _formKey,
         child: Column(

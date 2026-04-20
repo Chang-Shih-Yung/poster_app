@@ -8,6 +8,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../core/services/image_compressor.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/sticky_header.dart';
 import '../../data/models/app_user.dart';
 import '../../data/repositories/auth_repository.dart';
 import '../../data/repositories/user_repository.dart';
@@ -140,85 +141,84 @@ class _ProfileEditPageState extends ConsumerState<ProfileEditPage> {
           }
           _hydrateFrom(profile);
 
-          return SingleChildScrollView(
-            padding: EdgeInsets.fromLTRB(20, topInset + 60, 20, bottomInset + 80),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('編輯個人檔案',
-                    style: theme.textTheme.headlineSmall
-                        ?.copyWith(fontWeight: FontWeight.w600)),
-                const SizedBox(height: 24),
-
-                // Avatar.
-                Center(child: _AvatarPicker(
-                  url: _avatarUrl,
-                  newBytes: _newAvatarBytes,
-                  onPick: _pickAvatar,
-                )),
-                const SizedBox(height: 28),
-
-                _Label('顯示名稱'),
-                const SizedBox(height: 6),
-                TextField(
-                  controller: _nameCtrl,
-                  maxLength: 30,
-                  decoration: const InputDecoration(
-                    hintText: '你想被叫什麼名字？',
-                  ),
-                ),
-                const SizedBox(height: 16),
-
-                _Label('個人簡介'),
-                const SizedBox(height: 6),
-                TextField(
-                  controller: _bioCtrl,
-                  maxLength: 200,
-                  maxLines: 4,
-                  decoration: const InputDecoration(
-                    hintText: '介紹一下你自己、你收藏的風格…',
-                  ),
-                ),
-                const SizedBox(height: 16),
-
-                _Label('性別（選填）'),
-                const SizedBox(height: 6),
-                _GenderPicker(
-                  value: _gender,
-                  onChanged: (g) => setState(() => _gender = g),
-                ),
-                const SizedBox(height: 24),
-
-                _Label('個人連結'),
-                const SizedBox(height: 6),
-                _LinksEditor(
-                  value: _links,
-                  onChanged: (l) => setState(() => _links = l),
-                ),
-
-                const SizedBox(height: 32),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton(
-                    onPressed: _saving ? null : () => _save(profile),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: AppTheme.text,
-                      foregroundColor: Colors.black,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
+          return Stack(
+            children: [
+              // Scrollable form (push down for sticky header height).
+              SingleChildScrollView(
+                padding: EdgeInsets.fromLTRB(
+                    20, topInset + 70, 20, bottomInset + 80),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Centered avatar + 更換相片 caption (v13 spec).
+                    Center(
+                      child: Column(
+                        children: [
+                          _AvatarPicker(
+                            url: _avatarUrl,
+                            newBytes: _newAvatarBytes,
+                            onPick: _pickAvatar,
+                          ),
+                          const SizedBox(height: 10),
+                          GestureDetector(
+                            onTap: _pickAvatar,
+                            child: Text(
+                              '更換相片',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: AppTheme.textMute,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                    child: _saving
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(
-                                strokeWidth: 2, color: Colors.black),
-                          )
-                        : const Text('儲存',
-                            style: TextStyle(fontWeight: FontWeight.w600)),
-                  ),
+                    const SizedBox(height: 24),
+                    _Label('暱稱'),
+                    const SizedBox(height: 6),
+                    TextField(
+                      controller: _nameCtrl,
+                      maxLength: 30,
+                      decoration: const InputDecoration(
+                        hintText: '你想被叫什麼名字？',
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    _Label('簡介'),
+                    const SizedBox(height: 6),
+                    TextField(
+                      controller: _bioCtrl,
+                      maxLength: 200,
+                      maxLines: 4,
+                      decoration: const InputDecoration(
+                        hintText: '介紹一下你自己、你收藏的風格…',
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    _Label('性別（選填）'),
+                    const SizedBox(height: 6),
+                    _GenderPicker(
+                      value: _gender,
+                      onChanged: (g) => setState(() => _gender = g),
+                    ),
+                    const SizedBox(height: 24),
+                    _Label('個人連結'),
+                    const SizedBox(height: 6),
+                    _LinksEditor(
+                      value: _links,
+                      onChanged: (l) => setState(() => _links = l),
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+              // v13 sticky black header — back arrow + title + save pill.
+              StickyHeader(
+                title: '編輯個人檔案',
+                actionLabel: '儲存',
+                actionLoading: _saving,
+                onAction: _saving ? null : () => _save(profile),
+              ),
+            ],
           );
         },
       ),
