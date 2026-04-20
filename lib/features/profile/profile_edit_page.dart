@@ -95,7 +95,10 @@ class _ProfileEditPageState extends ConsumerState<ProfileEditPage> {
         links: _links,
         avatarUrl: newAvatarUrl,
       );
-      ref.invalidate(currentProfileProvider);
+      // Single helper invalidates every provider that surfaces this user's
+      // displayName / avatar / bio / gender / links across the app. See
+      // user_repository.dart → invalidateUserSurfaces for the rationale.
+      invalidateUserSurfaces(ref, profile.id);
       if (mounted) {
         _toast('已儲存');
         context.pop();

@@ -5,6 +5,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/app_user.dart';
 import '../providers/supabase_providers.dart';
+import 'auth_repository.dart' show currentProfileProvider;
+import 'social_repository.dart' show homeSectionsV2Provider;
 
 /// Public profile payload returned by the `user_public_profile` RPC.
 /// Separate from [AppUser] because it includes aggregated stats.
@@ -126,3 +128,34 @@ final userSearchProvider =
     FutureProvider.autoDispose.family<List<AppUser>, String>((ref, query) async {
   return ref.watch(userRepositoryProvider).search(query);
 });
+
+/// Invalidate every provider that carries user-facing data for [userId].
+///
+/// Call this after ANY mutation that changes how a user is displayed across
+/// the app: avatar, displayName, bio, gender, links — and in the future,
+/// follow/unfollow counts, role badges, etc.
+///
+/// Why a single helper: native apps (iOS / Android) don't have "F5". The
+/// only way to make a screen show fresh data is to invalidate the providers
+/// that source it. Profile fields surface in many places (header card,
+/// uploader badges on poster cards, active-collectors row, follow feed,
+/// public profile page, search results). Centralising this so every future
+/// caller does the right thing.
+///
+/// Strategy:
+///   - non-autoDispose providers: always invalidate (the home tab is
+///     persistent in the IndexedStack so it actively listens — invalidate
+///     triggers refetch immediately).
+///   - autoDispose family providers (publicProfileProvider, _postersByUploader,
+///     unifiedSearchProvider, browseByTagProvider, _posterByIdProvider...):
+///     when the page leaves the tree they auto-tear-down; on next entry
+///     they refetch with the latest joined user data. We still invalidate
+///     publicProfileProvider(self) because the user might be viewing their
+///     own `/user/<self>` route.
+void invalidateUserSurfaces(WidgetRef ref, String userId) {
+  // Always-watched (persistent in IndexedStack):
+  ref.invalidate(currentProfileProvider);
+  ref.invalidate(homeSectionsV2Provider);
+  // Family — own public profile may be currently shown:
+  ref.invalidate(publicProfileProvider(userId));
+}

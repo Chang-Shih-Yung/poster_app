@@ -26,3 +26,9 @@ firebase-debug.log
 supabase/.temp/
 supabase/.branches/
 .gstack/
+
+# Claude / agent local state (worktrees, scheduled tasks, settings)
+.claude/worktrees/
+.claude/scheduled_tasks.lock
+.claude/settings.local.json
+.claude/launch.json
