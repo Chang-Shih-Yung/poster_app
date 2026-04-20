@@ -1,8 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../core/theme/app_theme.dart';
+
+/// Shared tab index for the bottom nav. Exposed so any route can jump
+/// the shell to a specific tab without lifting state via nav args.
+///   0 = 探索 (home)
+///   1 = 我的 (library with favorites default)
+class ShellTabNotifier extends Notifier<int> {
+  @override
+  int build() => 0;
+  void setIndex(int index) => state = index;
+}
+
+final shellTabProvider =
+    NotifierProvider<ShellTabNotifier, int>(ShellTabNotifier.new);
 
 /// Shell with bottom navigation: 探索 (home) / 我的 (library).
 class AppShell extends StatelessWidget {
@@ -122,24 +136,20 @@ class _AppShellScope extends InheritedWidget {
 }
 
 /// Stateful shell wrapper.
-class AppShellWrapper extends StatefulWidget {
+/// Tab index is now backed by [shellTabProvider] so external pages
+/// (e.g. profile → 我的收藏) can jump tabs by reading the provider.
+class AppShellWrapper extends ConsumerWidget {
   const AppShellWrapper({super.key, required this.children});
   final List<Widget> children;
 
   @override
-  State<AppShellWrapper> createState() => _AppShellWrapperState();
-}
-
-class _AppShellWrapperState extends State<AppShellWrapper> {
-  int _index = 0;
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final index = ref.watch(shellTabProvider);
     return _AppShellScope(
-      onTabChanged: (i) => setState(() => _index = i),
+      onTabChanged: (i) => ref.read(shellTabProvider.notifier).setIndex(i),
       child: AppShell(
-        currentIndex: _index,
-        children: widget.children,
+        currentIndex: index,
+        children: children,
       ),
     );
   }

@@ -12,6 +12,7 @@ import '../../data/repositories/auth_repository.dart';
 import '../../data/repositories/favorite_repository.dart';
 import '../../data/repositories/submission_repository.dart';
 import '../../data/repositories/user_repository.dart';
+import '../shell/app_shell.dart';
 
 /// Profile page — v11 simplified.
 ///
@@ -77,7 +78,12 @@ class _SignedInView extends ConsumerWidget {
           icon: LucideIcons.heart,
           label: '我的收藏',
           trailing: favCount?.toString(),
-          onTap: () => context.push('/me/favorites'),
+          onTap: () {
+            // 我的收藏 = 我的 tab filtered by favorites (default).
+            // Jump to tab 1 + pop profile page so the shell is visible.
+            ref.read(shellTabProvider.notifier).setIndex(1);
+            context.pop();
+          },
         ),
         const SizedBox(height: 8),
         _CardRow(

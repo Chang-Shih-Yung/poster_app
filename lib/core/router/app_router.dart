@@ -12,7 +12,6 @@ import '../../features/posters/library_page.dart';
 import '../../features/posters/poster_detail_page.dart';
 import '../../features/posters/tag_browse_page.dart';
 import '../../features/posters/work_page.dart';
-import '../../features/profile/my_favorites_page.dart';
 import '../../features/profile/profile_edit_page.dart';
 import '../../features/profile/profile_page.dart';
 import '../../features/profile/public_profile_page.dart';
@@ -82,10 +81,8 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/me/submissions',
         builder: (_, _) => const _BackablePage(child: MySubmissionsPage()),
       ),
-      GoRoute(
-        path: '/me/favorites',
-        builder: (_, _) => const _BackablePage(child: MyFavoritesPage()),
-      ),
+      // /me/favorites route removed — 我的收藏 now routes to the 我的
+      // bottom tab (LibraryPage with pillFavorites=true default).
 
       // Detail: slide-up modal transition.
       GoRoute(
