@@ -8,44 +8,49 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/shimmer_placeholder.dart';
 import '../../data/models/app_user.dart';
+import '../../data/models/home_section.dart';
 import '../../data/models/poster.dart';
 import '../../data/models/social.dart';
 import '../../data/repositories/auth_repository.dart';
 import '../../data/repositories/favorite_repository.dart';
-import '../../data/repositories/poster_repository.dart';
 import '../../data/repositories/social_repository.dart';
 
 // ---------------------------------------------------------------------------
 // Section display config
 // ---------------------------------------------------------------------------
 
-/// Map RPC section keys → display title + icon.
-const _sectionMeta = <String, ({String title, IconData icon})>{
-  'popular': (title: '熱門', icon: LucideIcons.flame),
-  'latest': (title: '最新上架', icon: LucideIcons.sparkles),
-  // Tag-based sections: unknown keys get a default icon.
-};
-
-IconData _iconForKey(String key) =>
-    _sectionMeta[key]?.icon ?? LucideIcons.tag;
-
-String _titleForKey(String key) =>
-    _sectionMeta[key]?.title ?? key;
-
-// ---------------------------------------------------------------------------
-// Home sections provider — single RPC (review #10)
-// ---------------------------------------------------------------------------
-
-final _homeSectionsProvider =
-    FutureProvider<List<HomeSection>>((ref) async {
-  final repo = ref.watch(posterRepositoryProvider);
-  return repo.homeSections(limit: 10);
-});
-
-// Social sections (EPIC 11) live in social_repository.dart as:
-//   trendingFavoritesProvider, activeCollectorsProvider,
-//   followFeedProvider, recentApprovedFeedProvider.
-// We watch them directly in build().
+/// Map lucide icon name (from DB) → IconData.
+/// Short whitelist — we only wire icons that seeded rows use today.
+/// Unknown icons fall back to LucideIcons.tag.
+IconData _iconFromName(String? name) {
+  switch (name) {
+    case 'flame':
+      return LucideIcons.flame;
+    case 'user-check':
+      return LucideIcons.userCheck;
+    case 'trending-up':
+      return LucideIcons.trendingUp;
+    case 'users':
+      return LucideIcons.users;
+    case 'sparkle':
+    case 'sparkles':
+      return LucideIcons.sparkles;
+    case 'star':
+      return LucideIcons.star;
+    case 'medal':
+      return LucideIcons.medal;
+    case 'flag':
+      return LucideIcons.flag;
+    case 'palette':
+      return LucideIcons.palette;
+    case 'award':
+      return LucideIcons.award;
+    case 'film':
+      return LucideIcons.film;
+    default:
+      return LucideIcons.tag;
+  }
+}
 
 // ---------------------------------------------------------------------------
 // HomePage
@@ -61,22 +66,7 @@ class HomePage extends ConsumerWidget {
     final profileAsync = ref.watch(currentProfileProvider);
     final profile = profileAsync.asData?.value;
     final favIds = ref.watch(favoriteIdsProvider).asData?.value ?? {};
-    final sectionsAsync = ref.watch(_homeSectionsProvider);
-    final trendingAsync = ref.watch(trendingFavoritesProvider);
-    final collectorsAsync = ref.watch(activeCollectorsProvider);
-    final followFeedAsync = ref.watch(followFeedProvider);
-    final recentAsync = ref.watch(recentApprovedFeedProvider);
-
-    // Split editorial sections from sectionsAsync for ordered placement.
-    final editorialSections = sectionsAsync.asData?.value
-            .where((s) => s.items.isNotEmpty)
-            .toList() ??
-        const <HomeSection>[];
-    final popularSection = editorialSections.where((s) => s.key == 'popular');
-    final latestSection = editorialSections.where((s) => s.key == 'latest');
-    final tagSections = editorialSections
-        .where((s) => s.key != 'popular' && s.key != 'latest')
-        .toList();
+    final sectionsAsync = ref.watch(homeSectionsV2Provider);
 
     return Scaffold(
       backgroundColor: AppTheme.bg,
@@ -114,88 +104,38 @@ class HomePage extends ConsumerWidget {
             ),
           ),
 
-          // ── Section order (EPIC 11) ─────────────────────────────────────
-          // 1. 熱門 — what's popular right now
-          // 2. 追蹤的人最近在收 — only if signed-in + has follows
-          // 3. 本週最多人收藏 — scarcity signal
-          // 4. 活躍收藏家 — same-taste discovery
-          // 5. Editorial tag sections (收藏必備 / 經典 / 日本 / ...)
-          // 6. 剛上架 — recent approved feed (was "社群動態")
-          // 7. 最新上架 — fallback if recent is empty
-
-          // 1. 熱門
-          if (sectionsAsync.isLoading)
-            SliverToBoxAdapter(child: _SectionSkeleton())
-          else if (sectionsAsync.hasError)
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.all(32),
-                child: Center(
-                  child: Text('載入失敗：${sectionsAsync.error}',
-                      style: TextStyle(color: AppTheme.textFaint)),
+          // ── EPIC 14: config-driven sections ──────────────────────────────
+          // One provider → ordered list → dispatch per sourceType. Order is
+          // determined by `home_sections_config.position` in DB. Admin can
+          // reorder / add / remove sections without code changes.
+          ...sectionsAsync.when(
+            loading: () => [
+              for (var i = 0; i < 3; i++)
+                SliverToBoxAdapter(child: _SectionSkeleton()),
+            ],
+            error: (e, _) => [
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.all(32),
+                  child: Center(
+                    child: Text('載入失敗：$e',
+                        style: TextStyle(color: AppTheme.textFaint)),
+                  ),
                 ),
               ),
-            )
-          else
-            ...popularSection.map((s) => SliverToBoxAdapter(
-                  child: _SectionRow(section: s, favIds: favIds),
-                )),
-
-          // 2. 追蹤的人最近在收 (empty-state: hide entirely)
-          followFeedAsync.maybeWhen(
-            data: (activities) => activities.isEmpty
-                ? const SliverToBoxAdapter(child: SizedBox.shrink())
-                : SliverToBoxAdapter(
-                    child: _FollowFeedRow(
-                      activities: activities,
-                      favIds: favIds,
-                    ),
-                  ),
-            orElse: () => const SliverToBoxAdapter(child: SizedBox.shrink()),
+            ],
+            data: (sections) {
+              final slivers = <Widget>[];
+              for (final s in sections) {
+                // Server already applied visibility gate. Empty items → hide.
+                if (s.isEmpty) continue;
+                slivers.add(SliverToBoxAdapter(
+                  child: _DynamicSectionRow(section: s, favIds: favIds),
+                ));
+              }
+              return slivers;
+            },
           ),
-
-          // 3. 本週最多人收藏
-          trendingAsync.maybeWhen(
-            data: (items) => items.isEmpty
-                ? const SliverToBoxAdapter(child: SizedBox.shrink())
-                : SliverToBoxAdapter(
-                    child: _TrendingRow(items: items, favIds: favIds),
-                  ),
-            orElse: () => const SliverToBoxAdapter(child: SizedBox.shrink()),
-          ),
-
-          // 4. 活躍收藏家
-          collectorsAsync.maybeWhen(
-            data: (items) => items.isEmpty
-                ? const SliverToBoxAdapter(child: SizedBox.shrink())
-                : SliverToBoxAdapter(child: _CollectorsRow(items: items)),
-            orElse: () => const SliverToBoxAdapter(child: SizedBox.shrink()),
-          ),
-
-          // 5. Editorial tag sections
-          ...tagSections.map((s) => SliverToBoxAdapter(
-                child: _SectionRow(section: s, favIds: favIds),
-              )),
-
-          // 6. 剛上架 (from recent_approved_feed — was social_activity_feed)
-          recentAsync.maybeWhen(
-            data: (items) => items.isEmpty
-                ? const SliverToBoxAdapter(child: SizedBox.shrink())
-                : SliverToBoxAdapter(
-                    child: _SectionRow(
-                      section: HomeSection(key: 'recent', items: items),
-                      favIds: favIds,
-                      overrideTitle: '剛上架',
-                      overrideIcon: LucideIcons.sparkle,
-                    ),
-                  ),
-            orElse: () => const SliverToBoxAdapter(child: SizedBox.shrink()),
-          ),
-
-          // 7. 最新上架 (fallback)
-          ...latestSection.map((s) => SliverToBoxAdapter(
-                child: _SectionRow(section: s, favIds: favIds),
-              )),
 
           // Bottom padding.
           SliverToBoxAdapter(
@@ -207,26 +147,78 @@ class HomePage extends ConsumerWidget {
   }
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// EPIC 14: _DynamicSectionRow — dispatches per sourceType
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// Each home section comes from DB config. sourceType tells us which card
+// widget to render:
+//   popular / tag_slug / recent_approved → _SectionRow (plain poster cards)
+//   trending_favorites                   → _TrendingRow
+//   active_collectors                    → _CollectorsRow
+//   follow_feed                          → _FollowFeedRow
+
+class _DynamicSectionRow extends StatelessWidget {
+  const _DynamicSectionRow({required this.section, required this.favIds});
+  final HomeSectionV2 section;
+  final Set<String> favIds;
+
+  @override
+  Widget build(BuildContext context) {
+    switch (section.sourceType) {
+      case 'trending_favorites':
+        return _TrendingRow(
+          items: section.asTrending(),
+          favIds: favIds,
+          title: section.titleZh,
+          icon: _iconFromName(section.icon),
+        );
+      case 'active_collectors':
+        return _CollectorsRow(
+          items: section.asCollectors(),
+          title: section.titleZh,
+          icon: _iconFromName(section.icon),
+        );
+      case 'follow_feed':
+        return _FollowFeedRow(
+          activities: section.asFollowFeed(),
+          favIds: favIds,
+          title: section.titleZh,
+          icon: _iconFromName(section.icon),
+        );
+      case 'popular':
+      case 'tag_slug':
+      case 'recent_approved':
+        return _SectionRow(
+          items: section.asPosters(),
+          favIds: favIds,
+          title: section.titleZh,
+          icon: _iconFromName(section.icon),
+        );
+      default:
+        return const SizedBox.shrink();
+    }
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Section row
 // ---------------------------------------------------------------------------
 
 class _SectionRow extends StatelessWidget {
   const _SectionRow({
-    required this.section,
+    required this.items,
     required this.favIds,
-    this.overrideTitle,
-    this.overrideIcon,
+    required this.title,
+    required this.icon,
   });
-  final HomeSection section;
+  final List<Poster> items;
   final Set<String> favIds;
-  final String? overrideTitle;
-  final IconData? overrideIcon;
+  final String title;
+  final IconData icon;
 
   @override
   Widget build(BuildContext context) {
-    final title = overrideTitle ?? _titleForKey(section.key);
-    final icon = overrideIcon ?? _iconForKey(section.key);
     return Padding(
       padding: const EdgeInsets.only(top: 24),
       child: Column(
@@ -259,11 +251,11 @@ class _SectionRow extends StatelessWidget {
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 20),
-              itemCount: section.items.length,
+              itemCount: items.length,
               separatorBuilder: (_, _) => const SizedBox(width: 12),
               itemBuilder: (_, i) => _FeedCard(
-                poster: section.items[i],
-                isFav: favIds.contains(section.items[i].id),
+                poster: items[i],
+                isFav: favIds.contains(items[i].id),
               ),
             ),
           ),
@@ -541,9 +533,16 @@ class _UploaderBadge extends StatelessWidget {
 // ─── 本週最多人收藏 ─────────────────────────────────────────────────────────
 
 class _TrendingRow extends StatelessWidget {
-  const _TrendingRow({required this.items, required this.favIds});
+  const _TrendingRow({
+    required this.items,
+    required this.favIds,
+    required this.title,
+    required this.icon,
+  });
   final List<TrendingPoster> items;
   final Set<String> favIds;
+  final String title;
+  final IconData icon;
 
   @override
   Widget build(BuildContext context) {
@@ -557,10 +556,9 @@ class _TrendingRow extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Row(
               children: [
-                Icon(LucideIcons.trendingUp,
-                    size: 16, color: AppTheme.textMute),
+                Icon(icon, size: 16, color: AppTheme.textMute),
                 const SizedBox(width: 6),
-                Text('本週最多人收藏',
+                Text(title,
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.w600,
                           color: AppTheme.text,
@@ -772,8 +770,14 @@ class _MiniAvatar extends StatelessWidget {
 // ─── 活躍收藏家 ────────────────────────────────────────────────────────────
 
 class _CollectorsRow extends StatelessWidget {
-  const _CollectorsRow({required this.items});
+  const _CollectorsRow({
+    required this.items,
+    required this.title,
+    required this.icon,
+  });
   final List<CollectorPreview> items;
+  final String title;
+  final IconData icon;
 
   @override
   Widget build(BuildContext context) {
@@ -787,9 +791,9 @@ class _CollectorsRow extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Row(
               children: [
-                Icon(LucideIcons.users, size: 16, color: AppTheme.textMute),
+                Icon(icon, size: 16, color: AppTheme.textMute),
                 const SizedBox(width: 6),
-                Text('活躍收藏家',
+                Text(title,
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.w600,
                           color: AppTheme.text,
@@ -942,9 +946,16 @@ class _MiniThumbEmpty extends StatelessWidget {
 // ─── 追蹤的人最近在收 ──────────────────────────────────────────────────────
 
 class _FollowFeedRow extends StatelessWidget {
-  const _FollowFeedRow({required this.activities, required this.favIds});
+  const _FollowFeedRow({
+    required this.activities,
+    required this.favIds,
+    required this.title,
+    required this.icon,
+  });
   final List<FollowActivity> activities;
   final Set<String> favIds;
+  final String title;
+  final IconData icon;
 
   @override
   Widget build(BuildContext context) {
@@ -958,10 +969,9 @@ class _FollowFeedRow extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Row(
               children: [
-                Icon(LucideIcons.userCheck,
-                    size: 16, color: AppTheme.textMute),
+                Icon(icon, size: 16, color: AppTheme.textMute),
                 const SizedBox(width: 6),
-                Text('追蹤的人最近在收',
+                Text(title,
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.w600,
                           color: AppTheme.text,

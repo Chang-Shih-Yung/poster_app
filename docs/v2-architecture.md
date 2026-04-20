@@ -642,14 +642,22 @@ create table home_sections_config (
 
 | # | 任務 | 狀態 | 預估 |
 |---|------|------|------|
-| 14-1 | Schema migration: `home_sections_config` + seed rows | [ ] | S |
-| 14-2 | RPC `home_sections_v2(p_user_id?)`：讀 config、依 source_type dispatch 對應子 RPC | [ ] | M |
-| 14-3 | Dart repository 改讀新 RPC | [ ] | S |
-| 14-4 | Home page：移除 `_homeSectionsProvider` 分散邏輯，統一來源 | [ ] | S |
-| 14-5 | 砍掉「最新上架」section | [ ] | XS |
-| 14-6 | Tests: config row → rendered section 對應 | [ ] | S |
+| 14-1 | Schema migration: `home_sections_config` + seed 11 rows（含整套既有 sections） | ✅ | S |
+| 14-2 | RPC `home_sections_v2()`：讀 config、依 source_type dispatch + visibility gate（always / signed_in / has_follows） | ✅ | M |
+| 14-3 | `HomeSectionV2` model + `SocialRepository.homeSectionsV2()` + `homeSectionsV2Provider` | ✅ | S |
+| 14-4 | Home page 改用 `homeSectionsV2Provider` + `_DynamicSectionRow` 依 `sourceType` 分派 widget；`_SectionRow/_TrendingRow/_CollectorsRow/_FollowFeedRow` 全改為接受 title + icon 參數 | ✅ | S |
+| 14-5 | 刪除舊 `home_sections()` RPC + 4 個 per-section Dart provider + `HomeSection` legacy class | ✅ | XS |
+| 14-6 | Tests: `HomeSectionV2.fromRow` + 4 種 sourceType 分派 parser（+5 tests, 105/105 pass） | ✅ | S |
 
 執行順序：14-1 → 14-2 → (14-3 // 14-4) → 14-5 → 14-6
+
+**實作筆記**：
+- Source type 白名單：`popular / tag_slug / recent_approved / trending_favorites / active_collectors / follow_feed`。未來加新類型只要 SQL 擴 `home_sections_v2` dispatch + Dart 擴 `_DynamicSectionRow`，不用動 config 結構
+- Visibility gate 在 server side（`auth.uid()` + `follows` 查詢），client 只要讀 `sections` 照序 render；`has_follows` 無追蹤時 server 端就不回傳該 section
+- 「剛上架」rename 自原 `social_activity_feed`，「最新上架」（舊 `latest` section）**已完全刪除**——跟剛上架同步在 approve 時 `now()`，視覺重複
+- Icon map：DB 存 lucide icon name 字串（`flame / sparkle / star / ...`），Dart 端 whitelist mapping（`_iconFromName`）防未知 icon 崩潰
+- Editorial tag sections（收藏必備/經典/日版/台版/手繪/大師）全部搬 config，Admin 在 Supabase Studio 改 `position` 欄位就能重排，改 `enabled=false` 就能隱藏，**不用 deploy**
+- 未來加「週五推薦」這種 scheduled section：加 `schedule jsonb` 欄位 + RPC 處理 gate。YAGNI 目前不做
 
 ---
 
@@ -1012,12 +1020,77 @@ create table tag_suggestions (
 - admin 每筆決策時間從 ~30 秒（要搜尋既有）降到 ~5 秒（直接點一鍵合併 / 建立 / 退回）
 - 使用者體驗：輸入 "Miyazaki" 立刻看到「你是不是想用宮崎駿」，心理負擔消失
 
+#### Phase 2 Bug-fix 修正紀錄
+
+- **CJK 相似度修正**（migration 101000）：`pg_trgm.similarity()` 對短中文字無感（「院線」vs「院線首刷」原本 ~0.2）。加 substring containment 支路 → 任一方是另一方 substring 給 0.85 分。門檻 0.30→0.25。新增 `p_cross_category` flag 讓 admin UI 跨 facet 找（legacy migrated 建議常分錯 category）
+- **Slug 產生修正**（migration 101400）：原本非 ASCII 的 label 被 regex 清成 `-`，產生 `curation--` 撞 unique key。改成：優先 label_en 拉丁→次選 label_zh 直接（UTF-8 slug 合法）→ 邊界補 UUID fragment → 衝突重試 4-char 隨機 suffix
+
+#### Phase 2 衍生：Merge picker + Admin UI UX 強化
+
+- **跨 category 手動搜尋**：merge picker 原本限制「只能選建議所在 category 的既有分類」，但 legacy 建議都塞在 編輯精選 → 選項永遠錯。改成列出全部 canonical tags + category 徽章
+- **系統推薦 pre-populate**：merge picker 頂部自動顯示 top 3 相似既有（跨 category），配相似度 % + 一鍵合併
+- **空 state**：系統推薦沒結果時顯示「系統在全站分類中找不到相似的既有分類，請自行搜尋挑選。」
+- **分類一覽 dialog**（`_TaxonomyOverviewDialog`）：app bar 的 list icon 打開，10 category × canonical tags 清單 + aliases + poster_count，admin 審稿前先認識 taxonomy
+
 ### TBD 討論項目
 
 - ~~Admin UI 範圍~~ ✅ 已定案：只做 suggestions queue
 - 投稿 UX 重設計：work_kind 第一步選擇的具體流程（直接下拉 vs 視覺選單）
 - Tag picker 的 UI pattern：全展開 vs 分類收摺 vs 搜索優先
 - 初期 seed 數量：200 還是先 100（MVP）？
+
+---
+
+### EPIC 18 Layer A: 規模化噪音削減（規則 + 產品決策，零 ML）
+
+**背景**：使用者問「queue 一次數百筆怎麼辦？」+「『當代』vs『1990』根本語意一樣，為什麼要 admin 審？」
+
+**核心洞察**：string similarity ≠ semantic similarity。pg_trgm 不懂語意。但不用馬上上 ML。**大部分噪音靠產品規則就能砍掉 70%**。
+
+**三塊刀**：
+
+1. **關閉結構化 category 的建議入口**（6 個 category）
+   - 年代 / 國別 / 版本 / 收藏狀態 / Chirashi 類型 / 編輯精選
+   - 理由：這些 canonical 列表夠完整 + 偏 enum，不該開給使用者建議（雜訊源頭）
+   - `tag_categories.allows_suggestion = false`
+   - TagPicker 已有 flag 保護（「建議新分類」link 消失）
+   - `submit_tag_suggestion` RPC 同時 raise `category_closed_for_suggestion`（server-side guard）
+   - **只剩 4 個 category 開放建議**：類型、媒材、設計師、美學
+
+2. **Synonym table + 年份正規化**（DB table，非 hardcode）
+   - 新表 `tag_synonyms (input_label, category_id, target_tag_id)` unique
+   - Seed：當代/現代/近代 → 2020s；復古/老派 → retro；得獎/獎項 → award；老片 → 經典（仍可 admin 擴充）
+   - SQL 函式 `normalise_year_to_era_tag(label)`：4-digit regex → decade 查 tag（1987 → era-1980s）；2-digit 世紀推理
+   - `submit_tag_suggestion` 升級：**年份 > 同義詞 > 相似度 > queue** 四段 auto-merge gate
+
+3. **Admin 可改 category**（修 legacy migration 盲點）
+   - 新 RPC `change_suggestion_category(suggestion_id, new_category_id)`
+   - 建議卡左上角 category chip 可點（加 chevron） → 彈出類別選單
+   - 解決：legacy migration 不知道 tag 屬於哪個 facet，全部塞「編輯精選」當垃圾桶，UX 不讓你改的問題
+   - 另外跑了一次 legacy re-categorisation：genre keywords → 類型、年份/當代/復古 → 年代、「X 版」/ 歐美 / 韓星 → 國別
+
+**Task 拆解**：
+
+| # | 任務 | 狀態 |
+|---|------|------|
+| A0 | DB 刪除誤加的 戰爭/懸疑 pending + canonical（後者分兩次 migration 補） | ✅ |
+| A1 | change_suggestion_category RPC + 建議卡 category chip dropdown | ✅ |
+| A2 | `allows_suggestion` flag on 6 category + RPC server guard + TagPicker client guard | ✅ |
+| A3 | `tag_synonyms` table + seed 常見 mapping | ✅ |
+| A4 | `normalise_year_to_era_tag` + submit_tag_suggestion 整合 | ✅ |
+| A5 | Legacy pending 依 keyword 規則重新分派 category | ✅ |
+
+**上線後效果**：
+- 使用者送「當代」 → auto-merge 2020s（同義詞）
+- 使用者送「1987」 → auto-merge 1980s（年份）
+- 使用者送「復古」 → auto-merge retro aesthetic
+- 結構化 category（年代/國別等）根本不讓建議，源頭砍噪音
+- Admin queue 最終只剩「真的需要人判斷」的長尾建議
+
+**Key 設計原則**：
+> tag-to-tag mapping 放 DB 欄位（`tags.aliases text[]`）或 DB table（`tag_synonyms`），**不是 code**。運營新增同義詞靠 Supabase Studio INSERT，不用 PR + deploy。code 裡唯一「固定」的只有演算法（regex、decade 除法、threshold）。
+
+**tests**：98/98 pass（含 Layer A 的 SuggestionOutcome reason 欄位 + similarity threshold）
 
 ---
 

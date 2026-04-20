@@ -72,13 +72,6 @@ class PosterPage {
   final bool hasMore;
 }
 
-/// A home section returned by home_sections() RPC.
-class HomeSection {
-  const HomeSection({required this.key, required this.items});
-  final String key;
-  final List<Poster> items;
-}
-
 class PosterRepository {
   PosterRepository(this._client);
 
@@ -168,18 +161,6 @@ class PosterRepository {
         .toList();
   }
 
-  /// Home sections via single RPC (review #10). 1 round-trip for all sections.
-  Future<List<HomeSection>> homeSections({int limit = 10}) async {
-    final result = await _client.rpc('home_sections', params: {'p_limit': limit});
-    final sections = result as List;
-    return sections.map((s) {
-      final map = s as Map<String, dynamic>;
-      final items = (map['items'] as List)
-          .map((r) => Poster.fromRow(r as Map<String, dynamic>))
-          .toList();
-      return HomeSection(key: map['key'] as String, items: items);
-    }).toList();
-  }
 
   Future<Poster?> getById(String id) async {
     final row = await _client

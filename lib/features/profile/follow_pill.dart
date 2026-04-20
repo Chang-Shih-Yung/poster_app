@@ -119,7 +119,9 @@ class _FollowPillState extends ConsumerState<FollowPill> {
       // Invalidate so stats refetch (counts update too).
       ref.invalidate(userRelationshipStatsProvider(widget.targetUserId));
       // Invalidate follow feed — it changes when the follow graph changes.
-      ref.invalidate(followFeedProvider);
+      // EPIC 14: home sections are now config-driven, refresh the combined
+      // RPC so the follow-feed section re-evaluates with new follow graph.
+      ref.invalidate(homeSectionsV2Provider);
     } catch (e) {
       // Rollback optimistic update.
       setState(() => _optimistic = current);

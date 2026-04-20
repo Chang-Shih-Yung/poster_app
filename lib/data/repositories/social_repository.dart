@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../models/home_section.dart';
 import '../models/poster.dart';
 import '../models/social.dart';
 import '../providers/supabase_providers.dart';
@@ -55,6 +56,19 @@ class SocialRepository {
         .toList(growable: false);
   }
 
+  /// EPIC 14: single RPC for the whole home page. Config-driven dispatcher
+  /// reads home_sections_config rows, fetches each section's items, and
+  /// returns an ordered array. Replaces the old home_sections() RPC + the
+  /// separate trendingFavorites / activeCollectors / followFeed /
+  /// recentApprovedFeed providers that were wired in-place on home_page.dart.
+  Future<List<HomeSectionV2>> homeSectionsV2() async {
+    final result = await _client.rpc('home_sections_v2');
+    final rows = (result as List?) ?? const [];
+    return rows
+        .map((r) => HomeSectionV2.fromRow(r as Map<String, dynamic>))
+        .toList(growable: false);
+  }
+
   /// `recent_approved_feed(limit)` — was social_activity_feed, renamed.
   /// Returns Poster objects (with uploader_name/avatar fields on each row).
   Future<List<Poster>> recentApprovedFeed({int limit = 12}) async {
@@ -71,24 +85,14 @@ final socialRepositoryProvider = Provider<SocialRepository>((ref) {
   return SocialRepository(ref.watch(supabaseClientProvider));
 });
 
-// ── Riverpod providers for each section ─────────────────────────────────────
+// EPIC 14: the four per-section providers (trendingFavoritesProvider /
+// activeCollectorsProvider / followFeedProvider / recentApprovedFeedProvider)
+// were removed — home page now uses homeSectionsV2Provider which dispatches
+// server-side by config. Repository methods are kept because admin flows
+// (e.g. public profile, direct search) may need direct access.
 
-final trendingFavoritesProvider =
-    FutureProvider.autoDispose<List<TrendingPoster>>((ref) async {
-  return ref.watch(socialRepositoryProvider).trendingFavorites();
-});
-
-final activeCollectorsProvider =
-    FutureProvider.autoDispose<List<CollectorPreview>>((ref) async {
-  return ref.watch(socialRepositoryProvider).activeCollectors();
-});
-
-final followFeedProvider =
-    FutureProvider.autoDispose<List<FollowActivity>>((ref) async {
-  return ref.watch(socialRepositoryProvider).followFeed();
-});
-
-final recentApprovedFeedProvider =
-    FutureProvider.autoDispose<List<Poster>>((ref) async {
-  return ref.watch(socialRepositoryProvider).recentApprovedFeed();
+/// EPIC 14: ordered list of all home sections from DB config.
+final homeSectionsV2Provider =
+    FutureProvider.autoDispose<List<HomeSectionV2>>((ref) async {
+  return ref.watch(socialRepositoryProvider).homeSectionsV2();
 });
