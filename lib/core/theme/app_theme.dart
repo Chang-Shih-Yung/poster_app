@@ -3,20 +3,36 @@ import 'package:flutter/material.dart';
 // because fonts were fetched from CDN after initial render. NotoSansTC is
 // now bundled as local asset in pubspec.yaml.
 
-/// v4 "Transparent Minimal" theme.
+/// v13 "Cool Ink + Liquid Glass" theme (was v4 "Transparent Minimal").
 ///
-/// Design rules:
-/// - NO accent color. Luxury = colorless, transparent, blur.
-/// - Primary surface is pure black. Text hierarchy by alpha, not color.
-/// - CTA is pure white pill on black; active states are white, not tinted.
-/// - Fonts: Geist (latin) + Noto Sans TC (Chinese). No italic, no serif.
+/// 2026-04-20 — palette shifted from pure black to **Cool Ink** (#0D1116):
+/// a slight blue undertone makes glass blur read as ambient light instead
+/// of grey haze. Glass surfaces (Glass widget) replace the old "raised
+/// card" pattern for top chrome, bottom nav, and detail drawer.
+///
+/// Design rules (v13):
+/// - NO accent color. Hierarchy = colorless transparency + blur.
+/// - Primary surface is **Cool Ink** (#0D1116), not pure black.
+/// - Glassmorphism: 20px backdropFilter + saturate(140%) + 1px line2 border
+///   + 1px inset top highlight + soft drop shadow. Use the [Glass] widget.
+/// - CTA is pure white pill on ink; active states are white, not tinted.
+/// - Bottom nav is a floating glass pill island (28dp from bottom),
+///   not a full-width bar. Two circular icons: home + heart.
+/// - Detail page is a Fuji drawer: full-bleed image background + glass
+///   bottom panel with handle, 32px editorial title, stats row, white CTA.
+/// - Fonts: Inter (latin) + Noto Sans TC (Chinese), w400-w700, no serif.
 /// - Icons: lucide_icons_flutter (rounded line icons).
 class AppTheme {
-  // Surface tokens
-  static const bg = Color(0xFF050506);
-  static const surface = Color(0xFF0A0A0C);
-  static const surfaceRaised = Color(0xFF131316);
-  static const surfaceGlass = Color(0x8C141416); // rgba(20,20,22,0.55)
+  // ── v13 Cool Ink palette ─────────────────────────────────────────────
+  // bg keeps the same NAME as before (so we don't have to rename 200
+  // call sites) but the VALUE shifted from #050506 → #0D1116.
+  static const bg = Color(0xFF0D1116); // ink — primary surface
+  static const ink2 = Color(0xFF10151B); // ink2 — slightly raised
+  static const ink3 = Color(0xFF161C24); // ink3 — card background
+  // Backwards-compat aliases (call sites still reference these names)
+  static const surface = ink2;
+  static const surfaceRaised = ink3;
+  static const surfaceGlass = Color(0x8C141820); // rgba(20,24,32,0.55) — glass tint
 
   // Text tokens (all white w/ alpha)
   static const text = Color(0xFFFFFFFF);

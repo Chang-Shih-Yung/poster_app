@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/glass.dart';
 
 /// Shared tab index for the bottom nav. Exposed so any route can jump
 /// the shell to a specific tab without lifting state via nav args.
@@ -18,7 +19,9 @@ class ShellTabNotifier extends Notifier<int> {
 final shellTabProvider =
     NotifierProvider<ShellTabNotifier, int>(ShellTabNotifier.new);
 
-/// Shell with bottom navigation: 探索 (home) / 我的 (library).
+/// v13 shell — content is full-bleed under the device safe area, and a
+/// **floating glass pill island** hovers at the bottom centre with two
+/// circular icons (home + heart). No more full-width bottom bar.
 class AppShell extends StatelessWidget {
   const AppShell({
     super.key,
@@ -35,36 +38,62 @@ class AppShell extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: AppTheme.bg,
-      body: IndexedStack(
-        index: currentIndex,
-        children: children,
-      ),
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          border: Border(top: BorderSide(color: AppTheme.line1, width: 0.5)),
-        ),
-        child: Padding(
-          padding: EdgeInsets.only(bottom: bottomInset > 0 ? bottomInset : 8),
-          child: SizedBox(
-            height: 52,
-            child: Row(
-              children: [
-                _NavItem(
-                  icon: LucideIcons.compass,
-                  label: '探索',
-                  active: currentIndex == 0,
-                  onTap: () => _onTap(context, 0),
-                ),
-                _NavItem(
-                  icon: LucideIcons.libraryBig,
-                  label: '我的',
-                  active: currentIndex == 1,
-                  onTap: () => _onTap(context, 1),
-                ),
-              ],
+      // extendBody so the glass pill floats over the content edge.
+      extendBody: true,
+      body: Stack(
+        children: [
+          IndexedStack(
+            index: currentIndex,
+            children: children,
+          ),
+          Positioned(
+            left: 0,
+            right: 0,
+            // 28dp from bottom safe area — matches v13 prototype.
+            bottom: bottomInset + 20,
+            child: Center(
+              child: _GlassPillTabBar(currentIndex: currentIndex),
             ),
           ),
-        ),
+        ],
+      ),
+    );
+  }
+}
+
+class _GlassPillTabBar extends StatelessWidget {
+  const _GlassPillTabBar({required this.currentIndex});
+  final int currentIndex;
+
+  @override
+  Widget build(BuildContext context) {
+    return Glass(
+      blur: 18,
+      tint: 0.6,
+      borderRadius: BorderRadius.circular(999),
+      padding: const EdgeInsets.all(6),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _PillIcon(
+            icon: LucideIcons.house,
+            active: currentIndex == 0,
+            label: '探索',
+            onTap: () => _onTap(context, 0),
+          ),
+          const SizedBox(width: 4),
+          _PillIcon(
+            // When active, swap stroke heart → filled heart for the
+            // "saved/loved" visual. Lucide is stroke-only so we use
+            // Material's favorite icon for the filled state.
+            icon: currentIndex == 1
+                ? Icons.favorite
+                : LucideIcons.heart,
+            active: currentIndex == 1,
+            label: '我的',
+            onTap: () => _onTap(context, 1),
+          ),
+        ],
       ),
     );
   }
@@ -72,47 +101,47 @@ class AppShell extends StatelessWidget {
   void _onTap(BuildContext context, int index) {
     if (index == currentIndex) return;
     HapticFeedback.selectionClick();
-    // Navigate via the shell callback.
     _AppShellScope.of(context)?.onTabChanged(index);
   }
 }
 
-class _NavItem extends StatelessWidget {
-  const _NavItem({
+class _PillIcon extends StatelessWidget {
+  const _PillIcon({
     required this.icon,
-    required this.label,
     required this.active,
+    required this.label,
     required this.onTap,
   });
   final IconData icon;
-  final String label;
   final bool active;
+  final String label;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
+    return Semantics(
+      label: label,
+      button: true,
+      selected: active,
       child: GestureDetector(
         onTap: onTap,
         behavior: HitTestBehavior.opaque,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          curve: AppTheme.easeStandard,
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            color: active ? Colors.white : Colors.transparent,
+            shape: BoxShape.circle,
+          ),
+          child: Center(
+            child: Icon(
               icon,
-              size: 20,
-              color: active ? AppTheme.text : AppTheme.textFaint,
+              size: 18,
+              color: active ? Colors.black : Colors.white,
             ),
-            const SizedBox(height: 3),
-            Text(
-              label,
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: active ? AppTheme.text : AppTheme.textFaint,
-                    fontWeight: active ? FontWeight.w600 : FontWeight.w400,
-                    fontSize: 10,
-                  ),
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -135,9 +164,8 @@ class _AppShellScope extends InheritedWidget {
       onTabChanged != oldWidget.onTabChanged;
 }
 
-/// Stateful shell wrapper.
-/// Tab index is now backed by [shellTabProvider] so external pages
-/// (e.g. profile → 我的收藏) can jump tabs by reading the provider.
+/// Stateful shell wrapper. Tab index is backed by [shellTabProvider]
+/// so external pages can jump tabs by reading the provider.
 class AppShellWrapper extends ConsumerWidget {
   const AppShellWrapper({super.key, required this.children});
   final List<Widget> children;
