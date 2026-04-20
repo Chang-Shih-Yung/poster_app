@@ -582,7 +582,7 @@ class _SubmissionPageState extends ConsumerState<SubmissionPage> {
             const SizedBox(height: 24),
 
             // ── Tag picker (EPIC 18-9): faceted taxonomy ──
-            _SectionLabel(label: '分類 Tags'),
+            _SectionLabel(label: '分類'),
             const SizedBox(height: 8),
             TagPicker(
               selected: _selectedTags,

@@ -55,7 +55,7 @@ begin
     p_tag_label,
     p_tag_label,
     (select id from public.tag_categories where slug = 'curation'),
-    '從既有 posters.tags 自動遷移（EPIC 18-6），無法匹配到 canonical tag',
+    '這個分類是舊版本遺留下來的，系統沒辦法自動配對到新分類，請判斷要新建一個、合併到已有、或是退回。',
     'pending'
   where not exists (
     select 1 from public.tag_suggestions

@@ -276,7 +276,7 @@ class _BatchSubmissionPageState extends ConsumerState<BatchSubmissionPage> {
 
             const SizedBox(height: 28),
             // Shared tags across the whole batch.
-            Text('分類 Tags（整批共用）',
+            Text('分類（整批共用）',
                 style: theme.textTheme.labelMedium?.copyWith(
                   color: AppTheme.textMute,
                   letterSpacing: 1.6,

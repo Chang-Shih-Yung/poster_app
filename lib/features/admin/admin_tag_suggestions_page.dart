@@ -23,7 +23,7 @@ class AdminTagSuggestionsPage extends ConsumerWidget {
     return Scaffold(
       backgroundColor: AppTheme.bg,
       appBar: AppBar(
-        title: const Text('Tag 建議審核'),
+        title: const Text('分類建議審核'),
         backgroundColor: AppTheme.bg,
         actions: [
           IconButton(
@@ -42,7 +42,7 @@ class AdminTagSuggestionsPage extends ConsumerWidget {
             return Center(
               child: Padding(
                 padding: const EdgeInsets.all(32),
-                child: Text('目前沒有待審核的 tag 建議。',
+                child: Text('目前沒有待審核的建議。',
                     style: TextStyle(color: AppTheme.textMute)),
               ),
             );
@@ -50,13 +50,135 @@ class AdminTagSuggestionsPage extends ConsumerWidget {
           final cats = catsAsync.asData?.value ?? const <TagCategory>[];
           return ListView.separated(
             padding: const EdgeInsets.all(12),
-            itemCount: items.length,
+            itemCount: items.length + 1, // +1 for intro card
             separatorBuilder: (_, _) => const SizedBox(height: 10),
-            itemBuilder: (ctx, i) =>
-                _SuggestionCard(suggestion: items[i], categories: cats),
+            itemBuilder: (ctx, i) {
+              if (i == 0) return const _IntroCard();
+              return _SuggestionCard(
+                  suggestion: items[i - 1], categories: cats);
+            },
           );
         },
       ),
+    );
+  }
+}
+
+/// Intro card: explains the 3 action buttons to non-technical reviewers.
+/// Collapsed by default so it doesn't take too much screen real estate.
+class _IntroCard extends StatefulWidget {
+  const _IntroCard();
+  @override
+  State<_IntroCard> createState() => _IntroCardState();
+}
+
+class _IntroCardState extends State<_IntroCard> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppTheme.chipBg,
+        border: Border.all(color: AppTheme.line1),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          InkWell(
+            onTap: () => setState(() => _expanded = !_expanded),
+            child: Row(
+              children: [
+                Icon(LucideIcons.lightbulb, size: 16, color: AppTheme.textMute),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '怎麼決定按哪個按鈕？',
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.text,
+                    ),
+                  ),
+                ),
+                Icon(
+                  _expanded
+                      ? LucideIcons.chevronUp
+                      : LucideIcons.chevronDown,
+                  size: 16,
+                  color: AppTheme.textMute,
+                ),
+              ],
+            ),
+          ),
+          if (_expanded) ...[
+            const SizedBox(height: 10),
+            _IntroLine(
+              icon: LucideIcons.check,
+              title: '建立新分類',
+              detail: '這個建議真的是新的分類，站上目前沒有類似的。直接加入官方分類庫。',
+            ),
+            const SizedBox(height: 8),
+            _IntroLine(
+              icon: LucideIcons.gitMerge,
+              title: '合併到既有分類',
+              detail: '使用者建議的意思我們已經有對應分類了（例如他寫「Miyazaki」但我們已經有「宮崎駿」）。把這個寫法加進既有分類的「別名」，以後別人搜尋也找得到。',
+            ),
+            const SizedBox(height: 8),
+            _IntroLine(
+              icon: LucideIcons.x,
+              title: '退回此建議',
+              detail: '建議不合適（亂填、廣告、沒意義、放錯類別）。可以寫退回原因給使用者。',
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _IntroLine extends StatelessWidget {
+  const _IntroLine({
+    required this.icon,
+    required this.title,
+    required this.detail,
+  });
+  final IconData icon;
+  final String title;
+  final String detail;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 13, color: AppTheme.textMute),
+        const SizedBox(width: 8),
+        Expanded(
+          child: RichText(
+            text: TextSpan(
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: AppTheme.textMute,
+                height: 1.45,
+              ),
+              children: [
+                TextSpan(
+                  text: title,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.text,
+                  ),
+                ),
+                const TextSpan(text: ' — '),
+                TextSpan(text: detail),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -168,7 +290,7 @@ class _SuggestionCardState extends ConsumerState<_SuggestionCard> {
               FilledButton.icon(
                 onPressed: _busy ? null : _approve,
                 icon: const Icon(LucideIcons.check, size: 14),
-                label: const Text('批准（建 tag）'),
+                label: const Text('建立新分類'),
                 style: FilledButton.styleFrom(
                   padding: const EdgeInsets.symmetric(
                       horizontal: 14, vertical: 10),
@@ -178,13 +300,13 @@ class _SuggestionCardState extends ConsumerState<_SuggestionCard> {
               OutlinedButton.icon(
                 onPressed: _busy ? null : _merge,
                 icon: const Icon(LucideIcons.gitMerge, size: 14),
-                label: const Text('合併到既有'),
+                label: const Text('合併到既有分類'),
               ),
               const SizedBox(width: 8),
               OutlinedButton.icon(
                 onPressed: _busy ? null : _reject,
                 icon: const Icon(LucideIcons.x, size: 14),
-                label: const Text('退回'),
+                label: const Text('退回此建議'),
               ),
             ],
           ),
@@ -209,7 +331,7 @@ class _SuggestionCardState extends ConsumerState<_SuggestionCard> {
           .read(tagSuggestionRepositoryProvider)
           .approve(widget.suggestion.id);
       if (!mounted) return;
-      _toast('已批准，canonical tag 建立');
+      _toast('已加入官方分類庫');
       ref.invalidate(pendingTagSuggestionsProvider);
       ref.invalidate(tagCategoriesProvider);
     } catch (e) {

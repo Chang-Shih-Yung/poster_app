@@ -49,7 +49,7 @@ class _TagPickerState extends ConsumerState<TagPicker> {
       ),
       error: (e, _) => Padding(
         padding: const EdgeInsets.all(16),
-        child: Text('Tag 載入失敗：$e',
+        child: Text('分類載入失敗：$e',
             style: TextStyle(color: AppTheme.textMute)),
       ),
       data: (cats) {
@@ -374,7 +374,7 @@ class _SuggestLink extends ConsumerWidget {
           Icon(LucideIcons.plus, size: 12, color: AppTheme.textMute),
           const SizedBox(width: 4),
           Text(
-            '找不到適合的？建議新 ${category.titleZh}',
+            '找不到適合的？建議新增「${category.titleZh}」分類',
             style: Theme.of(context)
                 .textTheme
                 .labelSmall
@@ -392,7 +392,7 @@ class _SuggestLink extends ConsumerWidget {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('建議新 ${category.titleZh}'),
+        title: Text('建議新增「${category.titleZh}」分類'),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -411,7 +411,7 @@ class _SuggestLink extends ConsumerWidget {
               TextField(
                 controller: reasonCtrl,
                 decoration:
-                    const InputDecoration(labelText: '為什麼需要這個 tag？（選填）'),
+                    const InputDecoration(labelText: '為什麼需要這個分類？（選填）'),
                 maxLines: 2,
               ),
             ],
@@ -446,7 +446,7 @@ class _SuggestLink extends ConsumerWidget {
           );
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('已送出建議，管理員會審核後加入 tag 庫')),
+          const SnackBar(content: Text('已送出建議，管理員審核後會加入分類庫')),
         );
       }
     } catch (e) {
