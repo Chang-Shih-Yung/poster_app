@@ -112,9 +112,20 @@ class _SignedInView extends ConsumerWidget {
         _GhostPill(
           label: '登出',
           icon: LucideIcons.logOut,
-          onTap: () {
+          onTap: () async {
             HapticFeedback.selectionClick();
-            ref.read(authRepositoryProvider).signOut();
+            // Pop the profile page first so we don't briefly render
+            // signed-out content with auth-required widgets still mounted.
+            // Then await Supabase signOut and force-navigate to /signin
+            // (the GoRouter redirect would also fire, but we don't want
+            // to depend on the auth-stream race winning before any
+            // already-loaded provider tries to refetch with no session).
+            final router = GoRouter.of(context);
+            await ref.read(authRepositoryProvider).signOut();
+            // Drop any cached user-scoped data so the next sign-in
+            // doesn't briefly flash the previous account's profile.
+            ref.invalidate(currentProfileProvider);
+            router.go('/signin');
           },
         ),
       ],
