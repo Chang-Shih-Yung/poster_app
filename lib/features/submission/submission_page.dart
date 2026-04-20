@@ -694,53 +694,94 @@ class _SectionLabel extends StatelessWidget {
 }
 
 /// Empty state: tap to pick.
+/// v13 empty picker — 2:3 aspect ratio, diagonal-stripe pattern, dashed
+/// border, camera icon centred. Matches prototype `UploadScreen`.
 class _EmptyPicker extends StatelessWidget {
   const _EmptyPicker({required this.compressing});
   final bool compressing;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 180,
-      decoration: BoxDecoration(
-        color: AppTheme.surfaceRaised,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppTheme.line1),
-      ),
-      child: Center(
-        child: compressing
-            ? SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: AppTheme.textMute,
-                ),
-              )
-            : Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(LucideIcons.imagePlus,
-                      size: 28, color: AppTheme.textFaint),
-                  const SizedBox(height: 10),
-                  Text(
-                    '選擇海報圖片',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: AppTheme.textMute,
-                        ),
+    return AspectRatio(
+      aspectRatio: 2 / 3,
+      child: CustomPaint(
+        painter: _DiagonalStripePainter(),
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: AppTheme.line2,
+              width: 1,
+              style: BorderStyle.solid,
+            ),
+          ),
+          child: Center(
+            child: compressing
+                ? SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: AppTheme.textMute,
+                    ),
+                  )
+                : Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(LucideIcons.camera,
+                          size: 32, color: AppTheme.textMute),
+                      const SizedBox(height: 10),
+                      Text(
+                        '點擊選擇圖片 · 支援多張',
+                        style:
+                            Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                  color: AppTheme.textMute,
+                                  fontSize: 13,
+                                ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '自動壓縮，支援 JPG / PNG',
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: AppTheme.textFaint,
-                        ),
-                  ),
-                ],
-              ),
+          ),
+        ),
       ),
     );
   }
+}
+
+/// 45° striped fill — alternating rgba(255,255,255,0.03) and 0.06 bands
+/// (matches v13 prototype's `repeating-linear-gradient(45deg, ...)`).
+class _DiagonalStripePainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    const radius = 14.0;
+    final rect = Rect.fromLTWH(0, 0, size.width, size.height);
+    final clip = Path()
+      ..addRRect(RRect.fromRectAndRadius(rect, const Radius.circular(radius)));
+    canvas.save();
+    canvas.clipPath(clip);
+    final p1 = Paint()..color = const Color(0x08FFFFFF); // 0.03
+    final p2 = Paint()..color = const Color(0x0FFFFFFF); // 0.06
+    const band = 12.0;
+    final diag = (size.width + size.height);
+    for (var x = -diag; x < diag; x += band * 2) {
+      _stripe(canvas, x, band, size, p1);
+      _stripe(canvas, x + band, band, size, p2);
+    }
+    canvas.restore();
+  }
+
+  void _stripe(Canvas canvas, double x, double w, Size size, Paint p) {
+    final path = Path()
+      ..moveTo(x, 0)
+      ..lineTo(x + w, 0)
+      ..lineTo(x + w + size.height, size.height)
+      ..lineTo(x + size.height, size.height)
+      ..close();
+    canvas.drawPath(path, p);
+  }
+
+  @override
+  bool shouldRepaint(_DiagonalStripePainter old) => false;
 }
 
 /// Image preview with replace overlay.

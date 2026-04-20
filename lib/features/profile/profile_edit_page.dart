@@ -179,9 +179,7 @@ class _ProfileEditPageState extends ConsumerState<ProfileEditPage> {
                     TextField(
                       controller: _nameCtrl,
                       maxLength: 30,
-                      decoration: const InputDecoration(
-                        hintText: '你想被叫什麼名字？',
-                      ),
+                      decoration: _v13InputDeco('你想被叫什麼名字？'),
                     ),
                     const SizedBox(height: 16),
                     _Label('簡介'),
@@ -190,9 +188,7 @@ class _ProfileEditPageState extends ConsumerState<ProfileEditPage> {
                       controller: _bioCtrl,
                       maxLength: 200,
                       maxLines: 4,
-                      decoration: const InputDecoration(
-                        hintText: '介紹一下你自己、你收藏的風格…',
-                      ),
+                      decoration: _v13InputDeco('介紹一下你自己、你收藏的風格…'),
                     ),
                     const SizedBox(height: 16),
                     _Label('性別（選填）'),
@@ -224,6 +220,32 @@ class _ProfileEditPageState extends ConsumerState<ProfileEditPage> {
       ),
     );
   }
+}
+
+/// v13 input decoration — exact prototype spec:
+///   bg = rgba(255,255,255,0.06), border 1px line1, radius 12px,
+///   12px padding, no counter (we hide maxLength counter manually
+///   if it causes vertical drift, which it doesn't in current spec).
+InputDecoration _v13InputDeco(String hint) {
+  return InputDecoration(
+    hintText: hint,
+    filled: true,
+    fillColor: const Color(0x0FFFFFFF), // 0.06
+    isDense: true,
+    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+    border: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(12),
+      borderSide: BorderSide(color: AppTheme.line1),
+    ),
+    enabledBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(12),
+      borderSide: BorderSide(color: AppTheme.line1),
+    ),
+    focusedBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(12),
+      borderSide: BorderSide(color: AppTheme.line2, width: 1),
+    ),
+  );
 }
 
 class _Label extends StatelessWidget {
@@ -441,10 +463,7 @@ class _LinkRowState extends State<_LinkRow> {
           width: 90,
           child: TextField(
             controller: _labelCtrl,
-            decoration: const InputDecoration(
-              hintText: 'IG / 網站',
-              isDense: true,
-            ),
+            decoration: _v13InputDeco('IG / 網站'),
             onChanged: (v) => widget.onChanged(
               ProfileLink(label: v, url: _urlCtrl.text),
             ),
@@ -454,10 +473,7 @@ class _LinkRowState extends State<_LinkRow> {
         Expanded(
           child: TextField(
             controller: _urlCtrl,
-            decoration: const InputDecoration(
-              hintText: 'https://...',
-              isDense: true,
-            ),
+            decoration: _v13InputDeco('https://...'),
             keyboardType: TextInputType.url,
             onChanged: (v) => widget.onChanged(
               ProfileLink(label: _labelCtrl.text, url: v),
