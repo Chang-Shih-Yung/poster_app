@@ -127,6 +127,18 @@ class TagSuggestionRepository {
       'p_target_tag_id': targetTagId,
     });
   }
+
+  /// Admin: change the category of a pending suggestion (fixes legacy
+  /// migration's "everything goes to 編輯精選" problem).
+  Future<void> changeCategory({
+    required String suggestionId,
+    required String newCategoryId,
+  }) async {
+    await _client.rpc('change_suggestion_category', params: {
+      'p_suggestion_id': suggestionId,
+      'p_new_category_id': newCategoryId,
+    });
+  }
 }
 
 final tagSuggestionRepositoryProvider =

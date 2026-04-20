@@ -229,20 +229,33 @@ class _SuggestionCardState extends ConsumerState<_SuggestionCard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Category + time.
+          // Category chip (clickable to change) + time.
           Row(
             children: [
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: AppTheme.chipBg,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(
-                  cat?.titleZh ?? '未知類別',
-                  style: theme.textTheme.labelSmall
-                      ?.copyWith(color: AppTheme.textMute),
+              InkWell(
+                onTap: _busy ? null : _changeCategory,
+                borderRadius: BorderRadius.circular(999),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: AppTheme.chipBg,
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: AppTheme.line1),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        cat?.titleZh ?? '未知類別',
+                        style: theme.textTheme.labelSmall
+                            ?.copyWith(color: AppTheme.textMute),
+                      ),
+                      const SizedBox(width: 4),
+                      Icon(LucideIcons.chevronDown,
+                          size: 10, color: AppTheme.textFaint),
+                    ],
+                  ),
                 ),
               ),
               const Spacer(),
@@ -369,6 +382,56 @@ class _SuggestionCardState extends ConsumerState<_SuggestionCard> {
       ref.invalidate(tagCategoriesProvider);
     } catch (e) {
       _toast('批准失敗：$e');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  /// Reassign this suggestion to a different category before approving.
+  /// Fixes legacy-migrated suggestions that were all dumped into 編輯精選.
+  Future<void> _changeCategory() async {
+    final cats = widget.categories;
+    final picked = await showDialog<TagCategory>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: const Text('改到哪個類別？'),
+        children: [
+          for (final c in cats)
+            if (c.id != widget.suggestion.categoryId)
+              SimpleDialogOption(
+                onPressed: () => Navigator.pop(ctx, c),
+                child: Row(
+                  children: [
+                    Text(c.titleZh),
+                    const SizedBox(width: 8),
+                    if (c.descriptionZh != null)
+                      Flexible(
+                        child: Text(
+                          c.descriptionZh!,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.labelSmall
+                              ?.copyWith(color: AppTheme.textFaint),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+        ],
+      ),
+    );
+    if (picked == null) return;
+    setState(() => _busy = true);
+    try {
+      await ref.read(tagSuggestionRepositoryProvider).changeCategory(
+            suggestionId: widget.suggestion.id,
+            newCategoryId: picked.id,
+          );
+      if (!mounted) return;
+      _toast('已改為「${picked.titleZh}」');
+      ref.invalidate(pendingTagSuggestionsProvider);
+    } catch (e) {
+      _toast('改類別失敗：$e');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
