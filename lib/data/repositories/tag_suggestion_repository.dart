@@ -68,8 +68,7 @@ class TagSuggestionRepository {
       if (labelEn != null && labelEn.trim().isNotEmpty)
         'p_label_en': labelEn.trim(),
       if (reason != null && reason.trim().isNotEmpty) 'p_reason': reason.trim(),
-      if (linkedSubmissionId != null)
-        'p_linked_submission_id': linkedSubmissionId,
+      'p_linked_submission_id': ?linkedSubmissionId,
     });
     return SuggestionOutcome.fromJson(result as Map<String, dynamic>);
   }

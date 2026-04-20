@@ -114,7 +114,7 @@ class SubmissionRepository {
   Future<String> approve(String submissionId, {String? workId}) async {
     final result = await _client.rpc('approve_submission', params: {
       'p_submission_id': submissionId,
-      if (workId != null) 'p_work_id': workId,
+      'p_work_id': ?workId,
     });
     return result as String;
   }
@@ -145,7 +145,7 @@ class SubmissionRepository {
   Future<void> reject(String submissionId, {String? note}) async {
     await _client.rpc('reject_submission', params: {
       'p_submission_id': submissionId,
-      if (note != null) 'p_note': note,
+      'p_note': ?note,
     });
   }
 }
