@@ -93,6 +93,12 @@ class _FullBleedFeedState extends State<_FullBleedFeed>
               final poster = items[i];
               return GestureDetector(
                 onTap: () => context.push('/poster/${poster.id}'),
+                onLongPress: () {
+                  HapticFeedback.mediumImpact();
+                  widget.onToggleFavorite(poster);
+                  setState(() => _showHeartPulse = true);
+                  _heartAnim.forward();
+                },
                 child: Hero(
                   tag: 'poster-${poster.id}',
                   child: Stack(
@@ -290,8 +296,23 @@ class _FullBleedFeedState extends State<_FullBleedFeed>
 }
 
 // ---------------------------------------------------------------------------
-// M: 2-col grid (Spotify style: image + meta below)
+// M: v13 Pinterest masonry — 2 cols of variable-height cards
 // ---------------------------------------------------------------------------
+
+/// Deterministic aspect ratio per poster id. Real images load with
+/// BoxFit.cover so the card stays the chosen height regardless. This
+/// gives the visual "Pinterest" rhythm without needing image dimensions
+/// in the database.
+double _ratioForId(String id) {
+  // 5 movie-poster-leaning ratios. Bias toward the canonical 2:3 (=0.67)
+  // because most posters are that shape; the others give visual variety.
+  const ratios = <double>[0.67, 0.67, 0.75, 1.0, 1.33, 0.56];
+  var h = 0;
+  for (final r in id.runes) {
+    h = (h * 31 + r) & 0x7fffffff;
+  }
+  return ratios[h % ratios.length];
+}
 
 class _MediumGrid extends StatelessWidget {
   const _MediumGrid({
@@ -313,141 +334,195 @@ class _MediumGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GridView.builder(
+    // Two-column masonry: assign each poster to whichever column is
+    // currently shorter. Same algorithm the v13 prototype uses.
+    final colA = <Poster>[];
+    final colB = <Poster>[];
+    var hA = 0.0;
+    var hB = 0.0;
+    for (final p in items) {
+      final h = 1 / _ratioForId(p.id);
+      if (hA <= hB) {
+        colA.add(p);
+        hA += h + 0.05;
+      } else {
+        colB.add(p);
+        hB += h + 0.05;
+      }
+    }
+
+    Widget renderCard(Poster p) => _MasonryCard(
+          poster: p,
+          isFavorited: favIds.contains(p.id),
+          onToggleFavorite: () => onToggleFavorite(p),
+          aspectRatio: _ratioForId(p.id),
+        );
+
+    return SingleChildScrollView(
       controller: controller,
-      padding: EdgeInsets.fromLTRB(16, topPadding, 16, bottomPadding),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        mainAxisSpacing: 16,
-        crossAxisSpacing: 12,
-        childAspectRatio: 0.52,
-      ),
-      itemCount: items.length + (trailingLoader ? 2 : 0),
-      itemBuilder: (context, i) {
-        if (i >= items.length) {
-          return Column(
+      padding: EdgeInsets.fromLTRB(12, topPadding, 12, bottomPadding),
+      child: Column(
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: AppTheme.surfaceRaised,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Center(
-                    child: SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2, color: AppTheme.textMute),
-                    ),
-                  ),
+                child: Column(
+                  children: colA
+                      .map((p) => Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: renderCard(p),
+                          ))
+                      .toList(),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  children: colB
+                      .map((p) => Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: renderCard(p),
+                          ))
+                      .toList(),
                 ),
               ),
             ],
-          );
-        }
-        final poster = items[i];
-        return _MediumCard(
-          poster: poster,
-          isFavorited: favIds.contains(poster.id),
-          onToggleFavorite: () => onToggleFavorite(poster),
-        );
-      },
+          ),
+          if (trailingLoader)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 24),
+              child: Center(
+                child: SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: AppTheme.textMute,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }
 
-class _MediumCard extends StatelessWidget {
-  const _MediumCard({
+/// v13 masonry card — overlay style: title + year/director sit on top
+/// of the image with a soft bottom gradient. Long-press toggles favorite
+/// (haptic + toast handled by the handler).
+class _MasonryCard extends StatelessWidget {
+  const _MasonryCard({
     required this.poster,
     required this.isFavorited,
     required this.onToggleFavorite,
+    required this.aspectRatio,
   });
   final Poster poster;
   final bool isFavorited;
   final VoidCallback onToggleFavorite;
+  final double aspectRatio;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-
     return GestureDetector(
       onTap: () => context.push('/poster/${poster.id}'),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Poster image.
-          Expanded(
-            child: Hero(
-              tag: 'poster-${poster.id}',
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: CachedNetworkImage(
-                  imageUrl: poster.thumbnailUrl ?? poster.posterUrl,
-                  fit: BoxFit.cover,
-                  width: double.infinity,
-                  placeholder: (_, _) =>
-                      const ColoredBox(color: AppTheme.surfaceRaised),
-                  errorWidget: (_, _, _) =>
-                      const ColoredBox(color: AppTheme.surfaceRaised),
-                ),
+      onLongPress: onToggleFavorite,
+      child: Hero(
+        tag: 'poster-${poster.id}',
+        child: AspectRatio(
+          aspectRatio: aspectRatio,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(14),
+            child: Container(
+              decoration: BoxDecoration(
+                color: AppTheme.ink3,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: AppTheme.line1),
+              ),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  CachedNetworkImage(
+                    imageUrl: poster.thumbnailUrl ?? poster.posterUrl,
+                    fit: BoxFit.cover,
+                    placeholder: (_, _) =>
+                        const ColoredBox(color: AppTheme.surfaceRaised),
+                    errorWidget: (_, _, _) =>
+                        const ColoredBox(color: AppTheme.surfaceRaised),
+                  ),
+                  // Bottom gradient to lift title.
+                  const Positioned.fill(
+                    child: IgnorePointer(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.bottomCenter,
+                            end: Alignment.topCenter,
+                            colors: [
+                              Color(0xBF000000),
+                              Color(0x00000000),
+                            ],
+                            stops: [0, 0.45],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  // Title + meta — overlay bottom-left.
+                  Positioned(
+                    left: 10,
+                    right: 10,
+                    bottom: 10,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          poster.title,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                            height: 1.2,
+                            letterSpacing: -0.2,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          [
+                            if (poster.year != null) '${poster.year}',
+                            if (poster.director != null) poster.director!,
+                          ].join(' · '),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: Colors.white.withValues(alpha: 0.75),
+                            fontSize: 10,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Heart indicator — top-right when fav.
+                  if (isFavorited)
+                    const Positioned(
+                      top: 8,
+                      right: 8,
+                      child: Icon(
+                        Icons.favorite,
+                        size: 16,
+                        color: Colors.white,
+                      ),
+                    ),
+                ],
               ),
             ),
           ),
-
-          // Meta row: title + year/director on left, heart on right.
-          Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        poster.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w600,
-                          color: AppTheme.text,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        [
-                          if (poster.year != null) '${poster.year}',
-                          if (poster.director != null) poster.director!,
-                        ].join(' · '),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: AppTheme.textMute,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                // Heart button.
-                GestureDetector(
-                  onTap: onToggleFavorite,
-                  behavior: HitTestBehavior.opaque,
-                  child: Padding(
-                    padding: const EdgeInsets.only(left: 4, top: 2),
-                    child: Icon(
-                      LucideIcons.heart,
-                      size: 18,
-                      color: isFavorited
-                          ? const Color(0xFFE53935)
-                          : AppTheme.textFaint,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -523,6 +598,7 @@ class _SmallTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: () => context.push('/poster/${poster.id}'),
+      onLongPress: onToggleFavorite,
       borderRadius: BorderRadius.circular(8),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 8),

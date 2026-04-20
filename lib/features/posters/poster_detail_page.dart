@@ -1,5 +1,3 @@
-import 'dart:ui';
-
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -8,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/glass.dart';
 import '../../data/models/poster.dart';
 import '../../data/providers/supabase_providers.dart';
 import '../../data/repositories/favorite_repository.dart';
@@ -186,13 +185,13 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
               physics: const ClampingScrollPhysics(),
               child: Column(
                 children: [
-                  // ── Hero section (full-bleed poster) ──
+                  // ── Hero (full-bleed poster + Fuji drawer overlay) ──
                   SizedBox(
                     height: screenH,
                     child: Stack(
                       fit: StackFit.expand,
                       children: [
-                        // Poster image.
+                        // Poster image — full bleed.
                         Hero(
                           tag: 'poster-${p.id}',
                           child: CachedNetworkImage(
@@ -207,12 +206,10 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                             ),
                           ),
                         ),
-                        // Top gradient.
-                        Positioned(
-                          top: 0,
-                          left: 0,
-                          right: 0,
-                          height: topInset + 120,
+                        // Single soft gradient: lifts top chrome + sits the
+                        // glass drawer on a shadow so it doesn't hover
+                        // mid-air over a bright image.
+                        const Positioned.fill(
                           child: IgnorePointer(
                             child: DecoratedBox(
                               decoration: BoxDecoration(
@@ -220,67 +217,59 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                                   begin: Alignment.topCenter,
                                   end: Alignment.bottomCenter,
                                   colors: [
-                                    Colors.black.withValues(alpha: 0.55),
-                                    Colors.black.withValues(alpha: 0.0),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                        // Bottom gradient (taller for editorial content).
-                        const Positioned(
-                          left: 0,
-                          right: 0,
-                          bottom: 0,
-                          height: 480,
-                          child: IgnorePointer(
-                            child: DecoratedBox(
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  begin: Alignment.topCenter,
-                                  end: Alignment.bottomCenter,
-                                  colors: [
+                                    Color(0x73000000), // 0.45
                                     Color(0x00000000),
-                                    Color(0xB3000000),
-                                    Color(0xF2000000),
+                                    Color(0x00000000),
+                                    Color(0xEB000000), // 0.92
                                   ],
-                                  stops: [0.0, 0.45, 1.0],
+                                  stops: [0.0, 0.20, 0.45, 1.0],
                                 ),
                               ),
                             ),
                           ),
                         ),
-                        // Top bar: close + fav.
+                        // Top floating glass buttons: close + fav.
                         Positioned(
                           top: topInset + 12,
-                          left: 20,
-                          right: 20,
+                          left: 16,
+                          right: 16,
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              _GlassIconButton(
+                              GlassButton(
                                 icon: LucideIcons.chevronDown,
                                 onTap: () => context.pop(),
-                                semanticLabel: '關閉',
+                                semanticsLabel: '關閉',
                               ),
-                              _GlassIconButton(
-                                icon: favIdsReady && isFav
-                                    ? LucideIcons.heart
+                              GlassButton(
+                                // Stroke when un-fav, filled Material heart
+                                // when fav (Lucide is stroke-only).
+                                icon: isFav
+                                    ? Icons.favorite
                                     : LucideIcons.heart,
-                                onTap: favIdsReady ? toggleFav : null,
-                                active: isFav,
-                                semanticLabel: isFav ? '取消收藏' : '加入收藏',
+                                color: isFav
+                                    ? const Color(0xFFFF5C5C)
+                                    : Colors.white,
+                                onTap: favIdsReady
+                                    ? toggleFav
+                                    : () {},
+                                semanticsLabel:
+                                    isFav ? '取消收藏' : '加入收藏',
                               ),
                             ],
                           ),
                         ),
-                        // Title + metadata stack.
+                        // Fuji drawer (bottom glass panel).
                         Positioned(
-                          left: 24,
-                          right: 24,
-                          bottom: bottomInset + 28,
-                          child: _TitleStack(poster: p),
+                          left: 16,
+                          right: 16,
+                          bottom: bottomInset + 100, // clear the glass tab bar
+                          child: _FujiDrawer(
+                            poster: p,
+                            isFav: isFav,
+                            favIdsReady: favIdsReady,
+                            onToggleFav: toggleFav,
+                          ),
                         ),
                       ],
                     ),
@@ -298,194 +287,214 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
   }
 }
 
-// ── Title stack with column metadata ──
+// ── v13 Fuji drawer ────────────────────────────────────────────────
+//
+// A glass panel anchored at the bottom of the hero image. Contains
+// drag handle + eyebrow + 32px editorial title + director + stats
+// row (年份/時長/瀏覽) + white pill CTA + share. Replaces the v12
+// inline title stack + gradient overlay metadata.
 
-class _TitleStack extends StatelessWidget {
-  const _TitleStack({required this.poster});
+class _FujiDrawer extends StatefulWidget {
+  const _FujiDrawer({
+    required this.poster,
+    required this.isFav,
+    required this.favIdsReady,
+    required this.onToggleFav,
+  });
   final Poster poster;
+  final bool isFav;
+  final bool favIdsReady;
+  final Future<void> Function() onToggleFav;
+
+  @override
+  State<_FujiDrawer> createState() => _FujiDrawerState();
+}
+
+class _FujiDrawerState extends State<_FujiDrawer> {
+  bool _expanded = false;
 
   @override
   Widget build(BuildContext context) {
+    final p = widget.poster;
     final theme = Theme.of(context);
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        // Eyebrow: first tag uppercased.
-        if (poster.tags.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 10),
-            child: Text(
-              poster.tags.first.toUpperCase(),
-              style: theme.textTheme.labelMedium?.copyWith(
-                color: AppTheme.textMute,
-                letterSpacing: 2.4,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-
-        // Title — tappable to /work/:id if this poster is linked to a work.
-        GestureDetector(
-          onTap: poster.workId == null
-              ? null
-              : () => context.push('/work/${poster.workId}'),
-          child: Text(
-            poster.title,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.displaySmall?.copyWith(
-              height: 1.05,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
-        if (poster.workId != null) ...[
-          const SizedBox(height: 6),
-          GestureDetector(
-            onTap: () => context.push('/work/${poster.workId}'),
-            child: Row(
-              children: [
-                Icon(LucideIcons.layers,
-                    size: 13, color: AppTheme.textFaint),
-                const SizedBox(width: 6),
-                Text(
-                  '看這部作品的所有海報',
-                  style: theme.textTheme.labelMedium?.copyWith(
-                    color: AppTheme.textFaint,
-                    fontWeight: FontWeight.w500,
+    return AnimatedSize(
+      duration: AppTheme.motionMed,
+      curve: AppTheme.easeStandard,
+      alignment: Alignment.topCenter,
+      child: Glass(
+        blur: 24,
+        tint: 0.65,
+        borderRadius: BorderRadius.circular(24),
+        padding: const EdgeInsets.fromLTRB(20, 14, 20, 18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Drag handle — tap to expand/collapse extra info.
+            GestureDetector(
+              onTap: () => setState(() => _expanded = !_expanded),
+              behavior: HitTestBehavior.opaque,
+              child: Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 14),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.35),
+                    borderRadius: BorderRadius.circular(99),
                   ),
                 ),
-                const SizedBox(width: 4),
-                Icon(LucideIcons.chevronRight,
-                    size: 13, color: AppTheme.textFaint),
+              ),
+            ),
+            // Eyebrow: first tag · year (uppercase, letter-spaced).
+            _Eyebrow(
+              parts: [
+                if (p.tags.isNotEmpty) p.tags.first.toUpperCase(),
+                if (p.year != null) '${p.year}',
               ],
             ),
-          ),
-        ],
-
-        // Column metadata (Wind Rises style): Year / Director / Views.
-        if (poster.year != null || poster.director != null) ...[
-          const SizedBox(height: 18),
-          _MetaColumns(poster: poster),
-        ],
-
-        // Tag chips — canonical tags from poster_tags (EPIC 18), tappable
-        // to /tags/:slug. Falls back to legacy poster.tags text[] while
-        // migration settles.
-        Consumer(builder: (ctx, ref, _) {
-          final tagsAsync = ref.watch(tagsForPosterProvider(poster.id));
-          final canonical = tagsAsync.asData?.value ?? const [];
-          if (canonical.isNotEmpty) {
-            return Padding(
-              padding: const EdgeInsets.only(top: 16),
-              child: Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: canonical
-                    .map((t) => _TappableTagChip(
-                          label: t.labelZh,
-                          onTap: () => ctx.push('/tags/${t.slug}'),
-                        ))
-                    .toList(growable: false),
-              ),
-            );
-          }
-          // Fallback: legacy text[] tags (not tappable)
-          if (poster.tags.isNotEmpty) {
-            return Padding(
-              padding: const EdgeInsets.only(top: 16),
-              child: Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: poster.tags
-                    .map((t) => _MiniChip(label: t))
-                    .toList(growable: false),
-              ),
-            );
-          }
-          return const SizedBox.shrink();
-        }),
-
-        // CTAs.
-        const SizedBox(height: 22),
-        Row(
-          children: [
-            Expanded(
-              child: _WhitePillCta(
-                label: '查看原圖',
-                icon: LucideIcons.maximize,
-                onTap: () {
-                  HapticFeedback.selectionClick();
-                  showDialog<void>(
-                    context: context,
-                    barrierColor: Colors.black.withValues(alpha: 0.92),
-                    builder: (_) =>
-                        _FullImageViewer(url: poster.posterUrl),
-                  );
-                },
+            const SizedBox(height: 6),
+            // Title — 32px editorial.
+            GestureDetector(
+              onTap: p.workId == null
+                  ? null
+                  : () => context.push('/work/${p.workId}'),
+              child: Text(
+                p.title,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.headlineLarge?.copyWith(
+                  fontSize: 32,
+                  height: 1.05,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: -0.8,
+                ),
               ),
             ),
-            const SizedBox(width: 10),
-            _GlassPillCta(
-              icon: LucideIcons.share2,
-              onTap: () {
-                HapticFeedback.selectionClick();
-                Clipboard.setData(ClipboardData(text: poster.posterUrl));
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('連結已複製')),
-                );
-              },
+            if (p.director != null && p.director!.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(
+                p.director!,
+                style: theme.textTheme.bodyMedium
+                    ?.copyWith(color: AppTheme.textMute),
+              ),
+            ],
+            const SizedBox(height: 14),
+            // Stats row — 年份 / 時長 / 瀏覽 with thin top+bottom lines.
+            Container(
+              decoration: BoxDecoration(
+                border: Border(
+                  top: BorderSide(color: AppTheme.line1),
+                  bottom: BorderSide(color: AppTheme.line1),
+                ),
+              ),
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              child: _StatsRow(poster: p),
+            ),
+            // Expanded section: tags + work link.
+            AnimatedCrossFade(
+              firstChild: const SizedBox(height: 0, width: double.infinity),
+              secondChild: _ExpandedInfo(poster: p),
+              crossFadeState: _expanded
+                  ? CrossFadeState.showSecond
+                  : CrossFadeState.showFirst,
+              duration: AppTheme.motionMed,
+            ),
+            const SizedBox(height: 14),
+            // CTAs.
+            Row(
+              children: [
+                Expanded(
+                  child: _PrimaryCta(
+                    isFav: widget.isFav,
+                    enabled: widget.favIdsReady,
+                    onTap: widget.onToggleFav,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                GlassButton(
+                  icon: LucideIcons.share2,
+                  size: 46,
+                  onTap: () {
+                    HapticFeedback.selectionClick();
+                    Clipboard.setData(ClipboardData(text: p.posterUrl));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('連結已複製')),
+                    );
+                  },
+                ),
+                const SizedBox(width: 8),
+                GlassButton(
+                  icon: LucideIcons.maximize,
+                  size: 46,
+                  onTap: () {
+                    HapticFeedback.selectionClick();
+                    showDialog<void>(
+                      context: context,
+                      barrierColor: Colors.black.withValues(alpha: 0.92),
+                      builder: (_) => _FullImageViewer(url: p.posterUrl),
+                    );
+                  },
+                ),
+              ],
             ),
           ],
         ),
-      ],
+      ),
     );
   }
 }
 
-// ── Column metadata (Year / Director / Views) ──
+class _Eyebrow extends StatelessWidget {
+  const _Eyebrow({required this.parts});
+  final List<String> parts;
 
-class _MetaColumns extends StatelessWidget {
-  const _MetaColumns({required this.poster});
+  @override
+  Widget build(BuildContext context) {
+    if (parts.isEmpty) return const SizedBox.shrink();
+    return Text(
+      parts.join(' · '),
+      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+            color: AppTheme.textMute,
+            letterSpacing: 2,
+            fontWeight: FontWeight.w600,
+          ),
+    );
+  }
+}
+
+class _StatsRow extends StatelessWidget {
+  const _StatsRow({required this.poster});
   final Poster poster;
 
   @override
   Widget build(BuildContext context) {
-    final cols = <_MetaCol>[];
-
+    final stats = <_Stat>[];
     if (poster.year != null) {
-      cols.add(_MetaCol(label: '年份', value: '${poster.year}'));
+      stats.add(_Stat(label: '年份', value: '${poster.year}'));
     }
-    if (poster.director != null && poster.director!.isNotEmpty) {
-      cols.add(_MetaCol(label: '導演', value: poster.director!));
-    }
-    cols.add(_MetaCol(label: '瀏覽', value: '${poster.viewCount}'));
-
+    stats.add(_Stat(
+      label: '瀏覽',
+      value: poster.viewCount > 1000
+          ? '${(poster.viewCount / 1000).toStringAsFixed(1)}k'
+          : '${poster.viewCount}',
+    ));
+    stats.add(_Stat(
+      label: '收藏',
+      value: '${poster.favoriteCount}',
+    ));
     return Row(
-      children: [
-        for (int i = 0; i < cols.length; i++) ...[
-          if (i > 0) ...[
-            Container(
-              width: 1,
-              height: 28,
-              margin: const EdgeInsets.symmetric(horizontal: 16),
-              color: AppTheme.line2,
-            ),
-          ],
-          Flexible(child: cols[i]),
-        ],
-      ],
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: stats.map((s) => Expanded(child: s)).toList(),
     );
   }
 }
 
-class _MetaCol extends StatelessWidget {
-  const _MetaCol({required this.label, required this.value});
+class _Stat extends StatelessWidget {
+  const _Stat({required this.label, required this.value});
   final String label;
   final String value;
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -497,21 +506,136 @@ class _MetaCol extends StatelessWidget {
           label,
           style: theme.textTheme.labelSmall?.copyWith(
             color: AppTheme.textFaint,
-            letterSpacing: 1.6,
-            fontWeight: FontWeight.w500,
+            letterSpacing: 1,
+            fontWeight: FontWeight.w600,
           ),
         ),
-        const SizedBox(height: 4),
+        const SizedBox(height: 3),
         Text(
           value,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
           style: theme.textTheme.titleMedium?.copyWith(
             fontWeight: FontWeight.w600,
             color: Colors.white,
           ),
         ),
       ],
+    );
+  }
+}
+
+class _ExpandedInfo extends ConsumerWidget {
+  const _ExpandedInfo({required this.poster});
+  final Poster poster;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final tagsAsync = ref.watch(tagsForPosterProvider(poster.id));
+    final canonical = tagsAsync.asData?.value ?? const [];
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (canonical.isNotEmpty)
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: canonical
+                  .map((t) => _TappableTagChip(
+                        label: t.labelZh,
+                        onTap: () => context.push('/tags/${t.slug}'),
+                      ))
+                  .toList(growable: false),
+            )
+          else if (poster.tags.isNotEmpty)
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: poster.tags
+                  .map((t) => _MiniChip(label: t))
+                  .toList(growable: false),
+            ),
+          if (poster.workId != null) ...[
+            const SizedBox(height: 12),
+            GestureDetector(
+              onTap: () => context.push('/work/${poster.workId}'),
+              child: Row(
+                children: [
+                  Icon(LucideIcons.layers,
+                      size: 13, color: AppTheme.textFaint),
+                  const SizedBox(width: 6),
+                  Text(
+                    '看這部作品的所有海報',
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      color: AppTheme.textFaint,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Icon(LucideIcons.chevronRight,
+                      size: 13, color: AppTheme.textFaint),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _PrimaryCta extends StatelessWidget {
+  const _PrimaryCta({
+    required this.isFav,
+    required this.enabled,
+    required this.onTap,
+  });
+  final bool isFav;
+  final bool enabled;
+  final Future<void> Function() onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = isFav
+        ? Colors.white.withValues(alpha: 0.14)
+        : Colors.white;
+    final fg = isFav ? Colors.white : Colors.black;
+    return Material(
+      color: bg,
+      borderRadius: BorderRadius.circular(999),
+      child: InkWell(
+        onTap: enabled ? () => onTap() : null,
+        borderRadius: BorderRadius.circular(999),
+        child: Container(
+          height: 46,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(999),
+            border: isFav ? Border.all(color: AppTheme.line2) : null,
+          ),
+          alignment: Alignment.center,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                isFav ? Icons.favorite : LucideIcons.heart,
+                size: 16,
+                color: fg,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                isFav ? '已收藏' : '加入收藏',
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      color: fg,
+                      fontWeight: FontWeight.w600,
+                    ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -697,128 +821,6 @@ class _TappableTagChip extends StatelessWidget {
                   letterSpacing: 0.4,
                   fontWeight: FontWeight.w500,
                 ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _WhitePillCta extends StatelessWidget {
-  const _WhitePillCta({
-    required this.label,
-    required this.icon,
-    required this.onTap,
-  });
-  final String label;
-  final IconData icon;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: AppTheme.text,
-      borderRadius: BorderRadius.circular(999),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(999),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 16, color: Colors.black),
-              const SizedBox(width: 8),
-              Text(
-                label,
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      color: Colors.black,
-                      fontWeight: FontWeight.w600,
-                    ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _GlassPillCta extends StatelessWidget {
-  const _GlassPillCta({required this.icon, required this.onTap});
-  final IconData icon;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(999),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-        child: Material(
-          color: Colors.white.withValues(alpha: 0.08),
-          child: InkWell(
-            onTap: onTap,
-            child: Container(
-              width: 52,
-              height: 52,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                border: Border.all(color: AppTheme.line1),
-                borderRadius: BorderRadius.circular(999),
-              ),
-              child: Icon(icon, size: 18, color: AppTheme.text),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _GlassIconButton extends StatelessWidget {
-  const _GlassIconButton({
-    required this.icon,
-    required this.onTap,
-    this.active = false,
-    this.semanticLabel,
-  });
-  final IconData icon;
-  final VoidCallback? onTap;
-  final bool active;
-  final String? semanticLabel;
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      label: semanticLabel,
-      button: true,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(999),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-          child: Material(
-            color: active
-                ? Colors.white.withValues(alpha: 0.16)
-                : Colors.black.withValues(alpha: 0.28),
-            child: InkWell(
-              onTap: onTap,
-              child: Container(
-                width: 44,
-                height: 44,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  border: Border.all(color: AppTheme.line1),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Icon(icon,
-                    size: 18,
-                    color: active
-                        ? const Color(0xFFE53935)
-                        : AppTheme.text),
-              ),
-            ),
           ),
         ),
       ),

@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shimmer/shimmer.dart';
 
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/glass.dart';
 import '../../data/models/app_user.dart';
 import '../../data/models/poster.dart';
 import '../../data/providers/supabase_providers.dart';
@@ -388,23 +389,10 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
     final topTagsAsync = ref.watch(topTagsProvider);
     final tags = topTagsAsync.asData?.value ?? const [];
 
-    // In L mode, add a gradient backdrop for legibility.
-    return Container(
-      decoration: density == BrowseDensity.large
-          ? const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Color(0xE0000000),
-                  Color(0x80000000),
-                  Colors.transparent,
-                ],
-                stops: [0.0, 0.6, 1.0],
-              ),
-            )
-          : null,
-      child: Column(
+    // v13: wrap top chrome in a single glass surface (sticky strip).
+    // L mode keeps the dark gradient on top so the page-view stays
+    // legible behind the chrome (image is full-bleed at edge-to-edge).
+    final inner = Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           SizedBox(height: topInset + 8),
@@ -536,8 +524,45 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
             ),
           ),
         ],
+      );
+
+    // v13: a single glass strip wraps the chrome. In L mode keep the
+    // dark gradient on top so chrome reads against bright posters.
+    final glass = Glass(
+      blur: 20,
+      tint: 0.5,
+      // Full-width strip — no rounded corners on top/sides.
+      borderRadius: BorderRadius.zero,
+      // Custom border: no top/left/right edges, only bottom hairline.
+      border: Border(
+        bottom: BorderSide(color: AppTheme.line1, width: 0.5),
       ),
+      shadow: false,
+      highlight: false,
+      child: inner,
     );
+
+    if (density == BrowseDensity.large) {
+      return Stack(
+        children: [
+          // Dark gradient behind glass for legibility over full-bleed image.
+          IgnorePointer(
+            child: Container(
+              height: _chromeHeight(topInset) + 8,
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Color(0xB3000000), Color(0x00000000)],
+                ),
+              ),
+            ),
+          ),
+          glass,
+        ],
+      );
+    }
+    return glass;
   }
 
   Widget _buildContent(

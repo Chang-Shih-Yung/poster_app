@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/glass.dart';
 import '../../core/widgets/shimmer_placeholder.dart';
 import '../../data/models/app_user.dart';
 import '../../data/models/home_section.dart';
@@ -72,35 +73,21 @@ class HomePage extends ConsumerWidget {
       backgroundColor: AppTheme.bg,
       body: CustomScrollView(
         slivers: [
-          // Top bar.
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: EdgeInsets.fromLTRB(20, topInset + 12, 20, 8),
-              child: Row(
-                children: [
-                  GestureDetector(
-                    onTap: () => context.push('/profile'),
-                    child: _Avatar(profile: profile, size: 32),
-                  ),
-                  const SizedBox(width: 12),
-                  Text(
-                    '探索',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white,
-                        ),
-                  ),
-                  const Spacer(),
-                  GestureDetector(
-                    onTap: () {
-                      HapticFeedback.selectionClick();
-                      context.push('/search');
-                    },
-                    child: Icon(LucideIcons.search,
-                        size: 22, color: AppTheme.textMute),
-                  ),
-                ],
-              ),
+          // v13 sticky glass top chrome.
+          SliverPersistentHeader(
+            pinned: true,
+            delegate: _HomeGlassHeader(
+              topInset: topInset,
+              profile: profile,
+              onProfileTap: () => context.push('/profile'),
+              onSearchTap: () {
+                HapticFeedback.selectionClick();
+                context.push('/search');
+              },
+              onUploadTap: () {
+                HapticFeedback.selectionClick();
+                context.push('/upload');
+              },
             ),
           ),
 
@@ -145,6 +132,83 @@ class HomePage extends ConsumerWidget {
       ),
     );
   }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// v13 sticky glass top header for explore page
+// ═══════════════════════════════════════════════════════════════════════════
+
+class _HomeGlassHeader extends SliverPersistentHeaderDelegate {
+  _HomeGlassHeader({
+    required this.topInset,
+    required this.profile,
+    required this.onProfileTap,
+    required this.onSearchTap,
+    required this.onUploadTap,
+  });
+  final double topInset;
+  final AppUser? profile;
+  final VoidCallback onProfileTap;
+  final VoidCallback onSearchTap;
+  final VoidCallback onUploadTap;
+
+  static const double _bar = 56;
+
+  @override
+  double get minExtent => topInset + _bar;
+  @override
+  double get maxExtent => topInset + _bar;
+
+  @override
+  Widget build(BuildContext ctx, double shrink, bool overlaps) {
+    return Glass(
+      blur: 20,
+      tint: 0.5,
+      borderRadius: BorderRadius.zero,
+      border: Border(bottom: BorderSide(color: AppTheme.line1, width: 0.5)),
+      shadow: false,
+      highlight: false,
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(20, topInset + 8, 16, 8),
+        child: Row(
+          children: [
+            GestureDetector(
+              onTap: onProfileTap,
+              child: _Avatar(profile: profile, size: 32),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              '探索',
+              style: Theme.of(ctx).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
+            ),
+            const Spacer(),
+            GlassButton(
+              icon: LucideIcons.search,
+              size: 34,
+              color: Colors.white.withValues(alpha: 0.85),
+              onTap: onSearchTap,
+              semanticsLabel: '搜尋',
+            ),
+            const SizedBox(width: 6),
+            GlassButton(
+              icon: LucideIcons.plus,
+              size: 34,
+              color: Colors.white.withValues(alpha: 0.85),
+              onTap: onUploadTap,
+              semanticsLabel: '上傳',
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  bool shouldRebuild(_HomeGlassHeader old) =>
+      old.topInset != topInset || old.profile?.avatarUrl != profile?.avatarUrl;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
