@@ -967,6 +967,51 @@ create table tag_suggestions (
 
 **總預估**：CC 尺度約 6-8 小時
 
+---
+
+### EPIC 18 Phase 2: Similarity Detection & Anti-duplication UX
+
+**問題**：admin 無法記憶 ~165 canonical tags，無法判斷「這個建議跟既有是不是重複」。未來 taxonomy 越長只會更糟。
+
+**原則**：UX 應該做重活，不是靠 admin 的記憶力或搜尋耐心。
+
+**三層防護（從上游到下游）**：
+
+1. **User 輸入時（第 3 層）** — 使用者在「建議新分類」表單打字，debounce 250ms 後即時查詢 `find_similar_tags`。相似度 ≥ 0.75 就彈出「你是不是想用這個？」chip。一鍵採用 → 整個建議都不用送。
+2. **送出時（第 2 層）** — `submit_tag_suggestion` RPC gateway。相似度 ≥ 0.95 自動 merge 到既有 tag（把輸入加成別名、attach 到 linked poster）。建議根本不進 admin queue。
+3. **Admin 審稿時（第 1 層）** — 建議卡片自動顯示 top 3 相似既有分類（≥ 0.50 顯示），配相似度 % 徽章 + 一鍵合併按鈕。admin 零搜尋、零記憶。
+
+**Schema**：無新表，全用既有 pg_trgm extension。
+
+**RPCs**：
+- [x] `find_similar_tags(p_category_id, p_label, p_limit)` — pg_trgm `similarity()` 比對 label_zh / label_en / aliases，取最大值，≥ 0.3 才回傳
+- [x] `submit_tag_suggestion(p_category_id, p_label_zh, p_label_en, p_reason, p_linked_submission_id)` — gateway，≥ 0.95 自動 merge 並回 `{auto_merged: true, tag_id, tag_label_zh, similarity}`，否則建新 suggestion 回 `{auto_merged: false, suggestion_id}`
+
+**Dart 模型**：
+- [x] `SimilarTag` — `{tag_id, label_zh, label_en, similarity, posterCount}` + 三個閾值常數 (weak=0.5 / strong=0.75 / autoMerge=0.95)
+- [x] `SuggestionOutcome` sealed class → `SuggestionAutoMerged` / `SuggestionQueued`
+- [x] `TagSuggestionRepository.submit()` 取代 `create()`，走 gateway RPC
+- [x] `similarTagsProvider` family keyed on `(categoryId, label)`
+
+**UI**：
+- [x] Admin suggestion card 加 `_SimilarityHint`：橘色警告區塊 + top 3 相似 tag + 「一鍵合併」按鈕 + 相似度百分比徽章（≥95% 綠、≥75% 橘、其他灰）
+- [x] User 建議表單改成 `_SuggestDialog`（stateful）：
+  - Debounced live search
+  - 「你是不是想用這個？」chip 列（≥ 0.75 才出現）
+  - 點 chip → 跳過建議，直接使用既有
+  - 送出後解析 `SuggestionOutcome`：「已自動對應到既有分類 X」vs「已送出建議，審核中」
+
+**Tests**：
+- [x] `SimilarTag.fromRow` / `similarityPercent` / 三個閾值大小順序
+- [x] `SuggestionOutcome.fromJson` 分派到兩個 sealed 子型別
+- [x] Threshold 決策邏輯（admin vs user 不同門檻）
+- 93/93 pass
+
+**上線後效果預測**：
+- Admin queue 筆數下降 40-60%（重複的被上游攔截）
+- admin 每筆決策時間從 ~30 秒（要搜尋既有）降到 ~5 秒（直接點一鍵合併 / 建立 / 退回）
+- 使用者體驗：輸入 "Miyazaki" 立刻看到「你是不是想用宮崎駿」，心理負擔消失
+
 ### TBD 討論項目
 
 - ~~Admin UI 範圍~~ ✅ 已定案：只做 suggestions queue

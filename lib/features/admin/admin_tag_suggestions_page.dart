@@ -282,6 +282,31 @@ class _SuggestionCardState extends ConsumerState<_SuggestionCard> {
             ),
           ],
 
+          // ─── Similarity hint: "看起來這可能已經存在" ─────────────────────
+          _SimilarityHint(
+            categoryId: s.categoryId,
+            label: s.suggestedLabelZh,
+            busy: _busy,
+            onMergeToExisting: (tagId, labelZh) async {
+              // One-click merge into the surfaced match.
+              setState(() => _busy = true);
+              try {
+                await ref.read(tagSuggestionRepositoryProvider).merge(
+                      suggestionId: s.id,
+                      targetTagId: tagId,
+                    );
+                if (!mounted) return;
+                _toast('已合併到「$labelZh」');
+                ref.invalidate(pendingTagSuggestionsProvider);
+                ref.invalidate(tagCategoriesProvider);
+              } catch (e) {
+                _toast('合併失敗：$e');
+              } finally {
+                if (mounted) setState(() => _busy = false);
+              }
+            },
+          ),
+
           const SizedBox(height: 14),
 
           // Actions.
@@ -505,6 +530,172 @@ class _MergePickerState extends ConsumerState<_MergePicker> {
         TextButton(
           onPressed: () => Navigator.pop(context),
           child: const Text('取消'),
+        ),
+      ],
+    );
+  }
+}
+
+/// Shows a one-line hint above the action buttons when the suggestion looks
+/// like a duplicate of an existing tag. Reduces admin cognitive load: they
+/// don't need to memorize the ~165 canonical tags — the system surfaces
+/// likely matches inline with a one-click merge.
+class _SimilarityHint extends ConsumerWidget {
+  const _SimilarityHint({
+    required this.categoryId,
+    required this.label,
+    required this.busy,
+    required this.onMergeToExisting,
+  });
+
+  final String categoryId;
+  final String label;
+  final bool busy;
+  final Future<void> Function(String tagId, String labelZh) onMergeToExisting;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final async = ref.watch(similarTagsProvider(
+      SimilarTagsQuery(categoryId: categoryId, label: label),
+    ));
+    return async.maybeWhen(
+      data: (matches) {
+        if (matches.isEmpty) return const SizedBox.shrink();
+        // Only show hint if best match is above admin-weak threshold.
+        final best = matches.first;
+        if (best.similarity < SimilarTag.weakHintThreshold) {
+          return const SizedBox.shrink();
+        }
+        // Show top 3 above threshold.
+        final shown = matches
+            .where((m) => m.similarity >= SimilarTag.weakHintThreshold)
+            .take(3)
+            .toList();
+
+        return Container(
+          margin: const EdgeInsets.only(top: 10),
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: Colors.amber.withValues(alpha: 0.08),
+            border: Border.all(color: Colors.amber.withValues(alpha: 0.3)),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(LucideIcons.triangleAlert,
+                      size: 13, color: Colors.amber),
+                  const SizedBox(width: 6),
+                  Text(
+                    '看起來這個分類可能已經存在：',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: Colors.amber,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              for (final m in shown)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: _MatchRow(
+                    match: m,
+                    busy: busy,
+                    onTap: () => onMergeToExisting(m.tagId, m.labelZh),
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+      orElse: () => const SizedBox.shrink(),
+    );
+  }
+}
+
+class _MatchRow extends StatelessWidget {
+  const _MatchRow({
+    required this.match,
+    required this.busy,
+    required this.onTap,
+  });
+  final SimilarTag match;
+  final bool busy;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    // Colour the similarity badge by strength.
+    final pct = match.similarityPercent;
+    final Color badge;
+    if (match.similarity >= SimilarTag.autoMergeThreshold) {
+      badge = Colors.green;
+    } else if (match.similarity >= SimilarTag.strongHintThreshold) {
+      badge = Colors.amber;
+    } else {
+      badge = AppTheme.textMute;
+    }
+    return Row(
+      children: [
+        Expanded(
+          child: Row(
+            children: [
+              Text(
+                match.labelZh,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: AppTheme.text,
+                ),
+              ),
+              if (match.labelEn.isNotEmpty && match.labelEn != match.labelZh) ...[
+                const SizedBox(width: 6),
+                Text(
+                  match.labelEn,
+                  style: theme.textTheme.labelSmall
+                      ?.copyWith(color: AppTheme.textMute),
+                ),
+              ],
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                decoration: BoxDecoration(
+                  color: badge.withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  '相似度 $pct%',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: badge,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 10,
+                  ),
+                ),
+              ),
+              if (match.posterCount > 0) ...[
+                const SizedBox(width: 6),
+                Text(
+                  '${match.posterCount} 張',
+                  style: theme.textTheme.labelSmall
+                      ?.copyWith(color: AppTheme.textFaint, fontSize: 10),
+                ),
+              ],
+            ],
+          ),
+        ),
+        FilledButton.tonalIcon(
+          onPressed: busy ? null : onTap,
+          icon: const Icon(LucideIcons.gitMerge, size: 12),
+          label: const Text('一鍵合併', style: TextStyle(fontSize: 12)),
+          style: FilledButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            minimumSize: const Size(0, 28),
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
         ),
       ],
     );

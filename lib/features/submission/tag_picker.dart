@@ -386,75 +386,255 @@ class _SuggestLink extends ConsumerWidget {
   }
 
   Future<void> _openForm(BuildContext context, WidgetRef ref) async {
-    final labelZhCtrl = TextEditingController(text: prefill ?? '');
-    final labelEnCtrl = TextEditingController();
-    final reasonCtrl = TextEditingController();
-    final confirmed = await showDialog<bool>(
+    await showDialog<void>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('建議新增「${category.titleZh}」分類'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: labelZhCtrl,
-                autofocus: true,
-                decoration: const InputDecoration(labelText: '中文名 *'),
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: labelEnCtrl,
-                decoration: const InputDecoration(labelText: '英文名（選填）'),
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: reasonCtrl,
-                decoration:
-                    const InputDecoration(labelText: '為什麼需要這個分類？（選填）'),
-                maxLines: 2,
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('送出建議'),
-          ),
-        ],
+      builder: (ctx) => _SuggestDialog(
+        category: category,
+        prefill: prefill,
       ),
     );
-    if (confirmed != true) return;
-    final zh = labelZhCtrl.text.trim();
+  }
+}
+
+/// New-tag suggestion form with live duplicate detection.
+///
+/// As the user types 中文名, we debounce-query find_similar_tags and
+/// surface top matches right under the field with a "這個就是你要的" chip.
+/// If they pick one, no suggestion is created — the tag is applied directly.
+/// If they ignore hints and submit, the server gateway may still auto-merge
+/// at similarity ≥ 0.95 (e.g. "Miyazaki" → "宮崎駿" via alias).
+class _SuggestDialog extends ConsumerStatefulWidget {
+  const _SuggestDialog({required this.category, this.prefill});
+  final TagCategory category;
+  final String? prefill;
+
+  @override
+  ConsumerState<_SuggestDialog> createState() => _SuggestDialogState();
+}
+
+class _SuggestDialogState extends ConsumerState<_SuggestDialog> {
+  late final TextEditingController _labelZhCtrl;
+  final _labelEnCtrl = TextEditingController();
+  final _reasonCtrl = TextEditingController();
+  Timer? _debounce;
+  String _currentQuery = '';
+  bool _submitting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _labelZhCtrl = TextEditingController(text: widget.prefill ?? '');
+    _currentQuery = widget.prefill?.trim() ?? '';
+  }
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _labelZhCtrl.dispose();
+    _labelEnCtrl.dispose();
+    _reasonCtrl.dispose();
+    super.dispose();
+  }
+
+  void _onLabelChanged(String v) {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 250), () {
+      if (!mounted) return;
+      setState(() => _currentQuery = v.trim());
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final similarAsync = _currentQuery.isEmpty
+        ? null
+        : ref.watch(similarTagsProvider(
+            SimilarTagsQuery(
+              categoryId: widget.category.id,
+              label: _currentQuery,
+            ),
+          ));
+
+    // Filter to strong hints only (≥ 0.75) for user-facing UX.
+    final strongMatches = similarAsync?.asData?.value
+            .where((m) => m.similarity >= SimilarTag.strongHintThreshold)
+            .take(3)
+            .toList() ??
+        const [];
+
+    return AlertDialog(
+      title: Text('建議新增「${widget.category.titleZh}」分類'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            TextField(
+              controller: _labelZhCtrl,
+              autofocus: true,
+              decoration: const InputDecoration(labelText: '中文名 *'),
+              onChanged: _onLabelChanged,
+            ),
+            // Live duplicate hint.
+            if (strongMatches.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.amber.withValues(alpha: 0.08),
+                  border: Border.all(
+                      color: Colors.amber.withValues(alpha: 0.3)),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '你是不是想用這個？',
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: Colors.amber,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: [
+                        for (final m in strongMatches)
+                          _UseExistingChip(
+                            match: m,
+                            onTap: () => _useExistingTag(m),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            const SizedBox(height: 10),
+            TextField(
+              controller: _labelEnCtrl,
+              decoration: const InputDecoration(labelText: '英文名（選填）'),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _reasonCtrl,
+              decoration:
+                  const InputDecoration(labelText: '為什麼需要這個分類？（選填）'),
+              maxLines: 2,
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _submitting ? null : () => Navigator.pop(context),
+          child: const Text('取消'),
+        ),
+        FilledButton(
+          onPressed: _submitting ? null : _submit,
+          child: _submitting
+              ? const SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Text('送出建議'),
+        ),
+      ],
+    );
+  }
+
+  /// User clicked a surfaced match → skip suggestion, jump straight to
+  /// "this tag already exists, done".
+  void _useExistingTag(SimilarTag match) {
+    Navigator.pop(context);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('已使用既有分類「${match.labelZh}」'),
+      ),
+    );
+    // Note: does NOT auto-attach to the current poster since this dialog
+    // doesn't know which poster is being edited. User should pick the tag
+    // from the category list themselves.
+  }
+
+  Future<void> _submit() async {
+    final zh = _labelZhCtrl.text.trim();
     if (zh.isEmpty) return;
 
+    setState(() => _submitting = true);
     try {
-      await ref.read(tagSuggestionRepositoryProvider).create(
-            categoryId: category.id,
+      final result = await ref.read(tagSuggestionRepositoryProvider).submit(
+            categoryId: widget.category.id,
             labelZh: zh,
-            labelEn: labelEnCtrl.text.trim().isEmpty
+            labelEn: _labelEnCtrl.text.trim().isEmpty
                 ? null
-                : labelEnCtrl.text.trim(),
-            reason: reasonCtrl.text.trim().isEmpty
+                : _labelEnCtrl.text.trim(),
+            reason: _reasonCtrl.text.trim().isEmpty
                 ? null
-                : reasonCtrl.text.trim(),
+                : _reasonCtrl.text.trim(),
           );
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('已送出建議，管理員審核後會加入分類庫')),
-        );
-      }
+      if (!mounted) return;
+      Navigator.pop(context);
+      final msg = switch (result) {
+        SuggestionAutoMerged(:final tagLabelZh) =>
+          '已自動對應到既有分類「$tagLabelZh」',
+        SuggestionQueued() => '已送出建議，管理員審核後會加入分類庫',
+      };
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(msg)));
     } catch (e) {
-      if (context.mounted) {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('建議失敗：$e')),
         );
       }
+    } finally {
+      if (mounted) setState(() => _submitting = false);
     }
   }
 }
+
+class _UseExistingChip extends StatelessWidget {
+  const _UseExistingChip({required this.match, required this.onTap});
+  final SimilarTag match;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(999),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(999),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: AppTheme.chipBgStrong,
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: Colors.amber.withValues(alpha: 0.4)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(LucideIcons.check,
+                  size: 12, color: Colors.amber),
+              const SizedBox(width: 5),
+              Text(
+                match.labelZh,
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      fontWeight: FontWeight.w500,
+                    ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+

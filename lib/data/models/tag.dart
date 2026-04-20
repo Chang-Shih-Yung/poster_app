@@ -97,6 +97,55 @@ class Tag {
   final bool deprecated;
 }
 
+/// Result of `find_similar_tags` RPC — an existing tag with a fuzzy-match
+/// similarity score (0.3-1.0) against a user-typed label. Used for
+/// duplicate-detection hints in admin review and user suggestion forms.
+class SimilarTag {
+  const SimilarTag({
+    required this.tagId,
+    required this.slug,
+    required this.labelZh,
+    required this.labelEn,
+    required this.similarity,
+    this.aliases = const [],
+    this.posterCount = 0,
+  });
+
+  factory SimilarTag.fromRow(Map<String, dynamic> row) {
+    return SimilarTag(
+      tagId: row['tag_id'] as String,
+      slug: row['slug'] as String,
+      labelZh: row['label_zh'] as String,
+      labelEn: (row['label_en'] as String?) ?? '',
+      aliases: ((row['aliases'] as List?) ?? const [])
+          .map((e) => e.toString())
+          .toList(growable: false),
+      posterCount: (row['poster_count'] as num?)?.toInt() ?? 0,
+      similarity: (row['similarity'] as num?)?.toDouble() ?? 0.0,
+    );
+  }
+
+  final String tagId;
+  final String slug;
+  final String labelZh;
+  final String labelEn;
+  final List<String> aliases;
+  final int posterCount;
+  final double similarity;
+
+  /// Percentage (0-100) for UI display.
+  int get similarityPercent => (similarity * 100).round();
+
+  /// Auto-merge happens silently at this threshold (matches SQL).
+  static const double autoMergeThreshold = 0.95;
+
+  /// Show user "did you mean?" suggestion at this threshold.
+  static const double strongHintThreshold = 0.75;
+
+  /// Show admin "may be duplicate" hint at this threshold.
+  static const double weakHintThreshold = 0.50;
+}
+
 /// A user-submitted new-tag suggestion awaiting admin review.
 class TagSuggestion {
   const TagSuggestion({

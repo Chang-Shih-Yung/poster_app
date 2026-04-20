@@ -65,6 +65,27 @@ class TagRepository {
         .toList(growable: false);
   }
 
+  /// Find similar existing tags by similarity score (pg_trgm).
+  /// Returns tags with `similarity` 0.3-1.0. Used for:
+  ///   - Admin review card's duplicate hint
+  ///   - User-side autocomplete in suggestion form
+  Future<List<SimilarTag>> findSimilar({
+    required String categoryId,
+    required String label,
+    int limit = 5,
+  }) async {
+    final q = label.trim();
+    if (q.isEmpty) return const [];
+    final rows = await _client.rpc('find_similar_tags', params: {
+      'p_category_id': categoryId,
+      'p_label': q,
+      'p_limit': limit,
+    });
+    return ((rows as List?) ?? const [])
+        .map((r) => SimilarTag.fromRow(r as Map<String, dynamic>))
+        .toList(growable: false);
+  }
+
   /// Browse posters by tag slug. Returns {tag, posters[]}. Empty posters
   /// with null tag if slug not found.
   Future<({Tag? tag, List<Poster> posters})> browseByTag(
@@ -136,4 +157,30 @@ final tagsForPosterProvider =
 final browseByTagProvider = FutureProvider.autoDispose
     .family<({Tag? tag, List<Poster> posters}), String>((ref, slug) async {
   return ref.watch(tagRepositoryProvider).browseByTag(slug);
+});
+
+/// Find similar existing tags — family keyed on (categoryId, label).
+/// Used by admin suggestion review card + user-side autocomplete.
+class SimilarTagsQuery {
+  const SimilarTagsQuery({required this.categoryId, required this.label});
+  final String categoryId;
+  final String label;
+
+  @override
+  bool operator ==(Object other) =>
+      other is SimilarTagsQuery &&
+      other.categoryId == categoryId &&
+      other.label == label;
+
+  @override
+  int get hashCode => Object.hash(categoryId, label);
+}
+
+final similarTagsProvider = FutureProvider.autoDispose
+    .family<List<SimilarTag>, SimilarTagsQuery>((ref, query) async {
+  if (query.label.trim().isEmpty) return const [];
+  return ref.watch(tagRepositoryProvider).findSimilar(
+        categoryId: query.categoryId,
+        label: query.label,
+      );
 });
