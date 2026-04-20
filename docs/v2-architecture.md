@@ -710,14 +710,27 @@ create table recommendation_jobs (
 
 | # | 任務 | 狀態 | 預估 |
 |---|------|------|------|
-| 15-1 | RPC `for_you_feed_v1`（tag affinity + cold-start fallback） | [ ] | M |
-| 15-2 | SocialRepository 加 `forYouFeed()` + provider | [ ] | S |
-| 15-3 | Home page 新增「為你推薦」section（位置：熱門下面、追蹤動態上面） | [ ] | S |
-| 15-4 | Schema: `user_recommendations` + `recommendation_jobs` | [ ] | S |
-| 15-5 | 啟用 pg_cron extension | [ ] | XS |
-| 15-6 | Collaborative filtering 批次 job（SQL function + cron） | [ ] | M |
-| 15-7 | RPC `for_you_feed_cf` 讀 user_recommendations 表 | [ ] | S |
-| 15-8 | Tests: tag affinity 排序 / 冷啟動 fallback / CF 相似度算法 | [ ] | M |
+| 15-1 | RPC `for_you_feed_v1`（tag affinity + cold-start fallback + 空集合 trending fallback） | ✅ | M |
+| 15-2 | 改走 EPIC 14 dispatcher：擴 `home_sections_v2` 加 `for_you` / `for_you_cf` source_type（不需要單獨 Dart provider） | ✅ | S |
+| 15-3 | INSERT 「為你推薦」config row（position 15、visibility 'signed_in'，登入即看） | ✅ | XS |
+| 15-4 | Schema: `user_recommendations(user_id, poster_id, score, reason, job_slug)` + `recommendation_jobs(slug, algorithm, params, cron_expr, last_run_at, ...)` | ✅ | S |
+| 15-5 | `create extension pg_cron with schema extensions` + `cron.schedule('cf_nightly', '0 19 * * *', ...)` | ✅ | XS |
+| 15-6 | `compute_collaborative_recommendations()` SQL function：active_users (≥5 favs) → similar_users (≥3 overlap, top 50) → ranked_recs (top 30 per user) | ✅ | M |
+| 15-7 | RPC `for_you_feed_cf`：讀 user_recommendations 表 + 內建 fallback 到 v1（CF 沒資料時自動降級） | ✅ | S |
+| 15-8 | Tests：HomeSectionV2 dispatch 'for_you' / 'for_you_cf' + RPC param shape + 行為閾值守門 (+11 tests, 115/115 pass) | ✅ | S |
+
+執行順序：15-1 → 15-4-7 (CF infra) → 15-2-3 (wiring + config row) → 15-8
+
+**實作筆記**：
+- **EPIC 14 加快了 EPIC 15** — section 接到首頁變成 1 行 `INSERT INTO home_sections_config`，不用改 Dart
+- **Method 1 (v1) 即時上線**：seed config row `source_type='for_you'`。任何登入使用者刷新就看到
+- **Method 3 (CF) 做起來放**：infra 都建好（table + cron + SQL function + RPC）。第一次 run 會在今天 19:00 UTC（明早台北 03:00）。要切換到 CF 只需 `UPDATE home_sections_config SET source_type='for_you_cf' WHERE slug='for_you'`，零部署
+- **三層 cold-start 防呆**：
+  1. 未登入 → trending
+  2. < 3 favorites → trending
+  3. tag overlap 太稀疏 → trending
+- **Cron 設定 03:00 Asia/Taipei（19:00 UTC）**：避開使用者活躍時段
+- 觀察期建議：等 CF 跑 1-2 週 + active users > 50 + total favorites > 500 再切換 source_type 到 for_you_cf；那之前用 v1 即時 affinity 就好
 
 執行順序：15-1 → 15-2 → 15-3 **(Method 1 上線)** → 15-4 → 15-5 → 15-6 → 15-7 → 15-8 **(Method 3 做起來放)**
 

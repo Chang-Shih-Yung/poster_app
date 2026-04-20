@@ -189,6 +189,12 @@ class _DynamicSectionRow extends StatelessWidget {
       case 'popular':
       case 'tag_slug':
       case 'recent_approved':
+      case 'for_you':
+      case 'for_you_cf':
+        // All five return plain Poster rows (with optional
+        // recommendation_score for for_you variants — currently we don't
+        // surface the score in UI, but it could power "because you
+        // favorited X" hints later).
         return _SectionRow(
           items: section.asPosters(),
           favIds: favIds,
