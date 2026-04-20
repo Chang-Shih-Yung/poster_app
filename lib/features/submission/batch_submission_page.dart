@@ -11,6 +11,7 @@ import '../../core/services/image_compressor.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/providers/supabase_providers.dart';
 import '../../data/repositories/submission_repository.dart';
+import 'tag_picker.dart';
 
 /// /upload/batch — shared work info + N poster cards.
 ///
@@ -33,6 +34,14 @@ class _BatchSubmissionPageState extends ConsumerState<BatchSubmissionPage> {
   final _titleEnController = TextEditingController();
   final _yearController = TextEditingController();
   Region _region = Region.tw;
+
+  // EPIC 18: shared across all cards in this batch.
+  // Batch UX is primarily for multiple versions of the same movie
+  // (e.g. teaser + final + IMAX). Default to 'movie', users wanting
+  // other kinds use single submission flow.
+  final String _workKind = 'movie';
+  Map<String, Set<String>> _selectedTags = {};
+  bool _aiDeclaration = false;
 
   // One card per poster in this batch.
   final List<_CardState> _cards = [_CardState()];
@@ -82,6 +91,10 @@ class _BatchSubmissionPageState extends ConsumerState<BatchSubmissionPage> {
       _toast('有圖片還在壓縮，請稍候');
       return;
     }
+    if (!_aiDeclaration) {
+      _toast('請先勾選「此批海報皆非 AI 生成」的聲明');
+      return;
+    }
 
     setState(() => _submitting = true);
     HapticFeedback.mediumImpact();
@@ -108,12 +121,17 @@ class _BatchSubmissionPageState extends ConsumerState<BatchSubmissionPage> {
       for (var i = 0; i < _cards.length; i++) {
         final c = _cards[i];
         final urls = uploads[i];
+        final allTagIds =
+            _selectedTags.values.expand((s) => s).toList(growable: false);
         final row = <String, dynamic>{
           'batch_id': batchId,
           'uploader_id': user.id,
           'work_title_zh': titleZh,
           'region': _region.value,
           'is_exclusive': false,
+          'work_kind': _workKind,
+          'tag_ids': allTagIds,
+          'ai_self_declaration': _aiDeclaration,
           'image_url': urls.posterUrl,
           'thumbnail_url': urls.thumbUrl,
           'image_size_bytes': c.compressed!.posterBytes.lengthInBytes,
@@ -257,6 +275,69 @@ class _BatchSubmissionPageState extends ConsumerState<BatchSubmissionPage> {
             ),
 
             const SizedBox(height: 28),
+            // Shared tags across the whole batch.
+            Text('分類 Tags（整批共用）',
+                style: theme.textTheme.labelMedium?.copyWith(
+                  color: AppTheme.textMute,
+                  letterSpacing: 1.6,
+                  fontWeight: FontWeight.w600,
+                )),
+            const SizedBox(height: 8),
+            TagPicker(
+              selected: _selectedTags,
+              onChanged: (m) => setState(() => _selectedTags = m),
+            ),
+            const SizedBox(height: 20),
+
+            // AI self-declaration.
+            InkWell(
+              onTap: () => setState(() => _aiDeclaration = !_aiDeclaration),
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: AppTheme.surfaceRaised,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: _aiDeclaration ? AppTheme.text : AppTheme.line1,
+                  ),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 20,
+                      height: 20,
+                      margin: const EdgeInsets.only(top: 2),
+                      decoration: BoxDecoration(
+                        color: _aiDeclaration
+                            ? AppTheme.text
+                            : Colors.transparent,
+                        border: Border.all(
+                          color: _aiDeclaration
+                              ? AppTheme.text
+                              : AppTheme.line2,
+                          width: 1.5,
+                        ),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: _aiDeclaration
+                          ? Icon(LucideIcons.check, size: 14, color: AppTheme.bg)
+                          : null,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        '我確認此批海報皆非 AI 生成。POSTER. 禁止收錄 AI 海報，違者永久停權。',
+                        style: theme.textTheme.bodySmall
+                            ?.copyWith(color: AppTheme.textMute),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
             SizedBox(
               width: double.infinity,
               child: FilledButton(

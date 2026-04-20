@@ -12,6 +12,7 @@ import '../../data/models/poster.dart';
 import '../../data/providers/supabase_providers.dart';
 import '../../data/repositories/favorite_repository.dart';
 import '../../data/repositories/poster_repository.dart';
+import '../../data/repositories/tag_repository.dart';
 import '../../data/repositories/view_repository.dart';
 
 final _posterByIdProvider =
@@ -370,17 +371,42 @@ class _TitleStack extends StatelessWidget {
           _MetaColumns(poster: poster),
         ],
 
-        // Tag chips.
-        if (poster.tags.isNotEmpty) ...[
-          const SizedBox(height: 16),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: poster.tags
-                .map((t) => _MiniChip(label: t))
-                .toList(growable: false),
-          ),
-        ],
+        // Tag chips — canonical tags from poster_tags (EPIC 18), tappable
+        // to /tags/:slug. Falls back to legacy poster.tags text[] while
+        // migration settles.
+        Consumer(builder: (ctx, ref, _) {
+          final tagsAsync = ref.watch(tagsForPosterProvider(poster.id));
+          final canonical = tagsAsync.asData?.value ?? const [];
+          if (canonical.isNotEmpty) {
+            return Padding(
+              padding: const EdgeInsets.only(top: 16),
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: canonical
+                    .map((t) => _TappableTagChip(
+                          label: t.labelZh,
+                          onTap: () => ctx.push('/tags/${t.slug}'),
+                        ))
+                    .toList(growable: false),
+              ),
+            );
+          }
+          // Fallback: legacy text[] tags (not tappable)
+          if (poster.tags.isNotEmpty) {
+            return Padding(
+              padding: const EdgeInsets.only(top: 16),
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: poster.tags
+                    .map((t) => _MiniChip(label: t))
+                    .toList(growable: false),
+              ),
+            );
+          }
+          return const SizedBox.shrink();
+        }),
 
         // CTAs.
         const SizedBox(height: 22),
@@ -638,6 +664,41 @@ class _MiniChip extends StatelessWidget {
               letterSpacing: 0.6,
               fontWeight: FontWeight.w500,
             ),
+      ),
+    );
+  }
+}
+
+/// Tappable tag chip — navigates to /tags/:slug.
+class _TappableTagChip extends StatelessWidget {
+  const _TappableTagChip({required this.label, required this.onTap});
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(999),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(999),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: AppTheme.chipBg,
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: AppTheme.line1),
+          ),
+          child: Text(
+            '# $label',
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  color: AppTheme.text,
+                  letterSpacing: 0.4,
+                  fontWeight: FontWeight.w500,
+                ),
+          ),
+        ),
       ),
     );
   }

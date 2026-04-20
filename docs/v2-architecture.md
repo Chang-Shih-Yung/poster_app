@@ -927,22 +927,30 @@ create table tag_suggestions (
 
 | # | 任務 | 狀態 | 預估 |
 |---|------|------|------|
-| 18-1 | Schema: `tag_categories` + `tags` + `poster_tags` + `tag_suggestions` 四表 + RLS | [ ] | M |
-| 18-2 | Enum 擴充：`region_enum` 加 +10 國別 / `release_type_enum` 加 +8 / `size_type_enum` 加 +15 規格 | [ ] | S |
-| 18-3 | 新 `work_kind_enum` + `works.work_kind` 欄位 | [ ] | S |
-| 18-4 | Poster 新 boolean 欄位：`signed` / `numbered` / `linen_backed` / `licensed` | [ ] | XS |
-| 18-5 | Seed migration：10 個 tag_categories + 200+ canonical tags | [ ] | L |
-| 18-6 | Migration script：舊 `posters.tags text[]` 匹配到 `poster_tags` + 無法 match 進 suggestions queue | [ ] | M |
-| 18-7 | Dart models：`TagCategory`, `Tag`, `TagSuggestion` + repositories | [ ] | M |
-| 18-8 | 投稿 flow 重設計：第一步選 work_kind → 對應表單 → 多 facet tag picker | [ ] | L |
-| 18-9 | Tag picker UI component：search with aliases、category-grouped、「其他」fallback、「建議新 tag」入口 | [ ] | L |
-| 18-10 | Admin `/admin/tag-suggestions` page（approve / reject / merge） | [ ] | M |
-| 18-11 | RPC `approve_tag_suggestion(id)` / `reject_tag_suggestion(id, note)` / `merge_tag_suggestion(id, target_tag_id)` | [ ] | M |
-| 18-12 | AI-generated checkbox 加到 submission_page + batch_submission_page + TOS 條款 | [ ] | S |
-| 18-13 | Home `/` 更新：faceted browse 入口（「按國別」「按設計師」「按年代」），整合 EPIC 14 config | [ ] | M |
-| 18-14 | Search page：filter 按 category 分群 | [ ] | M |
-| 18-15 | Tests: models, tag fallback flow, migration script correctness | [ ] | M |
-| 18-16 | 更新 v2-architecture.md | [ ] | XS |
+| 18-1 | Schema: `tag_categories` + `tags` + `poster_tags` + `tag_suggestions` + RLS | ✅ | M |
+| 18-2 | Enum 擴充：region +11 / release_type +15 / size_type +25 | ✅ | S |
+| 18-3 | `work_kind_enum` + `works.work_kind` + `posters.work_kind` + `submissions.work_kind` | ✅ | S |
+| 18-4 | Poster/Submission 新欄位：`signed` / `numbered` / `edition_number` / `linen_backed` / `licensed` | ✅ | XS |
+| 18-5 | Seed: 10 個 tag_categories + **~165 canonical tags**（國別 22 / 年代 19 / 媒材 19 / 設計師 37 / 版本 19 / 美學 16 / 類型 15 / 收藏 13 / chirashi 8 / 編輯精選 7） | ✅ | L |
+| 18-6 | Migration: 舊 posters.tags text[] → poster_tags（**145 matched / 54 送進 tag_suggestions queue**） | ✅ | M |
+| 18-7 | Dart models + `TagRepository` + `TagSuggestionRepository` | ✅ | M |
+| 18-8 | 投稿 flow：加 work_kind 選擇（8 種）+ TagPicker + AI 聲明 checkbox | ✅ | L |
+| 18-9 | `TagPicker` widget：category-grouped / search with aliases / debounce / 「建議新 tag」入口 | ✅ | L |
+| 18-10 | `/admin/tag-suggestions` page（approve / reject / merge + _MergePicker dialog） | ✅ | M |
+| 18-11 | RPCs：`approve_tag_suggestion` / `reject_tag_suggestion` / `merge_tag_suggestion`（含 FOR UPDATE 防併發 + auto-attach 到 linked submission） | ✅ | M |
+| 18-12 | AI-generated 禁止：submission_page + batch_submission_page 雙重 checkbox（無 checkbox 不能送） | ✅ | S |
+| 18-13+14 | `/tags/:slug` 瀏覽頁（響應式 grid）+ poster detail tag chips tappable jump。**Home faceted entry 整合 EPIC 14**（延後） | ✅ | M |
+| 18-15 | Tests：models `fromRow` / alias search / suggestion 狀態流（**+12 tests, 84/84 pass**） | ✅ | M |
+| 18-16 | 更新 v2-architecture.md + audit | ✅ | XS |
+
+**驗證**：flutter analyze 0 errors / 0 warnings, flutter test **84/84 pass**
+
+**實作筆記**：
+- 舊 `posters.tags text[]` 欄位保留當備份，未 drop；Dart 端 poster_detail 仍會 fallback 顯示舊 tags（當 canonical 為空時）
+- 設計師 seed 僅 ~37 位（台灣 10、西方經典 8、Mondo 8、波蘭 6、日本 3、其他 2）；使用者建議 queue 會驅動持續擴充
+- Search page filter by category（18-14 原範圍）延後——`/tags/:slug` 已提供類似瀏覽體驗，等 EPIC 14 dynamic sections 一起做更好
+- Home faceted entry（18-13 原範圍）延後到 EPIC 14
+- Admin UI MVP 範圍（只做 suggestions queue）確實夠用；編輯既有 tag 需手改 Supabase dashboard
 
 **執行順序**：
 ```

@@ -5,10 +5,12 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../data/providers/supabase_providers.dart';
 import '../../features/admin/admin_review_page.dart';
+import '../../features/admin/admin_tag_suggestions_page.dart';
 import '../../features/auth/signin_page.dart';
 import '../../features/home/home_page.dart';
 import '../../features/posters/library_page.dart';
 import '../../features/posters/poster_detail_page.dart';
+import '../../features/posters/tag_browse_page.dart';
 import '../../features/posters/work_page.dart';
 import '../../features/profile/my_favorites_page.dart';
 import '../../features/profile/profile_page.dart';
@@ -96,6 +98,12 @@ final routerProvider = Provider<GoRouter>((ref) {
         ),
       ),
       GoRoute(
+        path: '/tags/:slug',
+        builder: (_, state) => _BackablePage(
+          child: TagBrowsePage(slug: state.pathParameters['slug']!),
+        ),
+      ),
+      GoRoute(
         path: '/user/:id',
         builder: (_, state) => _BackablePage(
           child: PublicProfilePage(userId: state.pathParameters['id']!),
@@ -107,6 +115,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
 
       GoRoute(path: '/admin', builder: (_, _) => const AdminReviewPage()),
+      GoRoute(
+        path: '/admin/tag-suggestions',
+        builder: (_, _) => const AdminTagSuggestionsPage(),
+      ),
     ],
   );
 });

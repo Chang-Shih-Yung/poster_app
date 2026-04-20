@@ -15,6 +15,7 @@ import '../../data/models/work.dart';
 import '../../data/providers/supabase_providers.dart';
 import '../../data/repositories/submission_repository.dart';
 import '../../data/repositories/work_repository.dart';
+import 'tag_picker.dart';
 
 class SubmissionPage extends ConsumerStatefulWidget {
   const SubmissionPage({super.key});
@@ -39,6 +40,11 @@ class _SubmissionPageState extends ConsumerState<SubmissionPage> {
   ReleaseType? _releaseType;
   SizeType? _sizeType;
   ChannelCategory? _channelCategory;
+
+  // ── EPIC 18: work_kind + tags + AI self-declaration ──
+  String _workKind = 'movie'; // values match work_kind_enum in SQL
+  Map<String, Set<String>> _selectedTags = {};
+  bool _aiDeclaration = false;
 
   // ── Channel detail ──
   final _channelTypeController = TextEditingController();
@@ -129,11 +135,18 @@ class _SubmissionPageState extends ConsumerState<SubmissionPage> {
   // ── Row builder ────────────────────────────────────────────────────────────
 
   Map<String, dynamic> _buildRow(String userId) {
+    // Flatten selected tag IDs from all categories into a single array.
+    final allTagIds =
+        _selectedTags.values.expand((s) => s).toList(growable: false);
+
     final row = <String, dynamic>{
       'work_title_zh': _titleZhController.text.trim(),
       'uploader_id': userId,
       'region': _region.value,
       'is_exclusive': _isExclusive,
+      'work_kind': _workKind,
+      'tag_ids': allTagIds,
+      'ai_self_declaration': _aiDeclaration,
     };
 
     final titleEn = _titleEnController.text.trim();
@@ -190,6 +203,10 @@ class _SubmissionPageState extends ConsumerState<SubmissionPage> {
     }
     if (_compressed == null) {
       _toast(_compressing ? '圖片壓縮中，請稍候' : '請先選一張海報圖片');
+      return;
+    }
+    if (!_aiDeclaration) {
+      _toast('請先勾選「此海報非 AI 生成」的聲明');
       return;
     }
     if (!_formKey.currentState!.validate()) return;
@@ -328,6 +345,13 @@ class _SubmissionPageState extends ConsumerState<SubmissionPage> {
             ),
 
             const SizedBox(height: 24),
+
+            // ── Work kind selector (EPIC 18-8) ──
+            _WorkKindSelector(
+              value: _workKind,
+              onChanged: (v) => setState(() => _workKind = v),
+            ),
+            const SizedBox(height: 16),
 
             // ── Required: 作品中文名（auto-suggest） ──
             _WorkTitleAutocomplete(
@@ -555,7 +579,25 @@ class _SubmissionPageState extends ConsumerState<SubmissionPage> {
               ),
             ],
 
-            const SizedBox(height: 28),
+            const SizedBox(height: 24),
+
+            // ── Tag picker (EPIC 18-9): faceted taxonomy ──
+            _SectionLabel(label: '分類 Tags'),
+            const SizedBox(height: 8),
+            TagPicker(
+              selected: _selectedTags,
+              onChanged: (m) => setState(() => _selectedTags = m),
+            ),
+
+            const SizedBox(height: 24),
+
+            // ── AI self-declaration (EPIC 18-12): mandatory ──
+            _AiDeclarationRow(
+              checked: _aiDeclaration,
+              onChanged: (v) => setState(() => _aiDeclaration = v),
+            ),
+
+            const SizedBox(height: 20),
 
             // ── Submit button ──
             SizedBox(
@@ -1187,6 +1229,192 @@ class _SummaryRow extends StatelessWidget {
             child: Text(value, style: Theme.of(context).textTheme.bodyMedium),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// EPIC 18-8: Work kind selector — first step of submission
+// ═══════════════════════════════════════════════════════════════════════════
+
+class _WorkKindSelector extends StatelessWidget {
+  const _WorkKindSelector({required this.value, required this.onChanged});
+  final String value;
+  final ValueChanged<String> onChanged;
+
+  static const _kinds = <_KindOption>[
+    _KindOption('movie',        '電影',       LucideIcons.film),
+    _KindOption('concert',      '演唱會',     LucideIcons.music),
+    _KindOption('theatre',      '戲劇',       LucideIcons.theater),
+    _KindOption('exhibition',   '展覽',       LucideIcons.image),
+    _KindOption('event',        '活動',       LucideIcons.calendar),
+    _KindOption('original_art', '原創作品',   LucideIcons.palette),
+    _KindOption('advertisement', '商業廣告',  LucideIcons.megaphone),
+    _KindOption('other',        '其他',       LucideIcons.circle),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '這張海報是關於什麼？*',
+          style: theme.textTheme.labelMedium?.copyWith(
+            color: AppTheme.textMute,
+            letterSpacing: 1.6,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children: [
+            for (final k in _kinds)
+              _KindChip(
+                option: k,
+                selected: value == k.slug,
+                onTap: () {
+                  HapticFeedback.selectionClick();
+                  onChanged(k.slug);
+                },
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _KindOption {
+  const _KindOption(this.slug, this.label, this.icon);
+  final String slug;
+  final String label;
+  final IconData icon;
+}
+
+class _KindChip extends StatelessWidget {
+  const _KindChip({
+    required this.option,
+    required this.selected,
+    required this.onTap,
+  });
+  final _KindOption option;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(999),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(999),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: selected ? AppTheme.text : AppTheme.chipBg,
+            border: Border.all(
+              color: selected ? AppTheme.text : AppTheme.line1,
+            ),
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                option.icon,
+                size: 14,
+                color: selected ? AppTheme.bg : AppTheme.text,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                option.label,
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      color: selected ? AppTheme.bg : AppTheme.text,
+                      fontWeight: FontWeight.w500,
+                    ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// EPIC 18-12: AI self-declaration checkbox (MANDATORY)
+// ═══════════════════════════════════════════════════════════════════════════
+
+class _AiDeclarationRow extends StatelessWidget {
+  const _AiDeclarationRow({required this.checked, required this.onChanged});
+  final bool checked;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return InkWell(
+      onTap: () => onChanged(!checked),
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppTheme.surfaceRaised,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: checked ? AppTheme.text : AppTheme.line1,
+          ),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Checkbox visual (manual, matches dark theme).
+            Container(
+              width: 20,
+              height: 20,
+              margin: const EdgeInsets.only(top: 2),
+              decoration: BoxDecoration(
+                color: checked ? AppTheme.text : Colors.transparent,
+                border: Border.all(
+                  color: checked ? AppTheme.text : AppTheme.line2,
+                  width: 1.5,
+                ),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: checked
+                  ? Icon(LucideIcons.check, size: 14, color: AppTheme.bg)
+                  : null,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '我確認此海報「非 AI 生成」*',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'POSTER. 禁止收錄 AI 生成海報。違者將永久停權。'
+                    '送出即代表你同意此條款。',
+                    style: theme.textTheme.bodySmall
+                        ?.copyWith(color: AppTheme.textMute),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

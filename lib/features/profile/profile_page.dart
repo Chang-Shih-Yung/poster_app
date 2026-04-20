@@ -95,6 +95,12 @@ class _SignedInView extends ConsumerWidget {
             label: 'Admin 審核',
             onTap: () => context.push('/admin'),
           ),
+          const SizedBox(height: 8),
+          _CardRow(
+            icon: LucideIcons.tag,
+            label: 'Tag 建議審核',
+            onTap: () => context.push('/admin/tag-suggestions'),
+          ),
         ],
         const SizedBox(height: 20),
         _SectionLabel(label: '個人檔案設定'),
