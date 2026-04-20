@@ -36,17 +36,28 @@
 ### 路由變更
 
 ```
-v10                              v11
-──────────                       ──────────
-/signin                          /signin（極簡）
-/browse (主頁 + tab bar)         / → /library（單頁圖庫）
-/upload                          /upload（push，自帶返回箭頭）
-/favorites (獨立頁)              ❌ 砍掉（併入 library filter）
-/profile                         /profile（push，自帶返回箭頭）
-/poster/:id (push →)             /poster/:id（slide-up ↑ modal）
-/admin                           /admin（保留）
-/me/submissions                  /me/submissions（保留）
+v10                              v11                              v12 (2026-04-20)
+──────────                       ──────────                       ──────────
+/signin                          /signin（極簡）                   keep
+/browse (主頁 + tab bar)         / → /library（單頁圖庫）          / → 兩個 tab：探索 + 我的
+/upload                          /upload（push，自帶返回箭頭）     keep
+/favorites (獨立頁)              ❌ 砍掉（併入 library filter）   keep
+/profile                         /profile（push）                 keep
+—                                —                                /profile/edit（NEW，IG 風格表單）
+/poster/:id (push →)             /poster/:id（slide-up modal）    keep
+/admin                           /admin（保留）                    keep
+/me/submissions                  /me/submissions（保留）           keep
+/me/favorites                    /me/favorites（獨立頁）           ❌ 砍掉（直接跳「我的」tab）
 ```
+
+### v11 → v12 變更（2026-04-20）
+
+- ✅ Bottom nav 確立兩個 tab：**探索 / 我的**（取代舊的單頁 library）
+- ✅ `/profile/edit` IG 風格個人檔案編輯器：avatar 上傳 + 暱稱 + 簡介 + 性別 chips + 個人連結（最多 5）
+- ✅ 「我的收藏」入口統一指向「我的」tab，不再有獨立 `/me/favorites`
+- ✅ Riverpod 3 `NotifierProvider<ShellTabNotifier, int>` 取代 v3 已移除的 `StateProvider`
+- ✅ 為你推薦 section（EPIC 15）：登入即看，CF / tag-affinity 雙引擎，server-side dispatch
+- ✅ Avatar 更新即時 invalidate 三個 provider，**native app 切 tab 不需任何刷新**
 
 ---
 
@@ -477,10 +488,16 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 ```
 
 **v10 → v11 變更：**
-- 移除「我的收藏」行列（收藏已併入 Library filter）
 - 移除未登入狀態（Profile 只有登入後才能進入，未登入看不到 avatar）
 - X 按鈕 → 左上返回箭頭 `LucideIcons.arrowLeft`
 - 其餘保持 v10 的 `_IdentityCard` + `_CardRow` + `_GhostPill` pattern
+
+**v11 → v12 變更（2026-04-20）：**
+- 加回「我的收藏」行列，但 onTap 不開新頁，而是
+  `ref.read(shellTabProvider.notifier).setIndex(1); context.pop()` 直接跳「我的」tab
+- 加「編輯個人檔案」行列 → `/profile/edit`（IG 風格表單）
+- 移除身份卡內聯的 _BioRow（bio 改在 edit 頁面顯示 + 編輯）
+- 登出修正：`signOut()` 完呼叫 `router.go('/signin')`，不靠 redirect 觸發
 
 ---
 

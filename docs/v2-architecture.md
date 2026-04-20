@@ -136,7 +136,10 @@ PRIMARY KEY (user_id, poster_id, viewed_date)
 | Column | Type | Note |
 |--------|------|------|
 | is_public | boolean default true | 公開個人檔案 |
-| bio | text | 自介 |
+| bio | text | 自介（≤200 字） |
+| gender | gender_enum | 性別（選填，2026-04-20 EPIC 19） |
+| links | jsonb default '[]' | 個人連結 `[{label, url}]`，最多 5 個（2026-04-20 EPIC 19） |
+| avatar_url | text | 上傳到 `avatars/<uid>/avatar_<ts>.<ext>` 後寫回（2026-04-20 EPIC 19） |
 
 ### Enums
 
@@ -159,6 +162,11 @@ CREATE TYPE channel_cat_enum AS ENUM (
 
 CREATE TYPE submission_status AS ENUM (
   'pending','approved','rejected','duplicate'
+);
+
+-- 2026-04-20 EPIC 19
+CREATE TYPE gender_enum AS ENUM (
+  'male','female','non_binary','prefer_not_say'
 );
 ```
 
@@ -734,6 +742,59 @@ create table recommendation_jobs (
 
 執行順序：15-1 → 15-2 → 15-3 **(Method 1 上線)** → 15-4 → 15-5 → 15-6 → 15-7 → 15-8 **(Method 3 做起來放)**
 
+**Demo / 驗證**：`20260420500600_cf_demo_seed.sql` 把 3 部 BIU 沒收藏的海報塞給張十墉
+（兩人共同收藏 4 → CF 分數 4），切 source_type 回 `for_you_cf`，重跑批次。
+DB 端 NOTICE 印出 `CF REC: score=4 [similar_favorites] {龍貓 / 花樣年華 / 你的名字}`，
+首頁登入 BIU 即可看到。
+
+---
+
+### EPIC 19: Profile Editor & Avatar Upload — 2026-04-20 規劃 ✅
+
+**目標**：使用者可以自己改頭像、暱稱、簡介、性別、外部連結。Profile 從「只讀身份卡」升級成「IG 風格可編輯個人檔案」。
+
+**範圍**：
+- 新頁面 `/profile/edit`（IG 風格表單：頭像、displayName、bio 200 字、gender chips、links 編輯器最多 5 個）
+- 新 storage bucket `avatars` + own-folder write RLS（`avatars/<uid>/avatar_<ts>.<ext>`）
+- 暱稱 / 簡介 / 性別 / 連結即時 invalidate 三個 provider，**讓 native app 切 tab 不用刷新**
+
+**Schema 新增**：
+```sql
+-- 20260420400100_user_profile_fields.sql
+create type gender_enum as enum ('male','female','non_binary','prefer_not_say');
+
+alter table public.users
+  add column gender gender_enum,
+  add column links jsonb not null default '[]'::jsonb;
+
+-- avatars storage bucket
+insert into storage.buckets (id, name, public) values ('avatars','avatars', true);
+
+create policy "avatars_own_folder_write" on storage.objects
+  for insert with check (bucket_id = 'avatars' and owner = auth.uid()
+    and (storage.foldername(name))[1] = auth.uid()::text);
+-- + update / delete 同 own-folder 規則
+```
+
+**Task 拆解**：
+
+| # | 任務 | 狀態 |
+|---|------|------|
+| 19-1 | gender_enum + users.gender / users.links 欄位 + avatars bucket + own-folder RLS | ✅ |
+| 19-2 | `AppUser` model 加 gender / links；`Gender` enum 帶 `labelZh`；`ProfileLink` from/to JSON | ✅ |
+| 19-3 | `UserRepository.uploadAvatar()` + `updateOwnProfile()` 擴充（displayName / avatarUrl / gender / links） | ✅ |
+| 19-4 | `/profile/edit` 頁面：`_AvatarPicker` + `_GenderPicker` (Wrap of chips) + `_LinksEditor` (5 rows max) | ✅ |
+| 19-5 | 存完 invalidate `currentProfileProvider` + `homeSectionsV2Provider` + `publicProfileProvider(self)` — native app 切 tab 即時更新（no refresh） | ✅ |
+| 19-6 | 「我的收藏」入口從獨立頁改成跳 `shellTabProvider.notifier.setIndex(1)`；刪 `my_favorites_page.dart` 與 `/me/favorites` 路由 | ✅ |
+| 19-7 | `ShellTabNotifier`（Riverpod 3 Notifier）取代被 v3 移除的 `StateProvider`；route_layer 用 `shellTabProvider` | ✅ |
+| 19-8 | 登出 fix：呼叫 `signOut()` 後 `router.go('/signin')` + invalidate `currentProfileProvider` | ✅ |
+
+**Avatar 即時更新策略**（重要：**app 沒有「按 F5」這種東西**）：
+- 上傳路徑用 timestamp suffix（`avatar_${now.millisecondsSinceEpoch}.jpg`）→ URL 永遠是新的 → `CachedNetworkImage` 自動 cache miss + 重抓
+- DB 端 `users.avatar_url` 是 single source of truth，所有 RPC（home_sections_v2, public_profile, posters）都 live JOIN，不存 denormalized 副本
+- 存完一次 invalidate 三個 provider（home / 個人頁 / 公開個人頁）→ Riverpod 重新訂閱 → UI 自動 rebuild
+- 行為在 web / iOS / Android 完全一致；不依賴 service worker、不依賴瀏覽器刷新
+
 ---
 
 ### EPIC 16: TMDB Optional Helper — 延後
@@ -1161,9 +1222,9 @@ Phase 3: Polish ✅
 ## Navigation（V2）
 
 ```
-Bottom tabs:
-  探索 (/)           Spotify-style sections feed
-  我的 (/library)    個人收藏 L/M/S density
+Bottom tabs（IndexedStack，全 app 唯一兩個 tab）:
+  探索 (index 0, /)        Spotify-style sections feed
+  我的 (index 1)           Library 頁，預設 pillFavorites=true（=收藏）
 
 Top bar:
   Avatar → /profile
@@ -1174,12 +1235,20 @@ Sub-pages (push):
   /poster/:id        海報詳情（slide up）
   /work/:id          同一電影所有海報
   /user/:id          公開個人檔案
-  /upload             單張投稿
-  /upload/batch       批量投稿
-  /upload/confirm     確認頁
+  /upload            單張投稿
+  /upload/batch      批量投稿
+  /upload/confirm    確認頁
   /me/submissions    我的投稿
-  /me/favorites      我的收藏
+  /profile/edit      編輯個人檔案（IG-style：頭像、簡介、性別、連結）
   /admin             審核佇列
+
+Tab state:
+  shellTabProvider (Riverpod 3 NotifierProvider<ShellTabNotifier, int>)
+  讓任意 sub-page 都能呼叫 ref.read(shellTabProvider.notifier).setIndex(1)
+  跳到「我的」tab，不需要 nav-args lifting
+
+Removed routes（v11 → v12）:
+  /me/favorites      ❌ 砍掉（直接跳到「我的」tab，避免重複頁面）
 ```
 
 ---
@@ -1202,7 +1271,7 @@ lib/
       work.dart                   NEW
       poster.dart                 EXTENDED
       submission.dart             NEW
-      app_user.dart               EXTENDED (is_public, bio)
+      app_user.dart               EXTENDED (is_public, bio, gender, links)
       favorite.dart
       favorite_category.dart
     providers/
@@ -1227,7 +1296,8 @@ lib/
     profile/
       profile_page.dart
       public_profile_page.dart    NEW
-      my_favorites_page.dart
+      profile_edit_page.dart      NEW (2026-04-20 EPIC 19)
+      # my_favorites_page.dart    REMOVED — 直接跳「我的」tab
     submission/
       submission_page.dart        REDESIGNED: structured fields
       batch_submission_page.dart  NEW
@@ -1265,6 +1335,8 @@ lib/
 | User discovery | — | NEW |
 | Batch upload | — | NEW |
 | Full-text search | — | NEW |
+| Profile editor (avatar/gender/links) | — | NEW (EPIC 19) |
+| 推薦引擎（tag affinity + CF） | — | NEW (EPIC 15) |
 
 ---
 
