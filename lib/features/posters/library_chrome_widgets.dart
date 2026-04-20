@@ -244,3 +244,187 @@ class _EmptyFavoritesState extends StatelessWidget {
     );
   }
 }
+
+// ───────────────────────────────────────────────────────────────────────
+// v13 Me-tab chrome widgets
+// ───────────────────────────────────────────────────────────────────────
+
+/// Profile summary row inside the chrome — 64×64 avatar + name + bio +
+/// 編輯 pill. Tap 編輯 → /profile/edit (handled inline since the chrome
+/// is a stateless region).
+class _MeProfileRow extends StatelessWidget {
+  const _MeProfileRow({
+    required this.profile,
+    required this.fallbackEmail,
+  });
+  final AppUser? profile;
+  final String fallbackEmail;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final displayName = profile?.displayName.trim() ?? '';
+    final name = displayName.isNotEmpty
+        ? displayName
+        : fallbackEmail.split('@').first;
+    final bio = profile?.bio?.trim();
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        _Avatar(profile: profile, size: 64),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: -0.2,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                bio?.isNotEmpty == true ? bio! : fallbackEmail,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  fontSize: 11,
+                  color: AppTheme.textMute,
+                  height: 1.4,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 10),
+        Material(
+          color: AppTheme.chipBg,
+          borderRadius: BorderRadius.circular(999),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(999),
+            onTap: () {
+              HapticFeedback.selectionClick();
+              context.push('/profile/edit');
+            },
+            child: Container(
+              height: 30,
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(color: AppTheme.line2),
+              ),
+              alignment: Alignment.center,
+              child: Text(
+                '編輯',
+                style: theme.textTheme.labelMedium?.copyWith(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  letterSpacing: 0,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Segmented sub-tab — text + 2px white underline when active. Used
+/// for 收藏 / 投稿 split below the filter chrome.
+class _SegTab extends StatelessWidget {
+  const _SegTab({
+    required this.label,
+    required this.active,
+    required this.onTap,
+  });
+  final String label;
+  final bool active;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        decoration: BoxDecoration(
+          border: Border(
+            bottom: BorderSide(
+              color: active ? Colors.white : Colors.transparent,
+              width: 2,
+            ),
+          ),
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          label,
+          style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                fontSize: 13,
+                color: active ? Colors.white : AppTheme.textMute,
+                fontWeight: active ? FontWeight.w600 : FontWeight.w500,
+                letterSpacing: 0,
+              ),
+        ),
+      ),
+    );
+  }
+}
+
+/// L/M/S density toggle — three icons inside a soft capsule, white-pill
+/// active state. Replaces the old single-icon cycle button (clearer
+/// affordance, matches v13 prototype).
+class _DensityToggle extends StatelessWidget {
+  const _DensityToggle({
+    required this.current,
+    required this.onChange,
+  });
+  final BrowseDensity current;
+  final ValueChanged<BrowseDensity> onChange;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      padding: const EdgeInsets.all(3),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (final d in BrowseDensity.values)
+            GestureDetector(
+              onTap: () => onChange(d),
+              behavior: HitTestBehavior.opaque,
+              child: AnimatedContainer(
+                duration: AppTheme.motionFast,
+                width: 28,
+                height: 24,
+                decoration: BoxDecoration(
+                  color: current == d
+                      ? Colors.white.withValues(alpha: 0.14)
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(7),
+                ),
+                child: Center(
+                  child: Icon(
+                    d.icon,
+                    size: 14,
+                    color: current == d ? Colors.white : AppTheme.textMute,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}

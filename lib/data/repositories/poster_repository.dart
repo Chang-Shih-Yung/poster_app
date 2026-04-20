@@ -15,6 +15,7 @@ class PosterFilter {
     this.yearMin,
     this.yearMax,
     this.favoritesOf,
+    this.uploadedBy,
   });
 
   final PosterSort sortBy;
@@ -26,6 +27,10 @@ class PosterFilter {
 
   /// When set, only return posters favorited by this user ID.
   final String? favoritesOf;
+
+  /// When set, only return posters uploaded by this user ID
+  /// (used by 我的 → 投稿 segmented tab).
+  final String? uploadedBy;
 
   bool get hasAdvanced =>
       tags.isNotEmpty ||
@@ -47,11 +52,13 @@ class PosterFilter {
     int? yearMin,
     int? yearMax,
     String? favoritesOf,
+    String? uploadedBy,
     bool clearSearch = false,
     bool clearDirector = false,
     bool clearYearMin = false,
     bool clearYearMax = false,
     bool clearFavoritesOf = false,
+    bool clearUploadedBy = false,
   }) {
     return PosterFilter(
       sortBy: sortBy ?? this.sortBy,
@@ -62,6 +69,8 @@ class PosterFilter {
       yearMax: clearYearMax ? null : (yearMax ?? this.yearMax),
       favoritesOf:
           clearFavoritesOf ? null : (favoritesOf ?? this.favoritesOf),
+      uploadedBy:
+          clearUploadedBy ? null : (uploadedBy ?? this.uploadedBy),
     );
   }
 }
@@ -124,6 +133,10 @@ class PosterRepository {
 
     if (filter.tags.isNotEmpty) {
       query = query.contains('tags', filter.tags);
+    }
+
+    if (filter.uploadedBy != null) {
+      query = query.eq('uploader_id', filter.uploadedBy!);
     }
 
     final director = filter.director?.trim();
