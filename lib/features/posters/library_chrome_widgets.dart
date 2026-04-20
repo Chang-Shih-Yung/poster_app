@@ -84,6 +84,7 @@ class _ChromeIconButton extends StatelessWidget {
   }
 }
 
+// ignore: unused_element
 class _FilterPill extends StatelessWidget {
   const _FilterPill({
     required this.label,
@@ -378,9 +379,9 @@ class _SegTab extends StatelessWidget {
   }
 }
 
-/// L/M/S density toggle — three icons inside a soft capsule, white-pill
-/// active state. Replaces the old single-icon cycle button (clearer
-/// affordance, matches v13 prototype).
+/// L/M/S density toggle — kept around in case we resurface density
+/// switching later; not currently rendered (我的 is masonry-only).
+// ignore: unused_element
 class _DensityToggle extends StatelessWidget {
   const _DensityToggle({
     required this.current,

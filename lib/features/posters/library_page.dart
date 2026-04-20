@@ -69,24 +69,21 @@ const _prefsKeySearchHistory = 'browse.search_history';
 const _searchHistoryMax = 5;
 
 /// v13 Me-tab chrome (top → bottom):
-///   1. title row (我的 + ⚙ settings)
+///   1. title row (+ upload + ☰ menu — no text title)
 ///   2. profile row (avatar + name + bio + 編輯 pill)
-///   3. filter pills (tags)
-///   4. sort + density (L/M/S)
-///   5. segmented tabs (收藏 / 投稿)
+///   3. segmented tabs (收藏 / 投稿)
+///
+/// Tag filter pills + L/M/S toggle removed (2026-04-20):
+///   - L/M/S: only masonry (M) makes sense for the IG-like 我的 view
+///   - Tag pills: list_favorites_with_posters RPC doesn't accept a tag
+///     filter, so filter chips were silently no-op when 收藏 was active.
+///     Cleaner to remove them than to fix server-side for a feature
+///     that isn't in v13 spec anyway.
 const _titleRowHeight = 44.0;
 const _profileRowHeight = 80.0;  // 64 avatar + 16 padding
-const _filterPillsHeight = 36.0;
-const _sortRowHeight = 40.0;
 const _segTabsHeight = 48.0;
 double _chromeHeight(double safeTop) =>
-    safeTop +
-    8 +
-    _titleRowHeight +
-    _profileRowHeight +
-    _filterPillsHeight +
-    _sortRowHeight +
-    _segTabsHeight;
+    safeTop + 8 + _titleRowHeight + _profileRowHeight + _segTabsHeight;
 
 /// 我的 segmented sub-tab — drives the filter passed to the poster
 /// repository. 收藏 → favoritesOf=user.id. 投稿 → uploadedBy=user.id.
@@ -117,9 +114,8 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
   int _heroPage = 0;
   int _requestSeq = 0;
 
-  // Pill state: multi-select tags. The 收藏/投稿 axis is now the
-  // segmented tab below (replaces the standalone 收藏 pill).
-  Set<String> _pillTags = {};
+  // v13 我的: only the segmented sub-tab drives filtering. Tag chips
+  // and density toggle removed.
   _MeTab _meTab = _MeTab.favorites;
 
   @override
@@ -267,25 +263,6 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
         .then((p) => p.setString(_prefsKeyDensity, next.key));
   }
 
-  // Pill tap handlers (tag chips only — segmented owns 收藏/投稿).
-  void _onPillAll() {
-    if (_pillTags.isEmpty) return;
-    setState(() => _pillTags = {});
-    _rebuildFilterFromPills();
-  }
-
-  void _onPillTag(String tag) {
-    HapticFeedback.selectionClick();
-    setState(() {
-      if (_pillTags.contains(tag)) {
-        _pillTags = Set.of(_pillTags)..remove(tag);
-      } else {
-        _pillTags = Set.of(_pillTags)..add(tag);
-      }
-    });
-    _rebuildFilterFromPills();
-  }
-
   void _onSegChange(_MeTab tab) {
     if (_meTab == tab) return;
     HapticFeedback.selectionClick();
@@ -297,7 +274,6 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
     final user = ref.read(currentUserProvider);
     final uid = user?.id;
     _applyFilter(PosterFilter(
-      tags: _pillTags.toList(),
       favoritesOf: _meTab == _MeTab.favorites ? uid : null,
       uploadedBy: _meTab == _MeTab.submissions ? uid : null,
     ));
@@ -397,15 +373,12 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
     AppUser? profile,
     dynamic user,
   ) {
-    final topTagsAsync = ref.watch(topTagsProvider);
-    final tags = topTagsAsync.asData?.value ?? const [];
-
-    // v13 我的 chrome (top → bottom):
-    //   1. title row: 我的 + ⚙ settings (right)
+    // v13 我的 chrome (3 rows):
+    //   1. title row: + (upload) on left, ☰ (menu) on right — no text title
     //   2. profile row: avatar 64 + name + bio + 編輯 pill
-    //   3. filter pills: 全部 + tag chips (no 收藏 — segmented owns that)
-    //   4. sort + density row
-    //   5. segmented sub-tabs: 收藏 / 投稿 (with 2px white underline)
+    //   3. segmented sub-tabs: 收藏 N / 投稿 N
+    //
+    // tag pills + L/M/S row removed per user feedback (2026-04-20).
     final favCount = ref.watch(favoriteIdsProvider).asData?.value.length ?? 0;
     final mySubsAsync = ref.watch(mySubmissionsV2Provider);
     final subCount = mySubsAsync.asData?.value.length ?? 0;
@@ -416,25 +389,31 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
         children: [
           SizedBox(height: topInset + 8),
 
-          // ── 1. title row ──
+          // ── 1. title row: + upload (left), ☰ menu (right) ──
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: SizedBox(
               height: _titleRowHeight,
               child: Row(
                 children: [
-                  Text(
-                    '我的',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontSize: 22,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: -0.5,
-                        ),
+                  _ChromeIconButton(
+                    icon: LucideIcons.plus,
+                    semanticLabel: '上傳海報',
+                    onTap: () {
+                      final u = ref.read(currentUserProvider);
+                      if (u == null) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('請先登入才能上傳')),
+                        );
+                        return;
+                      }
+                      context.push('/upload');
+                    },
                   ),
                   const Spacer(),
                   _ChromeIconButton(
-                    icon: LucideIcons.settings,
-                    semanticLabel: '設定',
+                    icon: LucideIcons.menu,
+                    semanticLabel: '選單',
                     onTap: () => context.push('/profile'),
                   ),
                 ],
@@ -451,71 +430,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
             ),
           ),
 
-          // ── 3. filter pills ──
-          SizedBox(
-            height: _filterPillsHeight,
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: ListView(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                shrinkWrap: true,
-                children: [
-                  Center(
-                    child: _FilterPill(
-                      label: '全部',
-                      selected: _pillTags.isEmpty,
-                      onTap: _onPillAll,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  ...tags.map((t) => Padding(
-                        padding: const EdgeInsets.only(right: 8),
-                        child: Center(
-                          child: _FilterPill(
-                            label: t,
-                            selected: _pillTags.contains(t),
-                            onTap: () => _onPillTag(t),
-                          ),
-                        ),
-                      )),
-                ],
-              ),
-            ),
-          ),
-
-          // ── 4. sort + density row ──
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: SizedBox(
-              height: _sortRowHeight,
-              child: Row(
-                children: [
-                  Text(
-                    '最近',
-                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                          color: AppTheme.textMute,
-                          letterSpacing: 1.6,
-                          fontWeight: FontWeight.w500,
-                        ),
-                  ),
-                  const Spacer(),
-                  // L/M/S segmented inside a glass capsule (per v13).
-                  _DensityToggle(
-                    current: density,
-                    onChange: (d) {
-                      ref.read(browseDensityProvider.notifier).set(d);
-                      HapticFeedback.selectionClick();
-                      SharedPreferences.getInstance().then(
-                          (p) => p.setString(_prefsKeyDensity, d.key));
-                    },
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          // ── 5. segmented sub-tabs (收藏 / 投稿) ──
+          // ── 3. segmented sub-tabs (收藏 / 投稿) ──
           SizedBox(
             height: _segTabsHeight,
             child: Padding(
@@ -603,41 +518,16 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
             : const _EmptyState(),
       );
     }
-    final child = switch (density) {
-      BrowseDensity.large => _FullBleedFeed(
-          pageController: _heroPageController,
-          items: displayItems,
-          heroIndex: _heroPage,
-          topPadding: topPad,
-          favIds: favIds,
-          onToggleFavorite: _toggleFavorite,
-        ),
-      BrowseDensity.medium => _MediumGrid(
-          controller: _scrollController,
-          items: displayItems,
-          trailingLoader: _loading,
-          topPadding: topPad,
-          bottomPadding: bottomPad,
-          favIds: favIds,
-          onToggleFavorite: _toggleFavorite,
-        ),
-      BrowseDensity.small => _SmallList(
-          controller: _scrollController,
-          items: displayItems,
-          trailingLoader: _loading,
-          topPadding: topPad,
-          bottomPadding: bottomPad,
-          favIds: favIds,
-          onToggleFavorite: _toggleFavorite,
-        ),
-    };
-    return AnimatedSwitcher(
-      duration: AppTheme.motionMed,
-      switchInCurve: AppTheme.easeStandard,
-      child: KeyedSubtree(
-        key: ValueKey(density),
-        child: child,
-      ),
+    // v13: only masonry. L (full-bleed page-view) and S (list) widgets
+    // are still in library_density_views.dart for future re-use.
+    return _MediumGrid(
+      controller: _scrollController,
+      items: displayItems,
+      trailingLoader: _loading,
+      topPadding: topPad,
+      bottomPadding: bottomPad,
+      favIds: favIds,
+      onToggleFavorite: _toggleFavorite,
     );
   }
 }

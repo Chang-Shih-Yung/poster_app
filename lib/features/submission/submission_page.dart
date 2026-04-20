@@ -693,12 +693,10 @@ class _SectionLabel extends StatelessWidget {
   }
 }
 
-/// Empty state: tap to pick.
-/// v13 empty picker — 2:3 aspect ratio, soft dark fill, camera icon
-/// centred + 點擊選擇圖片 · 支援多張. Earlier version used a custom
-/// diagonal-stripe painter but it caused a framework assertion on web
-/// (likely from path bounds vs the Stack-positioned StickyHeader); the
-/// flat fill reads almost identically and is bulletproof.
+/// v13 empty picker — 2:3 aspect, diagonal-stripe placeholder, camera
+/// icon + 點擊選擇圖片 · 支援多張. Stripe is drawn via canvas.drawRect
+/// (rect-based, fully bounded — avoids the framework assertion the
+/// previous path-based painter triggered).
 class _EmptyPicker extends StatelessWidget {
   const _EmptyPicker({required this.compressing});
   final bool compressing;
@@ -707,41 +705,74 @@ class _EmptyPicker extends StatelessWidget {
   Widget build(BuildContext context) {
     return AspectRatio(
       aspectRatio: 2 / 3,
-      child: Container(
-        decoration: BoxDecoration(
-          color: const Color(0x0AFFFFFF), // ≈ rgba(255,255,255,0.04)
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AppTheme.line2),
-        ),
-        child: Center(
-          child: compressing
-              ? SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: AppTheme.textMute,
-                  ),
-                )
-              : Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(LucideIcons.camera,
-                        size: 32, color: AppTheme.textMute),
-                    const SizedBox(height: 10),
-                    Text(
-                      '點擊選擇圖片 · 支援多張',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: AppTheme.textMute,
-                            fontSize: 13,
-                          ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          decoration: BoxDecoration(
+            color: AppTheme.ink2,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: AppTheme.line2),
+          ),
+          child: CustomPaint(
+            painter: _DiagonalStripePainter(),
+            child: Center(
+              child: compressing
+                  ? SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: AppTheme.textMute,
+                      ),
+                    )
+                  : Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(LucideIcons.camera,
+                            size: 32, color: AppTheme.textMute),
+                        const SizedBox(height: 10),
+                        Text(
+                          '點擊選擇圖片 · 支援多張',
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                color: AppTheme.textMute,
+                                fontSize: 13,
+                              ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
+            ),
+          ),
         ),
       ),
     );
   }
+}
+
+/// Diagonal-stripe pattern using `canvas.drawRect` only (rectangles
+/// have well-defined bounds, unlike the previous path-fill which
+/// extended beyond canvas and triggered an assertion). Each stripe is
+/// rotated 45° via canvas.transform.
+class _DiagonalStripePainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.save();
+    canvas.clipRect(Rect.fromLTWH(0, 0, size.width, size.height));
+    // Translate to centre, rotate 45°, draw vertical stripes that
+    // cover the rotated bounding box.
+    final centre = Offset(size.width / 2, size.height / 2);
+    canvas.translate(centre.dx, centre.dy);
+    canvas.rotate(0.785398); // π/4
+    final diag = (size.width + size.height); // covers rotated bbox
+    final paint = Paint()..color = const Color(0x0FFFFFFF); // 0.06
+    const band = 12.0;
+    for (var x = -diag; x < diag; x += band * 2) {
+      canvas.drawRect(Rect.fromLTWH(x, -diag, band, diag * 2), paint);
+    }
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(_DiagonalStripePainter old) => false;
 }
 
 /// Image preview with replace overlay.
