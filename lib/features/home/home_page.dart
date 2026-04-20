@@ -161,46 +161,52 @@ class _HomeGlassHeader extends SliverPersistentHeaderDelegate {
 
   @override
   Widget build(BuildContext ctx, double shrink, bool overlaps) {
-    return Glass(
-      blur: 20,
-      tint: 0.5,
-      borderRadius: BorderRadius.zero,
-      border: Border(bottom: BorderSide(color: AppTheme.line1, width: 0.5)),
-      shadow: false,
-      highlight: false,
-      child: Padding(
-        padding: EdgeInsets.fromLTRB(20, topInset + 8, 16, 8),
-        child: Row(
-          children: [
-            GestureDetector(
-              onTap: onProfileTap,
-              child: _Avatar(profile: profile, size: 32),
-            ),
-            const SizedBox(width: 12),
-            Text(
-              '探索',
-              style: Theme.of(ctx).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: Colors.white,
-                  ),
-            ),
-            const Spacer(),
-            GlassButton(
-              icon: LucideIcons.search,
-              size: 34,
-              color: Colors.white.withValues(alpha: 0.85),
-              onTap: onSearchTap,
-              semanticsLabel: '搜尋',
-            ),
-            const SizedBox(width: 6),
-            GlassButton(
-              icon: LucideIcons.plus,
-              size: 34,
-              color: Colors.white.withValues(alpha: 0.85),
-              onTap: onUploadTap,
-              semanticsLabel: '上傳',
-            ),
-          ],
+    // Wrap in SizedBox.expand so the sliver's paint extent matches its
+    // layout extent — BackdropFilter inside SliverPersistentHeader can
+    // otherwise cause "layoutExtent exceeds paintExtent" because the
+    // child reports a smaller paint size than the sliver expects.
+    return SizedBox.expand(
+      child: Glass(
+        blur: 20,
+        tint: 0.5,
+        borderRadius: BorderRadius.zero,
+        border: Border(bottom: BorderSide(color: AppTheme.line1, width: 0.5)),
+        shadow: false,
+        highlight: false,
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(20, topInset + 8, 16, 8),
+          child: Row(
+            children: [
+              GestureDetector(
+                onTap: onProfileTap,
+                child: _Avatar(profile: profile, size: 32),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                '探索',
+                style: Theme.of(ctx).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                    ),
+              ),
+              const Spacer(),
+              GlassButton(
+                icon: LucideIcons.search,
+                size: 34,
+                color: Colors.white.withValues(alpha: 0.85),
+                onTap: onSearchTap,
+                semanticsLabel: '搜尋',
+              ),
+              const SizedBox(width: 6),
+              GlassButton(
+                icon: LucideIcons.plus,
+                size: 34,
+                color: Colors.white.withValues(alpha: 0.85),
+                onTap: onUploadTap,
+                semanticsLabel: '上傳',
+              ),
+            ],
+          ),
         ),
       ),
     );
