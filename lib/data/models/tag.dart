@@ -109,6 +109,8 @@ class SimilarTag {
     required this.similarity,
     this.aliases = const [],
     this.posterCount = 0,
+    this.categorySlug,
+    this.categoryTitleZh,
   });
 
   factory SimilarTag.fromRow(Map<String, dynamic> row) {
@@ -122,6 +124,8 @@ class SimilarTag {
           .toList(growable: false),
       posterCount: (row['poster_count'] as num?)?.toInt() ?? 0,
       similarity: (row['similarity'] as num?)?.toDouble() ?? 0.0,
+      categorySlug: row['category_slug'] as String?,
+      categoryTitleZh: row['category_title_zh'] as String?,
     );
   }
 
@@ -132,6 +136,11 @@ class SimilarTag {
   final List<String> aliases;
   final int posterCount;
   final double similarity;
+  // When cross-category search is used (admin view), these tell admin
+  // which category the matched tag actually lives in — e.g. user put
+  // "院線" under 編輯精選, match is "院線首刷" under 版本.
+  final String? categorySlug;
+  final String? categoryTitleZh;
 
   /// Percentage (0-100) for UI display.
   int get similarityPercent => (similarity * 100).round();

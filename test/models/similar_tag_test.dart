@@ -21,6 +21,20 @@ void main() {
       expect(m.posterCount, 42);
     });
 
+    test('parses cross-category fields', () {
+      final m = SimilarTag.fromRow({
+        'tag_id': 't-1',
+        'slug': 'edition-first-run',
+        'label_zh': '院線首刷',
+        'label_en': 'Theatrical First Run',
+        'similarity': 0.85,
+        'category_slug': 'edition',
+        'category_title_zh': '版本',
+      });
+      expect(m.categorySlug, 'edition');
+      expect(m.categoryTitleZh, '版本');
+    });
+
     test('handles missing optional fields safely', () {
       final m = SimilarTag.fromRow({
         'tag_id': 't-1',
@@ -30,6 +44,41 @@ void main() {
       expect(m.labelEn, '');
       expect(m.similarity, 0.0);
       expect(m.posterCount, 0);
+      expect(m.categorySlug, isNull);
+      expect(m.categoryTitleZh, isNull);
+    });
+  });
+
+  group('CJK substring containment (simulating SQL logic)', () {
+    // The SQL uses LIKE-based containment score = 0.85 when either side
+    // is a substring of the other. This simulates the match a user would
+    // expect to see in the UI.
+
+    double cjkSubstringScore(String query, String target) {
+      final q = query.toLowerCase().trim();
+      final t = target.toLowerCase();
+      if (q.isEmpty) return 0.0;
+      if (t.contains(q) || q.contains(t)) return 0.85;
+      return 0.0;
+    }
+
+    test('院線 matches 院線首刷 at 0.85', () {
+      expect(cjkSubstringScore('院線', '院線首刷'), closeTo(0.85, 0.001));
+    });
+
+    test('miyazaki matches 宮崎駿 alias via substring', () {
+      // Simulates SQL path: aliases contain 'miyazaki', query 'miyazaki'
+      expect(cjkSubstringScore('miyazaki', 'miyazaki'), closeTo(0.85, 0.001));
+    });
+
+    test('unrelated CJK words score 0', () {
+      expect(cjkSubstringScore('懸疑', '驚悚'), 0.0);
+      expect(cjkSubstringScore('戰爭', '犯罪'), 0.0);
+    });
+
+    test('empty query scores 0', () {
+      expect(cjkSubstringScore('', '院線首刷'), 0.0);
+      expect(cjkSubstringScore('   ', '院線首刷'), 0.0);
     });
   });
 

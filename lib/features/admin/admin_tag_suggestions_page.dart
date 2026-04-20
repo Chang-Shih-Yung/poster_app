@@ -416,7 +416,10 @@ class _SuggestionCardState extends ConsumerState<_SuggestionCard> {
     }
     final target = await showDialog<Tag>(
       context: context,
-      builder: (_) => _MergePicker(categoryId: cat.id),
+      builder: (_) => _MergePicker(
+        categoryId: cat.id,
+        suggestionLabel: widget.suggestion.suggestedLabelZh,
+      ),
     );
     if (target == null) return;
 
@@ -443,10 +446,18 @@ class _SuggestionCardState extends ConsumerState<_SuggestionCard> {
   }
 }
 
-/// Dialog picker: search existing tags within a category to merge into.
+/// Dialog picker: pick an existing canonical tag to merge a suggestion into.
+///
+/// Pre-populates with cross-category similarity matches at the top
+/// (system's best guesses for the merge target), then a manual search
+/// across all tags.
 class _MergePicker extends ConsumerStatefulWidget {
-  const _MergePicker({required this.categoryId});
+  const _MergePicker({
+    required this.categoryId,
+    required this.suggestionLabel,
+  });
   final String categoryId;
+  final String suggestionLabel;
 
   @override
   ConsumerState<_MergePicker> createState() => _MergePickerState();
@@ -464,18 +475,74 @@ class _MergePickerState extends ConsumerState<_MergePicker> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    // System recommendations: cross-category similarity matches.
+    final suggestionsAsync = ref.watch(similarTagsProvider(
+      SimilarTagsQuery(
+        categoryId: widget.categoryId,
+        label: widget.suggestionLabel,
+        crossCategory: true,
+      ),
+    ));
+    // Manual search falls back to same category when no typed query.
     final tagsAsync = ref.watch(tagsByCategoryProvider(widget.categoryId));
+
     return AlertDialog(
-      title: const Text('合併到哪個既有 tag？'),
+      title: const Text('合併到哪一個既有分類？'),
       content: SizedBox(
         width: double.maxFinite,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            // ─── System recommendations ────────────────────────────────
+            suggestionsAsync.maybeWhen(
+              data: (matches) {
+                if (matches.isEmpty) return const SizedBox.shrink();
+                final top = matches.take(3).toList();
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '系統推薦（最相近的 ${top.length} 個）',
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: Colors.amber,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    for (final m in top)
+                      _RecommendedMatchTile(
+                        match: m,
+                        onTap: () {
+                          // Must fetch the full Tag to return — callers
+                          // expect a Tag, not a SimilarTag.
+                          final fullTag =
+                              tagsAsync.asData?.value.firstWhere(
+                            (t) => t.id == m.tagId,
+                            orElse: () => Tag(
+                              id: m.tagId,
+                              slug: m.slug,
+                              categoryId: widget.categoryId,
+                              labelZh: m.labelZh,
+                              labelEn: m.labelEn,
+                            ),
+                          );
+                          Navigator.pop(context, fullTag);
+                        },
+                      ),
+                    const SizedBox(height: 12),
+                    Divider(color: AppTheme.line1, height: 1),
+                    const SizedBox(height: 10),
+                  ],
+                );
+              },
+              orElse: () => const SizedBox.shrink(),
+            ),
+            // ─── Manual search ─────────────────────────────────────────
             TextField(
               controller: _searchCtrl,
-              autofocus: true,
-              decoration: const InputDecoration(hintText: '搜尋既有 tag…'),
+              decoration:
+                  const InputDecoration(hintText: '或自行搜尋既有分類…'),
               onChanged: (v) => setState(() => _query = v.trim().toLowerCase()),
             ),
             const SizedBox(height: 10),
@@ -501,7 +568,7 @@ class _MergePickerState extends ConsumerState<_MergePicker> {
                   if (filtered.isEmpty) {
                     return const Padding(
                       padding: EdgeInsets.all(16),
-                      child: Text('沒有符合的 tag'),
+                      child: Text('沒有符合的分類'),
                     );
                   }
                   return ListView.builder(
@@ -556,8 +623,15 @@ class _SimilarityHint extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
+    // Admin review: cross-category search so legacy-mis-categorised
+    // suggestions (e.g. 院線 filed under 編輯精選 but matches 院線首刷
+    // under 版本) still surface.
     final async = ref.watch(similarTagsProvider(
-      SimilarTagsQuery(categoryId: categoryId, label: label),
+      SimilarTagsQuery(
+        categoryId: categoryId,
+        label: label,
+        crossCategory: true,
+      ),
     ));
     return async.maybeWhen(
       data: (matches) {
@@ -643,50 +717,70 @@ class _MatchRow extends StatelessWidget {
     return Row(
       children: [
         Expanded(
-          child: Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                match.labelZh,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: AppTheme.text,
-                ),
+              // Top line: labels + similarity badge + poster count
+              Wrap(
+                spacing: 6,
+                runSpacing: 2,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  Text(
+                    match.labelZh,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.text,
+                    ),
+                  ),
+                  if (match.labelEn.isNotEmpty &&
+                      match.labelEn != match.labelZh)
+                    Text(
+                      match.labelEn,
+                      style: theme.textTheme.labelSmall
+                          ?.copyWith(color: AppTheme.textMute),
+                    ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 5, vertical: 1),
+                    decoration: BoxDecoration(
+                      color: badge.withValues(alpha: 0.18),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      '相似度 $pct%',
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: badge,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 10,
+                      ),
+                    ),
+                  ),
+                  if (match.posterCount > 0)
+                    Text(
+                      '${match.posterCount} 張',
+                      style: theme.textTheme.labelSmall?.copyWith(
+                          color: AppTheme.textFaint, fontSize: 10),
+                    ),
+                ],
               ),
-              if (match.labelEn.isNotEmpty && match.labelEn != match.labelZh) ...[
-                const SizedBox(width: 6),
-                Text(
-                  match.labelEn,
-                  style: theme.textTheme.labelSmall
-                      ?.copyWith(color: AppTheme.textMute),
-                ),
-              ],
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                decoration: BoxDecoration(
-                  color: badge.withValues(alpha: 0.18),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Text(
-                  '相似度 $pct%',
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: badge,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 10,
+              // Category hint (cross-category results)
+              if (match.categoryTitleZh != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Text(
+                    '在「${match.categoryTitleZh}」分類下',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: AppTheme.textFaint,
+                      fontSize: 10,
+                    ),
                   ),
                 ),
-              ),
-              if (match.posterCount > 0) ...[
-                const SizedBox(width: 6),
-                Text(
-                  '${match.posterCount} 張',
-                  style: theme.textTheme.labelSmall
-                      ?.copyWith(color: AppTheme.textFaint, fontSize: 10),
-                ),
-              ],
             ],
           ),
         ),
+        const SizedBox(width: 8),
         FilledButton.tonalIcon(
           onPressed: busy ? null : onTap,
           icon: const Icon(LucideIcons.gitMerge, size: 12),
@@ -698,6 +792,82 @@ class _MatchRow extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// One row in the "系統推薦" top section of the merge picker.
+class _RecommendedMatchTile extends StatelessWidget {
+  const _RecommendedMatchTile({required this.match, required this.onTap});
+  final SimilarTag match;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final pct = match.similarityPercent;
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(8),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          margin: const EdgeInsets.only(bottom: 4),
+          decoration: BoxDecoration(
+            color: AppTheme.chipBg,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.amber.withValues(alpha: 0.3)),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          match.labelZh,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 5, vertical: 1),
+                          decoration: BoxDecoration(
+                            color: Colors.amber.withValues(alpha: 0.18),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            '$pct%',
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: Colors.amber,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 10,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (match.categoryTitleZh != null)
+                      Text(
+                        '在「${match.categoryTitleZh}」分類 · ${match.posterCount} 張',
+                        style: theme.textTheme.labelSmall
+                            ?.copyWith(color: AppTheme.textFaint),
+                      ),
+                  ],
+                ),
+              ),
+              Icon(LucideIcons.gitMerge,
+                  size: 14, color: AppTheme.textMute),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

@@ -65,14 +65,19 @@ class TagRepository {
         .toList(growable: false);
   }
 
-  /// Find similar existing tags by similarity score (pg_trgm).
-  /// Returns tags with `similarity` 0.3-1.0. Used for:
-  ///   - Admin review card's duplicate hint
-  ///   - User-side autocomplete in suggestion form
+  /// Find similar existing tags by similarity score (pg_trgm + CJK substring).
+  /// Returns tags with `similarity` ≥ 0.25.
+  ///
+  /// - User-side (suggestion form): [crossCategory] = false — stay in same
+  ///   category so auto-merge never crosses facets.
+  /// - Admin-side (review queue): [crossCategory] = true — legacy-migrated
+  ///   suggestions are often in the wrong category (懸疑 → 編輯精選 instead
+  ///   of 類型). Cross-category search finds the right match.
   Future<List<SimilarTag>> findSimilar({
     required String categoryId,
     required String label,
     int limit = 5,
+    bool crossCategory = false,
   }) async {
     final q = label.trim();
     if (q.isEmpty) return const [];
@@ -80,6 +85,7 @@ class TagRepository {
       'p_category_id': categoryId,
       'p_label': q,
       'p_limit': limit,
+      'p_cross_category': crossCategory,
     });
     return ((rows as List?) ?? const [])
         .map((r) => SimilarTag.fromRow(r as Map<String, dynamic>))
@@ -159,21 +165,28 @@ final browseByTagProvider = FutureProvider.autoDispose
   return ref.watch(tagRepositoryProvider).browseByTag(slug);
 });
 
-/// Find similar existing tags — family keyed on (categoryId, label).
-/// Used by admin suggestion review card + user-side autocomplete.
+/// Find similar existing tags — family keyed on (categoryId, label, crossCategory).
+/// Used by admin suggestion review card (cross-category) + user-side
+/// autocomplete (same category only).
 class SimilarTagsQuery {
-  const SimilarTagsQuery({required this.categoryId, required this.label});
+  const SimilarTagsQuery({
+    required this.categoryId,
+    required this.label,
+    this.crossCategory = false,
+  });
   final String categoryId;
   final String label;
+  final bool crossCategory;
 
   @override
   bool operator ==(Object other) =>
       other is SimilarTagsQuery &&
       other.categoryId == categoryId &&
-      other.label == label;
+      other.label == label &&
+      other.crossCategory == crossCategory;
 
   @override
-  int get hashCode => Object.hash(categoryId, label);
+  int get hashCode => Object.hash(categoryId, label, crossCategory);
 }
 
 final similarTagsProvider = FutureProvider.autoDispose
@@ -182,5 +195,6 @@ final similarTagsProvider = FutureProvider.autoDispose
   return ref.watch(tagRepositoryProvider).findSimilar(
         categoryId: query.categoryId,
         label: query.label,
+        crossCategory: query.crossCategory,
       );
 });
