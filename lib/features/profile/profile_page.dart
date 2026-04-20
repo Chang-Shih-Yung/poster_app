@@ -105,9 +105,13 @@ class _SignedInView extends ConsumerWidget {
         const SizedBox(height: 20),
         _SectionLabel(label: '個人檔案設定'),
         const SizedBox(height: 10),
-        _PrivacyToggle(profile: profile),
+        _CardRow(
+          icon: LucideIcons.userPen,
+          label: '編輯個人檔案',
+          onTap: () => context.push('/profile/edit'),
+        ),
         const SizedBox(height: 8),
-        _BioRow(profile: profile),
+        _PrivacyToggle(profile: profile),
         const SizedBox(height: 28),
         _GhostPill(
           label: '登出',
@@ -402,66 +406,8 @@ class _PrivacyToggleState extends ConsumerState<_PrivacyToggle> {
   }
 }
 
-class _BioRow extends ConsumerWidget {
-  const _BioRow({required this.profile});
-  final AppUser? profile;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final bio = profile?.bio?.trim() ?? '';
-    return _CardRow(
-      icon: LucideIcons.pencilLine,
-      label: bio.isEmpty ? '寫一段自介' : '自介：$bio',
-      onTap: () => _editBio(context, ref),
-    );
-  }
-
-  Future<void> _editBio(BuildContext context, WidgetRef ref) async {
-    final profile = this.profile;
-    if (profile == null) return;
-
-    final controller = TextEditingController(text: profile.bio ?? '');
-    final result = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('編輯自介'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          maxLength: 200,
-          maxLines: 4,
-          decoration: const InputDecoration(
-            hintText: '介紹一下你自己、你收藏的風格…',
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
-            child: const Text('儲存'),
-          ),
-        ],
-      ),
-    );
-    if (result == null) return;
-
-    try {
-      await ref
-          .read(userRepositoryProvider)
-          .updateOwnProfile(userId: profile.id, bio: result);
-      ref.invalidate(currentProfileProvider);
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('更新失敗：$e')),
-        );
-      }
-    }
-  }
-}
+// _BioRow removed — profile editing is now done via the dedicated
+// /profile/edit page (see profile_edit_page.dart).
 
 class _GhostPill extends StatelessWidget {
   const _GhostPill({

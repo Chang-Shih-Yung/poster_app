@@ -101,7 +101,10 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
 
   // Pill state: multi-select tags + independent favorites toggle.
   Set<String> _pillTags = {};
-  bool _pillFavorites = false;
+  // "我的" tab defaults to my favorites (the page is labelled 我的, so
+  // the default content should be "mine" — favorites). User can toggle
+  // OFF to browse all canonical posters.
+  bool _pillFavorites = true;
 
   @override
   void initState() {
@@ -117,7 +120,11 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
       }
     });
     _loadPrefs();
-    _loadMore();
+    // Build initial filter from default pills (favorites=true, no tags).
+    // Must run after first frame so we can read currentUserProvider.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _rebuildFilterFromPills();
+    });
     _scrollController.addListener(_onScroll);
   }
 

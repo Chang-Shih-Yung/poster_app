@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -62,19 +64,52 @@ class UserRepository {
     return PublicProfile.fromRow(result as Map<String, dynamic>);
   }
 
-  /// Update current user's is_public flag + bio.
-  /// Returns the updated row so the caller can invalidate provider state.
+  /// Update current user's profile fields. Pass only the fields you want
+  /// to change; null = leave alone. Empty string = clear bio/etc.
   Future<void> updateOwnProfile({
     required String userId,
     bool? isPublic,
     String? bio,
+    String? displayName,
+    String? avatarUrl,
+    Gender? gender,
+    List<ProfileLink>? links,
   }) async {
     final row = <String, dynamic>{};
     if (isPublic != null) row['is_public'] = isPublic;
     if (bio != null) row['bio'] = bio;
+    if (displayName != null) row['display_name'] = displayName;
+    if (avatarUrl != null) row['avatar_url'] = avatarUrl;
+    if (gender != null) row['gender'] = gender.value;
+    if (links != null) {
+      row['links'] = links.map((l) => l.toJson()).toList();
+    }
     if (row.isEmpty) return;
 
     await _client.from('users').update(row).eq('id', userId);
+  }
+
+  /// Upload an avatar image to the avatars bucket. Returns the public URL.
+  /// Old avatar (if any) is left in place — Supabase storage doesn't auto-
+  /// clean. We pick a new path each upload (uuid suffix) to bust caches.
+  Future<String> uploadAvatar({
+    required String userId,
+    required Uint8List bytes,
+    required String contentType,
+  }) async {
+    final ext = switch (contentType) {
+      'image/png' => 'png',
+      'image/webp' => 'webp',
+      _ => 'jpg',
+    };
+    final objectKey =
+        '$userId/avatar_${DateTime.now().millisecondsSinceEpoch}.$ext';
+    await _client.storage.from('avatars').uploadBinary(
+          objectKey,
+          bytes,
+          fileOptions: FileOptions(contentType: contentType, upsert: false),
+        );
+    return _client.storage.from('avatars').getPublicUrl(objectKey);
   }
 }
 

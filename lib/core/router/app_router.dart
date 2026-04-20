@@ -13,6 +13,7 @@ import '../../features/posters/poster_detail_page.dart';
 import '../../features/posters/tag_browse_page.dart';
 import '../../features/posters/work_page.dart';
 import '../../features/profile/my_favorites_page.dart';
+import '../../features/profile/profile_edit_page.dart';
 import '../../features/profile/profile_page.dart';
 import '../../features/profile/public_profile_page.dart';
 import '../../features/search/search_page.dart';
@@ -72,6 +73,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/profile',
         builder: (_, _) => const _BackablePage(child: ProfilePage()),
+      ),
+      GoRoute(
+        path: '/profile/edit',
+        builder: (_, _) => const _BackablePage(child: ProfileEditPage()),
       ),
       GoRoute(
         path: '/me/submissions',
