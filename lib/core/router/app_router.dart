@@ -7,14 +7,11 @@ import '../../data/providers/supabase_providers.dart';
 import '../../features/admin/admin_review_page.dart';
 import '../../features/admin/admin_tag_suggestions_page.dart';
 import '../../features/auth/signin_page.dart';
-// home_page.dart parked: v13 explore = LibraryPage. Re-import when
-// you want to wire the sectioned recommendation feed back in.
-// import '../../features/home/home_page.dart';
+import '../../features/home/home_page.dart';
 import '../../features/posters/library_page.dart';
 import '../../features/posters/poster_detail_page.dart';
 import '../../features/posters/tag_browse_page.dart';
 import '../../features/posters/work_page.dart';
-import '../../features/profile/me_page.dart';
 import '../../features/profile/profile_edit_page.dart';
 import '../../features/profile/profile_page.dart';
 import '../../features/profile/public_profile_page.dart';
@@ -136,18 +133,14 @@ class _MainShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // v13 (2026-04-20):
-    //   tab 0 (探索 / 圖庫) → LibraryPage  — filter chrome + L/M/S + masonry
-    //   tab 1 (我的)        → MePage      — profile summary + 收藏/投稿 segmented
-    //
-    // The legacy HomePage (sectioned recommendation feed) is parked —
-    // class still exists in features/home/home_page.dart but no longer
-    // wired into the shell. The recommendation engine providers
-    // (homeSectionsV2Provider etc.) remain alive for future use.
+    // tab 0 (探索) → HomePage     — sectioned recommendation feed (trending,
+    //                                 collectors, for_you, follow_feed...)
+    // tab 1 (我的) → LibraryPage  — filter chrome + L/M/S + masonry, defaults
+    //                                 to my favorites (_pillFavorites=true)
     return const AppShellWrapper(
       children: [
+        HomePage(),
         LibraryPage(),
-        MePage(),
       ],
     );
   }

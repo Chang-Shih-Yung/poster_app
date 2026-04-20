@@ -102,10 +102,10 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
 
   // Pill state: multi-select tags + independent favorites toggle.
   Set<String> _pillTags = {};
-  // v13: this page is now the **探索 (圖庫)** tab — public browse with
-  // filter chrome + L/M/S density. Favorites filtering moved to the
-  // 我的 tab (MePage). Default favorites OFF.
-  bool _pillFavorites = false;
+  // "我的" tab defaults to my favorites (the page is labelled 我的, so
+  // the default content should be "mine" — favorites). User can toggle
+  // OFF to browse all canonical posters.
+  bool _pillFavorites = true;
 
   @override
   void initState() {
@@ -412,7 +412,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                   const SizedBox(width: 12),
                   // Title.
                   Text(
-                    '圖庫',
+                    '我的',
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
                           fontWeight: FontWeight.w600,
                           color: Colors.white,
