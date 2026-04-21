@@ -10,6 +10,8 @@ import '../../core/theme/app_theme.dart';
 import '../../data/models/app_user.dart';
 import '../../data/models/poster.dart';
 import '../../data/models/work.dart';
+import '../../data/providers/supabase_providers.dart';
+import '../../data/repositories/poster_repository.dart';
 import '../../data/repositories/search_repository.dart';
 import '../profile/follow_pill.dart';
 
@@ -51,6 +53,16 @@ class _SearchPageState extends ConsumerState<SearchPage> {
     _debounce = Timer(const Duration(milliseconds: 250), () {
       if (mounted) setState(() => _effectiveQuery = v.trim());
     });
+  }
+
+  /// Tag chip tapped on the landing — fill the field and trigger
+  /// search immediately (no debounce, since the tap IS intent).
+  void _searchForTag(String tag) {
+    _controller.text = tag;
+    _controller.selection =
+        TextSelection.collapsed(offset: tag.length);
+    _debounce?.cancel();
+    setState(() => _effectiveQuery = tag);
   }
 
   @override
@@ -103,7 +115,10 @@ class _SearchPageState extends ConsumerState<SearchPage> {
 
           Expanded(
             child: _effectiveQuery.isEmpty
-                ? _EmptyState()
+                ? _SearchLanding(
+                    onTagTap: _searchForTag,
+                    bottomInset: bottomInset,
+                  )
                 : _ResultsView(
                     query: _effectiveQuery,
                     bottomInset: bottomInset,
@@ -115,23 +130,305 @@ class _SearchPageState extends ConsumerState<SearchPage> {
   }
 }
 
-class _EmptyState extends StatelessWidget {
+// ─────────────────────────────────────────────────────────────────────
+// Search landing — replaces the old empty state.
+//
+// Top: horizontal-scroll row of top-20 tag chips (from `top_tags` RPC).
+//      Tap a chip → it fills the search field and triggers search.
+// Below: flat 2-col masonry of recommended posters from for_you_feed_v1
+//      (taste-ranked when user has ≥3 favorites; trending fallback when
+//      cold-start or signed out).
+// ─────────────────────────────────────────────────────────────────────
+
+/// Calls `for_you_feed_v1` and parses each row through Poster.fromRow.
+/// Caps at 24 posters so the landing renders fast.
+final searchLandingPostersProvider =
+    FutureProvider.autoDispose<List<Poster>>((ref) async {
+  final client = ref.watch(supabaseClientProvider);
+  final rows = await client.rpc('for_you_feed_v1', params: {'p_limit': 24});
+  if (rows == null) return const [];
+  return (rows as List)
+      .map((r) => Poster.fromRow(r as Map<String, dynamic>))
+      .toList(growable: false);
+});
+
+class _SearchLanding extends ConsumerWidget {
+  const _SearchLanding({
+    required this.onTagTap,
+    required this.bottomInset,
+  });
+  final ValueChanged<String> onTagTap;
+  final double bottomInset;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tagsAsync = ref.watch(topTagsProvider);
+    final postersAsync = ref.watch(searchLandingPostersProvider);
+
+    return CustomScrollView(
+      slivers: [
+        // ── Tag chip row ──
+        SliverToBoxAdapter(
+          child: tagsAsync.when(
+            loading: () => const SizedBox(height: 50),
+            error: (_, _) => const SizedBox.shrink(),
+            data: (tags) {
+              if (tags.isEmpty) return const SizedBox.shrink();
+              return SizedBox(
+                height: 50,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+                  itemCount: tags.length,
+                  separatorBuilder: (_, _) => const SizedBox(width: 6),
+                  itemBuilder: (_, i) => _LandingTagChip(
+                    label: tags[i],
+                    onTap: () => onTagTap(tags[i]),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+
+        // Section eyebrow
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+            child: Text(
+              '為你推薦',
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: AppTheme.textMute,
+                    letterSpacing: 1.6,
+                    fontWeight: FontWeight.w600,
+                  ),
+            ),
+          ),
+        ),
+
+        // ── Recommended posters (flat 2-col masonry) ──
+        postersAsync.when(
+          loading: () => const SliverToBoxAdapter(
+            child: Padding(
+              padding: EdgeInsets.symmetric(vertical: 48),
+              child: Center(
+                child: SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+            ),
+          ),
+          error: (e, _) => SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Center(
+                child: Text('載入失敗：$e',
+                    style: TextStyle(color: AppTheme.textMute)),
+              ),
+            ),
+          ),
+          data: (posters) {
+            if (posters.isEmpty) {
+              return SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.all(48),
+                  child: Center(
+                    child: Text('暫無推薦，輸入關鍵字搜尋海報、作品、使用者',
+                        style: TextStyle(color: AppTheme.textFaint)),
+                  ),
+                ),
+              );
+            }
+            return SliverPadding(
+              padding: EdgeInsets.fromLTRB(12, 0, 12, bottomInset + 32),
+              sliver: SliverToBoxAdapter(
+                child: _LandingMasonry(posters: posters),
+              ),
+            );
+          },
+        ),
+      ],
+    );
+  }
+}
+
+class _LandingTagChip extends StatelessWidget {
+  const _LandingTagChip({required this.label, required this.onTap});
+  final String label;
+  final VoidCallback onTap;
+
   @override
   Widget build(BuildContext context) {
     return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(LucideIcons.search,
-                size: 40, color: AppTheme.textFaint),
-            const SizedBox(height: 12),
-            Text(
-              '輸入關鍵字開始搜尋',
-              style: TextStyle(color: AppTheme.textMute),
+      child: Material(
+        color: AppTheme.chipBg,
+        borderRadius: BorderRadius.circular(999),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(999),
+          child: Container(
+            height: 30,
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(color: AppTheme.line1),
             ),
-          ],
+            child: Text(
+              label,
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: AppTheme.text,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    letterSpacing: 0,
+                  ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 2-col deterministic-aspect masonry for the search landing's poster
+/// grid. Tap a card → /poster/:id. Same algorithm as the 我的 tab so
+/// the visual rhythm matches.
+class _LandingMasonry extends StatelessWidget {
+  const _LandingMasonry({required this.posters});
+  final List<Poster> posters;
+
+  static double _ratioForId(String id) {
+    const ratios = <double>[0.67, 0.67, 0.75, 1.0, 1.33, 0.56];
+    var h = 0;
+    for (final r in id.runes) {
+      h = (h * 31 + r) & 0x7fffffff;
+    }
+    return ratios[h % ratios.length];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colA = <Poster>[];
+    final colB = <Poster>[];
+    var hA = 0.0;
+    var hB = 0.0;
+    for (final p in posters) {
+      final h = 1 / _ratioForId(p.id);
+      if (hA <= hB) {
+        colA.add(p);
+        hA += h + 0.05;
+      } else {
+        colB.add(p);
+        hB += h + 0.05;
+      }
+    }
+    Widget col(List<Poster> items) => Column(
+          children: items
+              .map((p) => Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: _LandingCard(
+                      poster: p,
+                      aspectRatio: _ratioForId(p.id),
+                    ),
+                  ))
+              .toList(),
+        );
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(child: col(colA)),
+        const SizedBox(width: 8),
+        Expanded(child: col(colB)),
+      ],
+    );
+  }
+}
+
+class _LandingCard extends StatelessWidget {
+  const _LandingCard({required this.poster, required this.aspectRatio});
+  final Poster poster;
+  final double aspectRatio;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return GestureDetector(
+      onTap: () => context.push('/poster/${poster.id}'),
+      child: AspectRatio(
+        aspectRatio: aspectRatio,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(14),
+          child: Container(
+            decoration: BoxDecoration(
+              color: AppTheme.surfaceRaised,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppTheme.line1),
+            ),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                CachedNetworkImage(
+                  imageUrl: poster.thumbnailUrl ?? poster.posterUrl,
+                  fit: BoxFit.cover,
+                  placeholder: (_, _) =>
+                      ColoredBox(color: AppTheme.surfaceRaised),
+                  errorWidget: (_, _, _) =>
+                      ColoredBox(color: AppTheme.surfaceRaised),
+                ),
+                const Positioned.fill(
+                  child: IgnorePointer(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.bottomCenter,
+                          end: Alignment.topCenter,
+                          colors: [Color(0xBF000000), Color(0x00000000)],
+                          stops: [0, 0.45],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  left: 10,
+                  right: 10,
+                  bottom: 10,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        poster.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600,
+                          height: 1.2,
+                          letterSpacing: -0.2,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        [
+                          if (poster.year != null) '${poster.year}',
+                          if (poster.director != null) poster.director!,
+                        ].join(' · '),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: Colors.white.withValues(alpha: 0.75),
+                          fontSize: 10,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
