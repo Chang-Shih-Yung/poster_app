@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
@@ -62,11 +61,20 @@ class _SubmissionPageState extends ConsumerState<SubmissionPage> {
   final _sourcePlatformController = TextEditingController();
   final _sourceNoteController = TextEditingController();
 
-  // ── Image state ──
-  Uint8List? _imageBytes;
-  CompressedImages? _compressed;
+  // ── Image state (multi-upload, v13 2026-04-21) ──
+  //
+  // Each entry = one picked poster. Big 2:3 preview shows the first;
+  // the thumb row below shows the full queue + a ＋ slot. On submit,
+  // each image becomes its own submission row, sharing the same work
+  // metadata (title / year / director / tags / AI declaration / ...).
+  final List<_PickedImage> _images = [];
   bool _compressing = false;
   bool _submitting = false;
+
+  Uint8List? get _primaryImageBytes =>
+      _images.isEmpty ? null : _images.first.bytes;
+  CompressedImages? get _primaryCompressed =>
+      _images.isEmpty ? null : _images.first.compressed;
 
   // ── Expandable sections ──
   bool _showAdvanced = false;
@@ -88,49 +96,42 @@ class _SubmissionPageState extends ConsumerState<SubmissionPage> {
     super.dispose();
   }
 
-  // ── Image picking ──────────────────────────────────────────────────────────
+  // ── Image picking (multi) ──────────────────────────────────────────────────
 
-  Future<void> _pickImage() async {
+  /// Open the native picker. On iOS/Android this presents multi-select; on
+  /// web it opens the browser file dialog (multi-file enabled via input).
+  /// Every picked file is compressed on-device and appended to [_images].
+  Future<void> _addImages() async {
     final picker = ImagePicker();
-    final file = await picker.pickImage(source: ImageSource.gallery);
-    if (file == null) return;
-    final rawBytes = await file.readAsBytes();
-
-    setState(() {
-      _imageBytes = rawBytes;
-      _compressed = null;
-      _compressing = true;
-    });
-
-    final result = ImageCompressor.compress(rawBytes);
+    final files = await picker.pickMultiImage();
+    if (files.isEmpty) return;
+    setState(() => _compressing = true);
+    final added = <_PickedImage>[];
+    for (final file in files) {
+      final rawBytes = await file.readAsBytes();
+      final result = ImageCompressor.compress(rawBytes);
+      if (result == null) {
+        _toast('一張圖片格式無法辨識，已跳過');
+        continue;
+      }
+      if (result.posterBytes.lengthInBytes > ImageCompressor.maxPosterBytes) {
+        _toast('一張圖片壓縮後仍超過 5 MB，已跳過');
+        continue;
+      }
+      added.add(_PickedImage(bytes: rawBytes, compressed: result));
+    }
     if (!mounted) return;
-
-    if (result == null) {
-      _toast('圖片格式無法辨識，請換一張試試');
-      setState(() {
-        _imageBytes = null;
-        _compressing = false;
-      });
-      return;
-    }
-
-    if (result.posterBytes.lengthInBytes > ImageCompressor.maxPosterBytes) {
-      _toast('壓縮後仍超過 5 MB，請選擇較小的圖片');
-      setState(() {
-        _imageBytes = null;
-        _compressing = false;
-      });
-      return;
-    }
-
     setState(() {
-      _compressed = result;
+      _images.addAll(added);
       _compressing = false;
     });
+    if (added.isNotEmpty) {
+      _toast(added.length == 1 ? '已加入 1 張' : '已加入 ${added.length} 張');
+    }
+  }
 
-    final rawKB = (rawBytes.lengthInBytes / 1024).round();
-    final posterKB = (result.posterBytes.lengthInBytes / 1024).round();
-    _toast('已壓縮 $rawKB → $posterKB KB');
+  void _removeImageAt(int i) {
+    setState(() => _images.removeAt(i));
   }
 
   // ── Row builder ────────────────────────────────────────────────────────────
@@ -202,7 +203,7 @@ class _SubmissionPageState extends ConsumerState<SubmissionPage> {
       _toast('請先登入');
       return;
     }
-    if (_compressed == null) {
+    if (_images.isEmpty) {
       _toast(_compressing ? '圖片壓縮中，請稍候' : '請先選一張海報圖片');
       return;
     }
@@ -219,8 +220,9 @@ class _SubmissionPageState extends ConsumerState<SubmissionPage> {
       backgroundColor: Colors.transparent,
       builder: (_) => _ConfirmSheet(
         row: row,
-        imageBytes: _imageBytes!,
-        imageSizeBytes: _compressed!.posterBytes.lengthInBytes,
+        imageBytes: _primaryImageBytes!,
+        imageSizeBytes: _primaryCompressed!.posterBytes.lengthInBytes,
+        extraCount: _images.length - 1,
       ),
     );
 
@@ -228,39 +230,51 @@ class _SubmissionPageState extends ConsumerState<SubmissionPage> {
     await _doSubmit(user.id, row);
   }
 
-  Future<void> _doSubmit(String userId, Map<String, dynamic> row) async {
+  /// Multi-upload: for each picked image, upload the pair + create a
+  /// submission row. All rows share the same work metadata (title,
+  /// year, director, tags, AI declaration). If any upload fails we
+  /// keep going so partial success doesn't lose uploaded work.
+  Future<void> _doSubmit(String userId, Map<String, dynamic> baseRow) async {
     setState(() => _submitting = true);
     HapticFeedback.mediumImpact();
-    try {
-      final repo = ref.read(submissionRepositoryProvider);
-
-      final urls = await repo.uploadPosterPair(
-        posterBytes: _compressed!.posterBytes,
-        thumbBytes: _compressed!.thumbBytes,
-        contentType: _compressed!.contentType,
-        userId: userId,
-      );
-
-      row['image_url'] = urls.posterUrl;
-      row['thumbnail_url'] = urls.thumbUrl;
-      row['image_size_bytes'] = _compressed!.posterBytes.lengthInBytes;
-
-      await repo.createSubmission(row);
-
-      if (!mounted) return;
-      _toast('已送出審核，感謝投稿！');
+    final repo = ref.read(submissionRepositoryProvider);
+    var ok = 0;
+    final errors = <String>[];
+    for (var i = 0; i < _images.length; i++) {
+      final img = _images[i];
+      try {
+        final urls = await repo.uploadPosterPair(
+          posterBytes: img.compressed.posterBytes,
+          thumbBytes: img.compressed.thumbBytes,
+          contentType: img.compressed.contentType,
+          userId: userId,
+        );
+        final row = Map<String, dynamic>.from(baseRow);
+        row['image_url'] = urls.posterUrl;
+        row['thumbnail_url'] = urls.thumbUrl;
+        row['image_size_bytes'] = img.compressed.posterBytes.lengthInBytes;
+        await repo.createSubmission(row);
+        ok++;
+      } catch (e) {
+        errors.add('第 ${i + 1} 張失敗：$e');
+      }
+    }
+    if (!mounted) return;
+    setState(() => _submitting = false);
+    if (ok > 0 && errors.isEmpty) {
+      _toast('已送出 $ok 張審核，感謝投稿！');
       _resetForm();
-    } catch (e) {
-      _toast('上傳失敗：$e');
-    } finally {
-      if (mounted) setState(() => _submitting = false);
+    } else if (ok > 0) {
+      _toast('送出 $ok 張成功 / ${errors.length} 張失敗');
+      setState(() => _images.removeRange(0, ok));
+    } else {
+      _toast('全部失敗：${errors.first}');
     }
   }
 
   void _resetForm() {
     setState(() {
-      _imageBytes = null;
-      _compressed = null;
+      _images.clear();
       _showAdvanced = false;
       _region = Region.tw;
       _releaseType = null;
@@ -342,29 +356,24 @@ class _SubmissionPageState extends ConsumerState<SubmissionPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Batch mode link.
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton.icon(
-                onPressed: () => context.push('/upload/batch'),
-                icon: const Icon(LucideIcons.layers, size: 14),
-                label: const Text('同一部電影有多張？改用批次'),
-                style: TextButton.styleFrom(
-                  foregroundColor: AppTheme.textMute,
-                ),
-              ),
-            ),
-            const SizedBox(height: 4),
-            // ── Image picker ──
+            // ── Image picker ── (v13: big 2:3 preview + thumb row)
             GestureDetector(
-              onTap: _submitting ? null : _pickImage,
-              child: _imageBytes == null
+              onTap: _submitting ? null : _addImages,
+              child: _images.isEmpty
                   ? _EmptyPicker(compressing: _compressing)
                   : _ImagePreview(
-                      bytes: _imageBytes!,
+                      bytes: _primaryImageBytes!,
                       compressing: _compressing,
-                      onReplace: _submitting ? null : _pickImage,
+                      onReplace: _submitting ? null : _addImages,
                     ),
+            ),
+            const SizedBox(height: 10),
+
+            // Thumb row — each picked image + a trailing ＋ slot.
+            _ThumbRow(
+              images: _images,
+              onRemove: _submitting ? null : _removeImageAt,
+              onAdd: _submitting ? null : _addImages,
             ),
 
             const SizedBox(height: 24),
@@ -1133,10 +1142,14 @@ class _ConfirmSheet extends StatelessWidget {
     required this.row,
     required this.imageBytes,
     required this.imageSizeBytes,
+    this.extraCount = 0,
   });
   final Map<String, dynamic> row;
   final Uint8List imageBytes;
   final int imageSizeBytes;
+
+  /// Count of additional images in the queue (for the "另外 N 張" badge).
+  final int extraCount;
 
   @override
   Widget build(BuildContext context) {
@@ -1168,12 +1181,23 @@ class _ConfirmSheet extends StatelessWidget {
             ),
             const SizedBox(height: 16),
 
-            Text('確認投稿',
-                style: theme.textTheme.titleMedium
-                    ?.copyWith(fontWeight: FontWeight.w600)),
+            Text(
+              extraCount > 0 ? '確認投稿 ${extraCount + 1} 張' : '確認投稿',
+              style: theme.textTheme.titleMedium
+                  ?.copyWith(fontWeight: FontWeight.w600),
+            ),
+            if (extraCount > 0) ...[
+              const SizedBox(height: 4),
+              Text(
+                '將為每張海報建立一筆投稿，共用下方的作品資料',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: AppTheme.textMute,
+                ),
+              ),
+            ],
             const SizedBox(height: 16),
 
-            // Image preview.
+            // Image preview (first image — others submit silently).
             ClipRRect(
               borderRadius: BorderRadius.circular(12),
               child: Image.memory(imageBytes,
@@ -1470,6 +1494,124 @@ class _AiDeclarationRow extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// v13 multi-upload support
+// ─────────────────────────────────────────────────────────────────────
+
+/// One picked image + its compression result (shared metadata between
+/// thumb-row rendering and the final batched submit).
+class _PickedImage {
+  const _PickedImage({required this.bytes, required this.compressed});
+  final Uint8List bytes;
+  final CompressedImages compressed;
+}
+
+/// Horizontal row of 48×64 thumbs — one per picked image + a trailing
+/// ＋ slot that opens the multi-picker again. Native-feeling multi-
+/// upload UI: main 2:3 preview above, thumb row here for overview
+/// and quick remove.
+class _ThumbRow extends StatelessWidget {
+  const _ThumbRow({
+    required this.images,
+    required this.onRemove,
+    required this.onAdd,
+  });
+  final List<_PickedImage> images;
+  final ValueChanged<int>? onRemove;
+  final VoidCallback? onAdd;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 64,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 0),
+        itemCount: images.length + 1, // trailing + slot
+        separatorBuilder: (_, _) => const SizedBox(width: 8),
+        itemBuilder: (context, i) {
+          if (i == images.length) return _AddSlot(onTap: onAdd);
+          return _ThumbTile(
+            image: images[i],
+            onRemove: onRemove == null ? null : () => onRemove!(i),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _ThumbTile extends StatelessWidget {
+  const _ThumbTile({required this.image, required this.onRemove});
+  final _PickedImage image;
+  final VoidCallback? onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 48,
+      height: 64,
+      child: Stack(
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Container(
+              decoration: BoxDecoration(
+                color: const Color(0x0FFFFFFF),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppTheme.line1),
+              ),
+              child: Image.memory(image.bytes, fit: BoxFit.cover),
+            ),
+          ),
+          if (onRemove != null)
+            Positioned(
+              top: -4,
+              right: -4,
+              child: GestureDetector(
+                onTap: onRemove,
+                behavior: HitTestBehavior.opaque,
+                child: Container(
+                  width: 18,
+                  height: 18,
+                  decoration: const BoxDecoration(
+                    color: Color(0xE6000000),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.close,
+                      size: 12, color: Colors.white),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AddSlot extends StatelessWidget {
+  const _AddSlot({required this.onTap});
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        width: 48,
+        height: 64,
+        decoration: BoxDecoration(
+          color: const Color(0x0AFFFFFF),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: AppTheme.line2),
+        ),
+        child: Icon(LucideIcons.plus, size: 18, color: AppTheme.textMute),
       ),
     );
   }
