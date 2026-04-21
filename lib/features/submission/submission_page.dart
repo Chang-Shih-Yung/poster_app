@@ -63,18 +63,26 @@ class _SubmissionPageState extends ConsumerState<SubmissionPage> {
 
   // ── Image state (multi-upload, v13 2026-04-21) ──
   //
-  // Each entry = one picked poster. Big 2:3 preview shows the first;
-  // the thumb row below shows the full queue + a ＋ slot. On submit,
-  // each image becomes its own submission row, sharing the same work
-  // metadata (title / year / director / tags / AI declaration / ...).
+  // Each entry = one picked poster. Big 2:3 preview shows whichever
+  // thumb the user tapped (defaults to the first). The thumb row
+  // below shows the full queue with a ring around the active one,
+  // plus a ＋ slot. On submit, each image becomes its own submission
+  // row, sharing the same work metadata.
   final List<_PickedImage> _images = [];
+  int _primaryIdx = 0;
+
+  // Compression progress (visible blocking overlay so the user
+  // doesn't think the app is hung when picking a 30MB photo).
   bool _compressing = false;
+  int _compressDone = 0;
+  int _compressTotal = 0;
+
   bool _submitting = false;
 
   Uint8List? get _primaryImageBytes =>
-      _images.isEmpty ? null : _images.first.bytes;
+      _images.isEmpty ? null : _images[_primaryIdx.clamp(0, _images.length - 1)].bytes;
   CompressedImages? get _primaryCompressed =>
-      _images.isEmpty ? null : _images.first.compressed;
+      _images.isEmpty ? null : _images[_primaryIdx.clamp(0, _images.length - 1)].compressed;
 
   // ── Expandable sections ──
   bool _showAdvanced = false;
@@ -98,40 +106,156 @@ class _SubmissionPageState extends ConsumerState<SubmissionPage> {
 
   // ── Image picking (multi) ──────────────────────────────────────────────────
 
-  /// Open the native picker. On iOS/Android this presents multi-select; on
-  /// web it opens the browser file dialog (multi-file enabled via input).
-  /// Every picked file is compressed on-device and appended to [_images].
+  /// Open the native picker. On iOS/Android this presents multi-select;
+  /// on web it opens the browser file dialog. Every picked file is
+  /// compressed on-device and appended to [_images]. Progress and
+  /// per-file skip reasons are surfaced in the UI (overlay during,
+  /// dialog at end).
   Future<void> _addImages() async {
     final picker = ImagePicker();
     final files = await picker.pickMultiImage();
     if (files.isEmpty) return;
-    setState(() => _compressing = true);
+
+    setState(() {
+      _compressing = true;
+      _compressTotal = files.length;
+      _compressDone = 0;
+    });
+
     final added = <_PickedImage>[];
+    final tooLarge = <String>[]; // raw filename + raw size for the dialog
+    final badFormat = <String>[];
+
     for (final file in files) {
       final rawBytes = await file.readAsBytes();
+      // Yield to the event loop so the spinner can repaint between
+      // images (compression is sync; otherwise the UI freezes).
+      await Future<void>.delayed(Duration.zero);
+
       final result = ImageCompressor.compress(rawBytes);
       if (result == null) {
-        _toast('一張圖片格式無法辨識，已跳過');
-        continue;
+        badFormat.add(file.name);
+      } else if (result.posterBytes.lengthInBytes >
+          ImageCompressor.maxPosterBytes) {
+        final mb = (rawBytes.lengthInBytes / 1024 / 1024).toStringAsFixed(1);
+        tooLarge.add('${file.name} ($mb MB)');
+      } else {
+        added.add(_PickedImage(bytes: rawBytes, compressed: result));
       }
-      if (result.posterBytes.lengthInBytes > ImageCompressor.maxPosterBytes) {
-        _toast('一張圖片壓縮後仍超過 5 MB，已跳過');
-        continue;
-      }
-      added.add(_PickedImage(bytes: rawBytes, compressed: result));
+      if (mounted) setState(() => _compressDone++);
     }
+
     if (!mounted) return;
     setState(() {
       _images.addAll(added);
+      // If this was the first batch, leave _primaryIdx at 0; otherwise
+      // jump to the first newly-added image so the user can see what
+      // they just picked.
+      if (added.isNotEmpty && _images.length == added.length) {
+        _primaryIdx = 0;
+      } else if (added.isNotEmpty) {
+        _primaryIdx = _images.length - added.length;
+      }
       _compressing = false;
+      _compressTotal = 0;
+      _compressDone = 0;
     });
-    if (added.isNotEmpty) {
+
+    // Single, clear summary instead of N stacked toasts.
+    if (tooLarge.isNotEmpty || badFormat.isNotEmpty) {
+      _showSkipSummary(
+        added: added.length,
+        tooLarge: tooLarge,
+        badFormat: badFormat,
+      );
+    } else if (added.isNotEmpty) {
       _toast(added.length == 1 ? '已加入 1 張' : '已加入 ${added.length} 張');
     }
   }
 
+  Future<void> _showSkipSummary({
+    required int added,
+    required List<String> tooLarge,
+    required List<String> badFormat,
+  }) async {
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.6),
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppTheme.surfaceRaised,
+        title: Text(
+          added > 0 ? '已加入 $added 張，部分跳過' : '全部跳過',
+          style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (tooLarge.isNotEmpty) ...[
+                Text('超過 5 MB（${tooLarge.length} 張）',
+                    style: Theme.of(ctx).textTheme.labelMedium?.copyWith(
+                          color: AppTheme.textMute,
+                          fontWeight: FontWeight.w600,
+                        )),
+                const SizedBox(height: 4),
+                ...tooLarge.map((n) => Padding(
+                      padding: const EdgeInsets.only(left: 4, top: 2),
+                      child: Text('· $n',
+                          style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                                color: AppTheme.text,
+                              )),
+                    )),
+                const SizedBox(height: 12),
+                Text('請先用編輯器壓縮再上傳，或選較小的圖片',
+                    style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                          color: AppTheme.textFaint,
+                        )),
+              ],
+              if (badFormat.isNotEmpty) ...[
+                if (tooLarge.isNotEmpty) const SizedBox(height: 16),
+                Text('格式不支援（${badFormat.length} 張）',
+                    style: Theme.of(ctx).textTheme.labelMedium?.copyWith(
+                          color: AppTheme.textMute,
+                          fontWeight: FontWeight.w600,
+                        )),
+                const SizedBox(height: 4),
+                ...badFormat.map((n) => Padding(
+                      padding: const EdgeInsets.only(left: 4, top: 2),
+                      child: Text('· $n',
+                          style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                                color: AppTheme.text,
+                              )),
+                    )),
+              ],
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('知道了'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _removeImageAt(int i) {
-    setState(() => _images.removeAt(i));
+    setState(() {
+      _images.removeAt(i);
+      // Keep _primaryIdx valid after removal.
+      if (_primaryIdx >= _images.length) {
+        _primaryIdx = (_images.length - 1).clamp(0, 1 << 30);
+      }
+    });
+  }
+
+  void _setPrimary(int i) {
+    setState(() => _primaryIdx = i);
   }
 
   // ── Row builder ────────────────────────────────────────────────────────────
@@ -357,22 +481,37 @@ class _SubmissionPageState extends ConsumerState<SubmissionPage> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             // ── Image picker ── (v13: big 2:3 preview + thumb row)
-            GestureDetector(
-              onTap: _submitting ? null : _addImages,
-              child: _images.isEmpty
-                  ? _EmptyPicker(compressing: _compressing)
-                  : _ImagePreview(
-                      bytes: _primaryImageBytes!,
-                      compressing: _compressing,
-                      onReplace: _submitting ? null : _addImages,
+            // Stack so we can overlay an unmissable compression spinner
+            // on top of whichever child (empty / preview) is showing.
+            Stack(
+              children: [
+                GestureDetector(
+                  onTap: _submitting ? null : _addImages,
+                  child: _images.isEmpty
+                      ? _EmptyPicker(compressing: _compressing)
+                      : _ImagePreview(
+                          bytes: _primaryImageBytes!,
+                          compressing: _compressing,
+                          onReplace: _submitting ? null : _addImages,
+                        ),
+                ),
+                if (_compressing)
+                  Positioned.fill(
+                    child: _CompressOverlay(
+                      done: _compressDone,
+                      total: _compressTotal,
                     ),
+                  ),
+              ],
             ),
             const SizedBox(height: 10),
 
             // Thumb row — each picked image + a trailing ＋ slot.
             _ThumbRow(
               images: _images,
+              activeIdx: _primaryIdx,
               onRemove: _submitting ? null : _removeImageAt,
+              onSelect: _submitting ? null : _setPrimary,
               onAdd: _submitting ? null : _addImages,
             ),
 
@@ -1518,26 +1657,34 @@ class _PickedImage {
 class _ThumbRow extends StatelessWidget {
   const _ThumbRow({
     required this.images,
+    required this.activeIdx,
     required this.onRemove,
+    required this.onSelect,
     required this.onAdd,
   });
   final List<_PickedImage> images;
+  final int activeIdx;
   final ValueChanged<int>? onRemove;
+  final ValueChanged<int>? onSelect;
   final VoidCallback? onAdd;
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 64,
+      // 4dp extra so the close × bubble (top: -4) doesn't get clipped
+      // by the row bounds.
+      height: 72,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 0),
-        itemCount: images.length + 1, // trailing + slot
+        padding: const EdgeInsets.only(top: 4),
+        itemCount: images.length + 1,
         separatorBuilder: (_, _) => const SizedBox(width: 8),
         itemBuilder: (context, i) {
           if (i == images.length) return _AddSlot(onTap: onAdd);
           return _ThumbTile(
             image: images[i],
+            active: i == activeIdx,
+            onSelect: onSelect == null ? null : () => onSelect!(i),
             onRemove: onRemove == null ? null : () => onRemove!(i),
           );
         },
@@ -1547,48 +1694,121 @@ class _ThumbRow extends StatelessWidget {
 }
 
 class _ThumbTile extends StatelessWidget {
-  const _ThumbTile({required this.image, required this.onRemove});
+  const _ThumbTile({
+    required this.image,
+    required this.active,
+    required this.onSelect,
+    required this.onRemove,
+  });
   final _PickedImage image;
+  final bool active;
+  final VoidCallback? onSelect;
   final VoidCallback? onRemove;
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 48,
-      height: 64,
-      child: Stack(
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: Container(
-              decoration: BoxDecoration(
-                color: const Color(0x0FFFFFFF),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: AppTheme.line1),
-              ),
-              child: Image.memory(image.bytes, fit: BoxFit.cover),
-            ),
-          ),
-          if (onRemove != null)
-            Positioned(
-              top: -4,
-              right: -4,
-              child: GestureDetector(
-                onTap: onRemove,
-                behavior: HitTestBehavior.opaque,
-                child: Container(
-                  width: 18,
-                  height: 18,
-                  decoration: const BoxDecoration(
-                    color: Color(0xE6000000),
-                    shape: BoxShape.circle,
+    return GestureDetector(
+      onTap: onSelect,
+      behavior: HitTestBehavior.opaque,
+      child: SizedBox(
+        width: 48,
+        height: 68,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            // Tile.
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: AnimatedContainer(
+                duration: AppTheme.motionFast,
+                width: 48,
+                height: 64,
+                decoration: BoxDecoration(
+                  color: const Color(0x0FFFFFFF),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: active ? Colors.white : AppTheme.line1,
+                    width: active ? 2 : 1,
                   ),
-                  child: const Icon(Icons.close,
-                      size: 12, color: Colors.white),
+                ),
+                child: Image.memory(image.bytes, fit: BoxFit.cover),
+              ),
+            ),
+            // Close × bubble.
+            if (onRemove != null)
+              Positioned(
+                top: -4,
+                right: -4,
+                child: GestureDetector(
+                  onTap: onRemove,
+                  behavior: HitTestBehavior.opaque,
+                  child: Container(
+                    width: 18,
+                    height: 18,
+                    decoration: const BoxDecoration(
+                      color: Color(0xE6000000),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.close,
+                        size: 12, color: Colors.white),
+                  ),
                 ),
               ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Compression progress overlay — sits on top of the picker area
+/// during _addImages so the user has unmissable feedback that work
+/// is happening (otherwise compressing a 30MB photo on web feels
+/// like the app froze).
+class _CompressOverlay extends StatelessWidget {
+  const _CompressOverlay({required this.done, required this.total});
+  final int done;
+  final int total;
+
+  @override
+  Widget build(BuildContext context) {
+    final pct = total == 0 ? 0.0 : done / total;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        color: Colors.black.withValues(alpha: 0.55),
+        alignment: Alignment.center,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              width: 44,
+              height: 44,
+              child: CircularProgressIndicator(
+                value: total == 0 ? null : pct,
+                strokeWidth: 3,
+                color: Colors.white,
+                backgroundColor: Colors.white.withValues(alpha: 0.18),
+              ),
             ),
-        ],
+            const SizedBox(height: 14),
+            Text(
+              total > 0 ? '壓縮中… $done / $total' : '壓縮中…',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                  ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '請稍候，超過 5MB 的會自動跳過',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Colors.white.withValues(alpha: 0.7),
+                    fontSize: 11,
+                  ),
+            ),
+          ],
+        ),
       ),
     );
   }
