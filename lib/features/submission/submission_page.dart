@@ -125,12 +125,25 @@ class _SubmissionPageState extends ConsumerState<SubmissionPage> {
     final added = <_PickedImage>[];
     final tooLarge = <String>[]; // raw filename + raw size for the dialog
     final badFormat = <String>[];
+    final duplicates = <String>[];
+
+    // Snapshot fingerprints of already-queued images so we can dedupe
+    // both against existing and against the just-picked batch.
+    final existingFingerprints = <int>{
+      for (final img in _images) _fingerprint(img.bytes),
+    };
 
     for (final file in files) {
       final rawBytes = await file.readAsBytes();
-      // Yield to the event loop so the spinner can repaint between
-      // images (compression is sync; otherwise the UI freezes).
-      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero); // yield to repaint
+
+      final fp = _fingerprint(rawBytes);
+      if (existingFingerprints.contains(fp)) {
+        duplicates.add(file.name);
+        if (mounted) setState(() => _compressDone++);
+        continue;
+      }
+      existingFingerprints.add(fp);
 
       final result = ImageCompressor.compress(rawBytes);
       if (result == null) {
@@ -162,23 +175,78 @@ class _SubmissionPageState extends ConsumerState<SubmissionPage> {
     });
 
     // Single, clear summary instead of N stacked toasts.
-    if (tooLarge.isNotEmpty || badFormat.isNotEmpty) {
+    if (tooLarge.isNotEmpty || badFormat.isNotEmpty || duplicates.isNotEmpty) {
       _showSkipSummary(
         added: added.length,
         tooLarge: tooLarge,
         badFormat: badFormat,
+        duplicates: duplicates,
       );
     } else if (added.isNotEmpty) {
       _toast(added.length == 1 ? '已加入 1 張' : '已加入 ${added.length} 張');
     }
   }
 
+  /// Cheap content fingerprint — hashes file size and a sample of bytes
+  /// (first / mid / last 64). Same image picked twice always collides.
+  /// Different images of the same dimension *may* collide (extremely
+  /// unlikely with the offsets), but we accept the small false-positive
+  /// risk to avoid hashing the entire byte array.
+  int _fingerprint(Uint8List b) {
+    final n = b.length;
+    var h = n;
+    void mix(int i) {
+      if (i < 0 || i >= n) return;
+      h = (h * 31 + b[i]) & 0x7fffffff;
+    }
+    for (var i = 0; i < 64 && i < n; i++) {
+      mix(i);
+    }
+    final mid = n ~/ 2;
+    for (var i = 0; i < 64; i++) {
+      mix(mid + i);
+    }
+    for (var i = 1; i <= 64; i++) {
+      mix(n - i);
+    }
+    return h;
+  }
+
   Future<void> _showSkipSummary({
     required int added,
     required List<String> tooLarge,
     required List<String> badFormat,
+    required List<String> duplicates,
   }) async {
     if (!mounted) return;
+    Widget section(String label, List<String> names, String? hint) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('$label（${names.length} 張）',
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: AppTheme.textMute,
+                    fontWeight: FontWeight.w600,
+                  )),
+          const SizedBox(height: 4),
+          ...names.map((n) => Padding(
+                padding: const EdgeInsets.only(left: 4, top: 2),
+                child: Text('· $n',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: AppTheme.text,
+                        )),
+              )),
+          if (hint != null) ...[
+            const SizedBox(height: 6),
+            Text(hint,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AppTheme.textFaint,
+                    )),
+          ],
+        ],
+      );
+    }
+
     await showDialog<void>(
       context: context,
       barrierColor: Colors.black.withValues(alpha: 0.6),
@@ -195,41 +263,18 @@ class _SubmissionPageState extends ConsumerState<SubmissionPage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
+              if (duplicates.isNotEmpty)
+                section('已存在於這次的清單', duplicates,
+                    '同一張照片不能加兩次'),
               if (tooLarge.isNotEmpty) ...[
-                Text('超過 5 MB（${tooLarge.length} 張）',
-                    style: Theme.of(ctx).textTheme.labelMedium?.copyWith(
-                          color: AppTheme.textMute,
-                          fontWeight: FontWeight.w600,
-                        )),
-                const SizedBox(height: 4),
-                ...tooLarge.map((n) => Padding(
-                      padding: const EdgeInsets.only(left: 4, top: 2),
-                      child: Text('· $n',
-                          style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
-                                color: AppTheme.text,
-                              )),
-                    )),
-                const SizedBox(height: 12),
-                Text('請先用編輯器壓縮再上傳，或選較小的圖片',
-                    style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
-                          color: AppTheme.textFaint,
-                        )),
+                if (duplicates.isNotEmpty) const SizedBox(height: 16),
+                section('超過 5 MB', tooLarge,
+                    '請先用編輯器壓縮再上傳，或選較小的圖片'),
               ],
               if (badFormat.isNotEmpty) ...[
-                if (tooLarge.isNotEmpty) const SizedBox(height: 16),
-                Text('格式不支援（${badFormat.length} 張）',
-                    style: Theme.of(ctx).textTheme.labelMedium?.copyWith(
-                          color: AppTheme.textMute,
-                          fontWeight: FontWeight.w600,
-                        )),
-                const SizedBox(height: 4),
-                ...badFormat.map((n) => Padding(
-                      padding: const EdgeInsets.only(left: 4, top: 2),
-                      child: Text('· $n',
-                          style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
-                                color: AppTheme.text,
-                              )),
-                    )),
+                if (duplicates.isNotEmpty || tooLarge.isNotEmpty)
+                  const SizedBox(height: 16),
+                section('格式不支援', badFormat, null),
               ],
             ],
           ),

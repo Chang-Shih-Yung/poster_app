@@ -532,7 +532,6 @@ class _MasonryCard extends StatelessWidget {
 // S: Spotify-style list rows
 // ---------------------------------------------------------------------------
 
-// ignore: unused_element
 class _SmallList extends StatelessWidget {
   const _SmallList({
     required this.controller,

@@ -263,7 +263,10 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                         Positioned(
                           left: 16,
                           right: 16,
-                          bottom: bottomInset + 100, // clear the glass tab bar
+                          // Detail page is pushed above the shell, so
+                          // there's no floating tab bar to clear. Sit
+                          // the drawer just above the safe-area edge.
+                          bottom: bottomInset + 16,
                           child: _FujiDrawer(
                             poster: p,
                             isFav: isFav,
@@ -326,23 +329,33 @@ class _FujiDrawerState extends State<_FujiDrawer> {
         blur: 24,
         tint: 0.65,
         borderRadius: BorderRadius.circular(24),
-        padding: const EdgeInsets.fromLTRB(20, 14, 20, 18),
+        padding: const EdgeInsets.fromLTRB(20, 6, 20, 18),
+        // Drop the inset top highlight — Glass paints a 1px white
+        // line at the top edge to read as "specular highlight" but
+        // on the Fuji drawer it shows up as a stray hairline directly
+        // above the drag handle. Disable here.
+        highlight: false,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
             // Drag handle — tap to expand/collapse extra info.
+            // 12dp top + 14dp bottom padding around the visible 4dp pill
+            // gives a 30dp tall hit target without any visible chrome.
             GestureDetector(
               onTap: () => setState(() => _expanded = !_expanded),
               behavior: HitTestBehavior.opaque,
-              child: Center(
-                child: Container(
-                  width: 36,
-                  height: 4,
-                  margin: const EdgeInsets.only(bottom: 14),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.35),
-                    borderRadius: BorderRadius.circular(99),
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                margin: const EdgeInsets.only(bottom: 6),
+                child: Center(
+                  child: Container(
+                    width: 36,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.35),
+                      borderRadius: BorderRadius.circular(99),
+                    ),
                   ),
                 ),
               ),
@@ -392,16 +405,15 @@ class _FujiDrawerState extends State<_FujiDrawer> {
               padding: const EdgeInsets.symmetric(vertical: 14),
               child: _StatsRow(poster: p),
             ),
-            // Expanded section: tags + work link.
-            AnimatedCrossFade(
-              firstChild: const SizedBox(height: 0, width: double.infinity),
-              secondChild: _ExpandedInfo(poster: p),
-              crossFadeState: _expanded
-                  ? CrossFadeState.showSecond
-                  : CrossFadeState.showFirst,
-              duration: AppTheme.motionMed,
-            ),
-            const SizedBox(height: 14),
+            // Expanded section: tags + work link. True conditional —
+            // when collapsed, this isn't in the tree at all (so the
+            // drawer height genuinely shrinks; AnimatedCrossFade was
+            // leaving residual layout space).
+            if (_expanded) ...[
+              _ExpandedInfo(poster: p),
+              const SizedBox(height: 14),
+            ] else
+              const SizedBox(height: 14),
             // CTAs.
             Row(
               children: [

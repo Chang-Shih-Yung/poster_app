@@ -429,3 +429,60 @@ class _DensityToggle extends StatelessWidget {
     );
   }
 }
+
+/// v13 我的 density toggle — only M (masonry) and S (list). L has no
+/// place on a personal page where each card needs its metadata around
+/// it. Lives in the title row alongside ＋ and ☰.
+class _MeDensityToggle extends StatelessWidget {
+  const _MeDensityToggle({
+    required this.current,
+    required this.onChange,
+  });
+  final BrowseDensity current;
+  final ValueChanged<BrowseDensity> onChange;
+
+  @override
+  Widget build(BuildContext context) {
+    const opts = <BrowseDensity>[BrowseDensity.medium, BrowseDensity.small];
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      padding: const EdgeInsets.all(3),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (final d in opts)
+            Semantics(
+              label: d == BrowseDensity.medium ? '網格檢視' : '列表檢視',
+              button: true,
+              selected: current == d,
+              child: GestureDetector(
+                onTap: () => onChange(d),
+                behavior: HitTestBehavior.opaque,
+                child: AnimatedContainer(
+                  duration: AppTheme.motionFast,
+                  width: 30,
+                  height: 26,
+                  decoration: BoxDecoration(
+                    color: current == d
+                        ? Colors.white.withValues(alpha: 0.14)
+                        : Colors.transparent,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Center(
+                    child: Icon(
+                      d.icon,
+                      size: 14,
+                      color: current == d ? Colors.white : AppTheme.textMute,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}

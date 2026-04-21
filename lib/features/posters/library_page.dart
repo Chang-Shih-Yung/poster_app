@@ -389,7 +389,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
         children: [
           SizedBox(height: topInset + 8),
 
-          // ── 1. title row: + upload (left), ☰ menu (right) ──
+          // ── 1. title row: + upload (left), M/S toggle + ☰ menu (right) ──
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: SizedBox(
@@ -411,6 +411,21 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                     },
                   ),
                   const Spacer(),
+                  // v13: M ↔ S density toggle (no L — full-bleed page-view
+                  // doesn't make sense in 我的 since each card needs the
+                  // metadata around it).
+                  _MeDensityToggle(
+                    current: density == BrowseDensity.small
+                        ? BrowseDensity.small
+                        : BrowseDensity.medium,
+                    onChange: (d) {
+                      ref.read(browseDensityProvider.notifier).set(d);
+                      HapticFeedback.selectionClick();
+                      SharedPreferences.getInstance().then(
+                          (p) => p.setString(_prefsKeyDensity, d.key));
+                    },
+                  ),
+                  const SizedBox(width: 8),
                   _ChromeIconButton(
                     icon: LucideIcons.menu,
                     semanticLabel: '選單',
@@ -518,8 +533,20 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
             : const _EmptyState(),
       );
     }
-    // v13: only masonry. L (full-bleed page-view) and S (list) widgets
-    // are still in library_density_views.dart for future re-use.
+    // v13 我的: M = Pinterest masonry, S = list (compact rows).
+    // L (full-bleed page-view) is unreachable here — the density toggle
+    // only exposes M ↔ S.
+    if (density == BrowseDensity.small) {
+      return _SmallList(
+        controller: _scrollController,
+        items: displayItems,
+        trailingLoader: _loading,
+        topPadding: topPad,
+        bottomPadding: bottomPad,
+        favIds: favIds,
+        onToggleFavorite: _toggleFavorite,
+      );
+    }
     return _MediumGrid(
       controller: _scrollController,
       items: displayItems,
