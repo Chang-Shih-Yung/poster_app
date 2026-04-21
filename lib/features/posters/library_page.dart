@@ -16,6 +16,7 @@ import '../../data/models/poster.dart';
 import '../../data/providers/supabase_providers.dart';
 import '../../data/repositories/auth_repository.dart';
 import '../../data/repositories/favorite_repository.dart';
+import '../../data/repositories/follow_repository.dart';
 import '../../data/repositories/poster_repository.dart';
 import '../../data/repositories/submission_repository.dart';
 
@@ -80,10 +81,16 @@ const _searchHistoryMax = 5;
 ///     Cleaner to remove them than to fix server-side for a feature
 ///     that isn't in v13 spec anyway.
 const _titleRowHeight = 44.0;
-const _profileRowHeight = 80.0;  // 64 avatar + 16 padding
+const _profileRowHeight = 96.0;  // 72 avatar + 24 padding
+const _statsRowHeight = 44.0;    // 4 stats + 編輯檔案 pill
 const _segTabsHeight = 48.0;
 double _chromeHeight(double safeTop) =>
-    safeTop + 8 + _titleRowHeight + _profileRowHeight + _segTabsHeight;
+    safeTop +
+    8 +
+    _titleRowHeight +
+    _profileRowHeight +
+    _statsRowHeight +
+    _segTabsHeight;
 
 /// 我的 segmented sub-tab — drives the filter passed to the poster
 /// repository. 收藏 → favoritesOf=user.id. 投稿 → uploadedBy=user.id.
@@ -389,28 +396,15 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
         children: [
           SizedBox(height: topInset + 8),
 
-          // ── 1. title row: + upload (left), ☰ menu (right) ──
-          // (M/S density toggle moved to 探索 per v13 review.)
+          // ── 1. title row: ☰ menu only (right) ──
+          // v18: no ＋ button here — upload is in the bottom nav now.
+          // No page title text — it's not a desktop.
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: SizedBox(
               height: _titleRowHeight,
               child: Row(
                 children: [
-                  _ChromeIconButton(
-                    icon: LucideIcons.plus,
-                    semanticLabel: '上傳海報',
-                    onTap: () {
-                      final u = ref.read(currentUserProvider);
-                      if (u == null) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('請先登入才能上傳')),
-                        );
-                        return;
-                      }
-                      context.push('/upload');
-                    },
-                  ),
                   const Spacer(),
                   _ChromeIconButton(
                     icon: LucideIcons.menu,
@@ -422,16 +416,34 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
             ),
           ),
 
-          // ── 2. profile row ──
+          // ── 2. profile row: avatar + name + @handle + bio ──
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: SizedBox(
               height: _profileRowHeight,
-              child: _MeProfileRow(profile: profile, fallbackEmail: user?.email ?? ''),
+              child: _MeProfileRow(
+                profile: profile,
+                fallbackEmail: user?.email ?? '',
+              ),
             ),
           ),
 
-          // ── 3. segmented sub-tabs (收藏 / 投稿) ──
+          // ── 3. stats + edit pill ──
+          // 追蹤者 · 追蹤中 · 已通過 · 投稿 with thin dividers,
+          // plus a "編輯檔案" pill on the right.
+          SizedBox(
+            height: _statsRowHeight,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 16, 0),
+              child: _MeStatsRow(
+                userId: user?.id,
+                favCount: favCount,
+                subCount: subCount,
+              ),
+            ),
+          ),
+
+          // ── 4. segmented sub-tabs (收藏 / 投稿) ──
           SizedBox(
             height: _segTabsHeight,
             child: Padding(
@@ -519,9 +531,9 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
             : const _EmptyState(),
       );
     }
-    // v13 我的: always Pinterest masonry. Density toggle (M/S) lives
-    // on 探索, not here — 我的 is a curated grid of YOUR stuff so a
-    // single layout keeps it tight.
+    // v18 我的: always Pinterest masonry. Heart overlay shows only on
+    // 投稿 tab (submissions) — 收藏 tab is by-definition-favorited so
+    // showing a heart on every card is redundant.
     return _MediumGrid(
       controller: _scrollController,
       items: displayItems,
@@ -529,6 +541,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
       topPadding: topPad,
       bottomPadding: bottomPad,
       favIds: favIds,
+      showFav: _meTab == _MeTab.submissions,
       onToggleFavorite: _toggleFavorite,
     );
   }

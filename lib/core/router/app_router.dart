@@ -8,6 +8,7 @@ import '../../features/admin/admin_review_page.dart';
 import '../../features/admin/admin_tag_suggestions_page.dart';
 import '../../features/auth/signin_page.dart';
 import '../../features/home/home_page.dart';
+import '../../features/notifications/notifications_page.dart';
 import '../../features/posters/library_page.dart';
 import '../../features/posters/poster_detail_page.dart';
 import '../../features/posters/tag_browse_page.dart';
@@ -66,6 +67,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/upload',
         builder: (_, _) => const SubmissionPage(),
+      ),
+      GoRoute(
+        path: '/notifications',
+        builder: (_, _) => const NotificationsPage(),
       ),
       GoRoute(
         path: '/upload/batch',

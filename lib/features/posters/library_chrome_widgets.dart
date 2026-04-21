@@ -250,9 +250,8 @@ class _EmptyFavoritesState extends StatelessWidget {
 // v13 Me-tab chrome widgets
 // ───────────────────────────────────────────────────────────────────────
 
-/// Profile summary row inside the chrome — 64×64 avatar + name + bio +
-/// 編輯 pill. Tap 編輯 → /profile/edit (handled inline since the chrome
-/// is a stateless region).
+/// Profile summary row — 72×72 avatar + name + @handle + bio.
+/// v18 spec; edit pill lives in the stats row below, not here.
 class _MeProfileRow extends StatelessWidget {
   const _MeProfileRow({
     required this.profile,
@@ -265,15 +264,20 @@ class _MeProfileRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final displayName = profile?.displayName.trim() ?? '';
-    final name = displayName.isNotEmpty
-        ? displayName
-        : fallbackEmail.split('@').first;
+    final emailPrefix = fallbackEmail.contains('@')
+        ? fallbackEmail.split('@').first
+        : fallbackEmail;
+    final name = displayName.isNotEmpty ? displayName : emailPrefix;
+    // No dedicated `handle` column in the users table yet — synthesize
+    // from the email prefix. When the backend gains a handle field,
+    // swap this for profile?.handle.
+    final handle = '@$emailPrefix';
     final bio = profile?.bio?.trim();
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        _Avatar(profile: profile, size: 64),
+        _Avatar(profile: profile, size: 72),
         const SizedBox(width: 14),
         Expanded(
           child: Column(
@@ -286,51 +290,34 @@ class _MeProfileRow extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: theme.textTheme.titleMedium?.copyWith(
                   fontSize: 17,
-                  fontWeight: FontWeight.w600,
+                  fontWeight: FontWeight.w700,
                   letterSpacing: -0.2,
                 ),
               ),
               const SizedBox(height: 2),
               Text(
-                bio?.isNotEmpty == true ? bio! : fallbackEmail,
-                maxLines: 2,
+                handle,
+                maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodySmall?.copyWith(
+                style: theme.textTheme.labelSmall?.copyWith(
                   fontSize: 11,
-                  color: AppTheme.textMute,
-                  height: 1.4,
+                  color: AppTheme.textFaint,
                 ),
               ),
+              if (bio != null && bio.isNotEmpty) ...[
+                const SizedBox(height: 6),
+                Text(
+                  bio,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    fontSize: 11,
+                    color: AppTheme.textMute,
+                    height: 1.45,
+                  ),
+                ),
+              ],
             ],
-          ),
-        ),
-        const SizedBox(width: 10),
-        Material(
-          color: AppTheme.chipBg,
-          borderRadius: BorderRadius.circular(999),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(999),
-            onTap: () {
-              HapticFeedback.selectionClick();
-              context.push('/profile/edit');
-            },
-            child: Container(
-              height: 30,
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(999),
-                border: Border.all(color: AppTheme.line2),
-              ),
-              alignment: Alignment.center,
-              child: Text(
-                '編輯',
-                style: theme.textTheme.labelMedium?.copyWith(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                  letterSpacing: 0,
-                ),
-              ),
-            ),
           ),
         ),
       ],
@@ -482,6 +469,125 @@ class _MeDensityToggle extends StatelessWidget {
               ),
             ),
         ],
+      ),
+    );
+  }
+}
+
+/// v18 stats row — 追蹤者 / 追蹤中 / 已通過 + 編輯檔案 pill.
+/// Pulls real follower/following counts from user_relationship_stats RPC.
+/// 已通過 = approved submissions count (from submissionsProvider).
+/// Pure inline typography with thin dividers — no card/box chrome.
+class _MeStatsRow extends ConsumerWidget {
+  const _MeStatsRow({
+    required this.userId,
+    required this.favCount,
+    required this.subCount,
+  });
+  final String? userId;
+  final int favCount;
+  final int subCount;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    int? followers;
+    int? following;
+    if (userId != null) {
+      final stats =
+          ref.watch(userRelationshipStatsProvider(userId!)).asData?.value;
+      followers = stats?.followerCount;
+      following = stats?.followingCount;
+    }
+    return Row(
+      children: [
+        _Stat(n: followers, label: '追蹤者'),
+        _StatDivider(),
+        _Stat(n: following, label: '追蹤中'),
+        _StatDivider(),
+        _Stat(n: subCount, label: '已通過'),
+        const Spacer(),
+        _EditPill(),
+      ],
+    );
+  }
+}
+
+class _Stat extends StatelessWidget {
+  const _Stat({required this.n, required this.label});
+  final int? n;
+  final String label;
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisAlignment: MainAxisAlignment.center,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          n == null ? '–' : '$n',
+          style: theme.textTheme.titleMedium?.copyWith(
+            fontSize: 17,
+            fontWeight: FontWeight.w700,
+            letterSpacing: -0.4,
+            height: 1,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          label,
+          style: theme.textTheme.labelSmall?.copyWith(
+            fontSize: 10,
+            color: AppTheme.textFaint,
+            letterSpacing: 0.5,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _StatDivider extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 1,
+      height: 22,
+      margin: const EdgeInsets.symmetric(horizontal: 14),
+      color: AppTheme.line1,
+    );
+  }
+}
+
+class _EditPill extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(999),
+      child: InkWell(
+        onTap: () {
+          HapticFeedback.selectionClick();
+          context.push('/profile/edit');
+        },
+        borderRadius: BorderRadius.circular(999),
+        child: Container(
+          height: 34,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: AppTheme.line2),
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            '編輯檔案',
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0,
+                ),
+          ),
+        ),
       ),
     );
   }

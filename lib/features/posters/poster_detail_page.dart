@@ -339,35 +339,22 @@ class _FujiDrawerState extends State<_FujiDrawer> {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Drag handle — tap to expand/collapse extra info.
-            // Centred 36×4 pill + tiny chevron underneath that flips
-            // between ▼ (collapsed → tap to expand) and ▲ (expanded
-            // → tap to collapse) so the state is unmistakable.
+            // Drag handle — tap to expand/collapse. App-style (no
+            // chevron indicator — just the pill). 16dp vertical hit
+            // area around the visible 4dp pill.
             GestureDetector(
               onTap: () => setState(() => _expanded = !_expanded),
               behavior: HitTestBehavior.opaque,
               child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 6),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 36,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.35),
-                        borderRadius: BorderRadius.circular(99),
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    AnimatedRotation(
-                      turns: _expanded ? 0.5 : 0,
-                      duration: AppTheme.motionFast,
-                      child: Icon(LucideIcons.chevronDown,
-                          size: 12,
-                          color: Colors.white.withValues(alpha: 0.45)),
-                    ),
-                  ],
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                alignment: Alignment.center,
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.35),
+                    borderRadius: BorderRadius.circular(99),
+                  ),
                 ),
               ),
             ),
@@ -404,27 +391,27 @@ class _FujiDrawerState extends State<_FujiDrawer> {
                     ?.copyWith(color: AppTheme.textMute),
               ),
             ],
-            const SizedBox(height: 14),
-            // Stats row — 年份 / 時長 / 瀏覽 with thin top+bottom lines.
-            Container(
-              decoration: BoxDecoration(
-                border: Border(
-                  top: BorderSide(color: AppTheme.line1),
-                  bottom: BorderSide(color: AppTheme.line1),
-                ),
-              ),
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              child: _StatsRow(poster: p),
-            ),
-            // Expanded section: tags + work link. True conditional —
-            // when collapsed, this isn't in the tree at all (so the
-            // drawer height genuinely shrinks). Collapsed state has
-            // a smaller bottom gap than expanded.
+            // Everything below title + director collapses together:
+            // stats row (年份/瀏覽/收藏), tags, work link. Collapsed
+            // state is just drag-handle + eyebrow + title + director
+            // + CTA row — a taller-than-a-snackbar but much smaller
+            // than expanded.
             if (_expanded) ...[
+              const SizedBox(height: 14),
+              Container(
+                decoration: BoxDecoration(
+                  border: Border(
+                    top: BorderSide(color: AppTheme.line1),
+                    bottom: BorderSide(color: AppTheme.line1),
+                  ),
+                ),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                child: _StatsRow(poster: p),
+              ),
               _ExpandedInfo(poster: p),
               const SizedBox(height: 14),
             ] else
-              const SizedBox(height: 8),
+              const SizedBox(height: 12),
             // CTAs.
             Row(
               children: [

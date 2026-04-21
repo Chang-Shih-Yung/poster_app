@@ -323,6 +323,7 @@ class _MediumGrid extends StatelessWidget {
     required this.bottomPadding,
     required this.favIds,
     required this.onToggleFavorite,
+    this.showFav = true,
   });
   final ScrollController controller;
   final List<Poster> items;
@@ -331,6 +332,11 @@ class _MediumGrid extends StatelessWidget {
   final double bottomPadding;
   final Set<String> favIds;
   final void Function(Poster) onToggleFavorite;
+
+  /// When false, cards never render the heart overlay — e.g. on the
+  /// 收藏 segmented tab where the category itself already implies
+  /// "favorited". Submissions use showFav=true with the fancy heart.
+  final bool showFav;
 
   @override
   Widget build(BuildContext context) {
@@ -354,6 +360,7 @@ class _MediumGrid extends StatelessWidget {
     Widget renderCard(Poster p) => _MasonryCard(
           poster: p,
           isFavorited: favIds.contains(p.id),
+          showFav: showFav,
           onToggleFavorite: () => onToggleFavorite(p),
           aspectRatio: _ratioForId(p.id),
         );
@@ -418,11 +425,16 @@ class _MasonryCard extends StatelessWidget {
     required this.isFavorited,
     required this.onToggleFavorite,
     required this.aspectRatio,
+    this.showFav = true,
   });
   final Poster poster;
   final bool isFavorited;
   final VoidCallback onToggleFavorite;
   final double aspectRatio;
+
+  /// Hide the heart overlay entirely — used on the 收藏 tab where
+  /// every card is by definition favorited.
+  final bool showFav;
 
   @override
   Widget build(BuildContext context) {
@@ -507,16 +519,14 @@ class _MasonryCard extends StatelessWidget {
                       ],
                     ),
                   ),
-                  // Heart indicator — top-right when fav.
-                  if (isFavorited)
+                  // Fancy heart — gradient-filled + white border + glow.
+                  // Only shown when showFav=true (投稿 tab) AND the
+                  // poster is actually favorited.
+                  if (showFav && isFavorited)
                     const Positioned(
                       top: 8,
                       right: 8,
-                      child: Icon(
-                        Icons.favorite,
-                        size: 16,
-                        color: Colors.white,
-                      ),
+                      child: _FancyHeart(size: 14),
                     ),
                 ],
               ),
@@ -678,4 +688,75 @@ class _SmallTile extends StatelessWidget {
       ),
     );
   }
+}
+
+/// v18 fancy heart — gradient pink-to-crimson fill + white stroke +
+/// drop-shadow glow. Direct port of prototype's FancyHeart: painted
+/// inline with SVG so we don't depend on a rich-icon font.
+class _FancyHeart extends StatelessWidget {
+  const _FancyHeart({required this.size});
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(
+      size: Size(size + 10, size + 10),
+      painter: _FancyHeartPainter(),
+    );
+  }
+}
+
+class _FancyHeartPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    // Scale factor based on 34x34 viewBox used by the prototype SVG.
+    final s = size.width / 34.0;
+    canvas.save();
+    canvas.scale(s, s);
+
+    final path = Path()
+      ..moveTo(17, 28.5)
+      ..cubicTo(5, 20.5, 2.5, 14.5, 4.5, 10)
+      ..cubicTo(7, 4.5, 13.5, 4, 17, 9)
+      ..cubicTo(20.5, 4, 27, 4.5, 29.5, 10)
+      ..cubicTo(31.5, 14.5, 29, 20.5, 17, 28.5)
+      ..close();
+
+    // Outer glow — crimson-alpha blurred behind the fill.
+    canvas.drawShadow(path, const Color(0xFFFF4678), 6, true);
+
+    // Gradient fill pink → crimson.
+    final fill = Paint()
+      ..shader = const LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [Color(0xFFFFD1DC), Color(0xFFFF6B95), Color(0xFFE11D48)],
+        stops: [0, 0.5, 1],
+      ).createShader(const Rect.fromLTWH(0, 0, 34, 34));
+    canvas.drawPath(path, fill);
+
+    // Soft white stroke outline.
+    final stroke = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.2
+      ..strokeJoin = StrokeJoin.round
+      ..color = Colors.white.withValues(alpha: 0.9);
+    canvas.drawPath(path, stroke);
+
+    // Tiny highlight arc top-left for that "jelly" look.
+    final highlight = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.4
+      ..strokeCap = StrokeCap.round
+      ..color = Colors.white.withValues(alpha: 0.75);
+    final hl = Path()
+      ..moveTo(11, 10.5)
+      ..cubicTo(12, 9, 14, 8.8, 15.5, 10.5);
+    canvas.drawPath(hl, highlight);
+
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(_FancyHeartPainter old) => false;
 }
