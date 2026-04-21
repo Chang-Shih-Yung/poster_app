@@ -481,20 +481,23 @@ class _SubmissionPageState extends ConsumerState<SubmissionPage> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             // ── Image picker ── (v13: big 2:3 preview + thumb row)
-            // Stack so we can overlay an unmissable compression spinner
-            // on top of whichever child (empty / preview) is showing.
+            // Big area:
+            //   - empty: tappable, opens picker
+            //   - has images: NOT tappable (avoids "tap → re-pick"
+            //     confusion with ＋ slot below). Adding more goes via
+            //     ＋ slot in thumb row only.
+            // Stack overlays an unmissable compression spinner.
             Stack(
               children: [
-                GestureDetector(
-                  onTap: _submitting ? null : _addImages,
-                  child: _images.isEmpty
-                      ? _EmptyPicker(compressing: _compressing)
-                      : _ImagePreview(
-                          bytes: _primaryImageBytes!,
-                          compressing: _compressing,
-                          onReplace: _submitting ? null : _addImages,
-                        ),
-                ),
+                _images.isEmpty
+                    ? GestureDetector(
+                        onTap: _submitting || _compressing ? null : _addImages,
+                        child: _EmptyPicker(compressing: _compressing),
+                      )
+                    : _ImagePreview(
+                        bytes: _primaryImageBytes!,
+                        compressing: _compressing,
+                      ),
                 if (_compressing)
                   Positioned.fill(
                     child: _CompressOverlay(
@@ -514,6 +517,18 @@ class _SubmissionPageState extends ConsumerState<SubmissionPage> {
               onSelect: _submitting ? null : _setPrimary,
               onAdd: _submitting ? null : _addImages,
             ),
+            // Hint when there's at least one image, so the multi-upload
+            // affordance is unmissable.
+            if (_images.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Text(
+                '點縮圖切換預覽，按 ＋ 加更多張（共用同一筆作品資料）',
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: AppTheme.textFaint,
+                      fontSize: 11,
+                    ),
+              ),
+            ],
 
             const SizedBox(height: 24),
 
@@ -923,86 +938,25 @@ class _DiagonalStripePainter extends CustomPainter {
   bool shouldRepaint(_DiagonalStripePainter old) => false;
 }
 
-/// Image preview with replace overlay.
+/// v13 image preview — just the image, 2:3 aspect, rounded.
+/// Compression spinner is owned by the outer `_CompressOverlay` in the
+/// parent Stack so we don't double up. Replace / add-more is now handled
+/// by the thumb row's ＋ slot, so no inline pill needed.
 class _ImagePreview extends StatelessWidget {
   const _ImagePreview({
     required this.bytes,
     required this.compressing,
-    required this.onReplace,
   });
   final Uint8List bytes;
   final bool compressing;
-  final VoidCallback? onReplace;
 
   @override
   Widget build(BuildContext context) {
     return ClipRRect(
-      borderRadius: BorderRadius.circular(16),
-      child: Stack(
-        children: [
-          AspectRatio(
-            aspectRatio: 3 / 4,
-            child: Image.memory(bytes, fit: BoxFit.cover),
-          ),
-          if (compressing)
-            Positioned.fill(
-              child: Container(
-                color: Colors.black54,
-                child: Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: AppTheme.textMute,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text('壓縮中…',
-                          style: Theme.of(context)
-                              .textTheme
-                              .labelSmall
-                              ?.copyWith(color: AppTheme.textMute)),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          if (!compressing)
-            Positioned(
-              top: 10,
-              right: 10,
-              child: GestureDetector(
-                onTap: onReplace,
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.6),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(LucideIcons.refreshCw,
-                          size: 12,
-                          color: Colors.white.withValues(alpha: 0.8)),
-                      const SizedBox(width: 5),
-                      Text(
-                        '更換',
-                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                              color: Colors.white.withValues(alpha: 0.8),
-                            ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-        ],
+      borderRadius: BorderRadius.circular(14),
+      child: AspectRatio(
+        aspectRatio: 2 / 3,
+        child: Image.memory(bytes, fit: BoxFit.cover),
       ),
     );
   }
@@ -1776,7 +1730,9 @@ class _CompressOverlay extends StatelessWidget {
     return ClipRRect(
       borderRadius: BorderRadius.circular(14),
       child: Container(
-        color: Colors.black.withValues(alpha: 0.55),
+        // Almost-opaque so any underlying empty placeholder (when
+        // compressing the very first image) is fully hidden.
+        color: const Color(0xEB0D1116), // ink at ~92% alpha
         alignment: Alignment.center,
         child: Column(
           mainAxisSize: MainAxisSize.min,
