@@ -340,23 +340,34 @@ class _FujiDrawerState extends State<_FujiDrawer> {
           mainAxisSize: MainAxisSize.min,
           children: [
             // Drag handle — tap to expand/collapse extra info.
-            // 12dp top + 14dp bottom padding around the visible 4dp pill
-            // gives a 30dp tall hit target without any visible chrome.
+            // Centred 36×4 pill + tiny chevron underneath that flips
+            // between ▼ (collapsed → tap to expand) and ▲ (expanded
+            // → tap to collapse) so the state is unmistakable.
             GestureDetector(
               onTap: () => setState(() => _expanded = !_expanded),
               behavior: HitTestBehavior.opaque,
               child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                margin: const EdgeInsets.only(bottom: 6),
-                child: Center(
-                  child: Container(
-                    width: 36,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.35),
-                      borderRadius: BorderRadius.circular(99),
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 36,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.35),
+                        borderRadius: BorderRadius.circular(99),
+                      ),
                     ),
-                  ),
+                    const SizedBox(height: 2),
+                    AnimatedRotation(
+                      turns: _expanded ? 0.5 : 0,
+                      duration: AppTheme.motionFast,
+                      child: Icon(LucideIcons.chevronDown,
+                          size: 12,
+                          color: Colors.white.withValues(alpha: 0.45)),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -407,13 +418,13 @@ class _FujiDrawerState extends State<_FujiDrawer> {
             ),
             // Expanded section: tags + work link. True conditional —
             // when collapsed, this isn't in the tree at all (so the
-            // drawer height genuinely shrinks; AnimatedCrossFade was
-            // leaving residual layout space).
+            // drawer height genuinely shrinks). Collapsed state has
+            // a smaller bottom gap than expanded.
             if (_expanded) ...[
               _ExpandedInfo(poster: p),
               const SizedBox(height: 14),
             ] else
-              const SizedBox(height: 14),
+              const SizedBox(height: 8),
             // CTAs.
             Row(
               children: [

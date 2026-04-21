@@ -430,9 +430,9 @@ class _DensityToggle extends StatelessWidget {
   }
 }
 
-/// v13 我的 density toggle — only M (masonry) and S (list). L has no
-/// place on a personal page where each card needs its metadata around
-/// it. Lives in the title row alongside ＋ and ☰.
+/// v13 我的 density toggle — currently unused (M/S moved to 探索).
+/// Kept in case we want to resurface density switching here later.
+// ignore: unused_element
 class _MeDensityToggle extends StatelessWidget {
   const _MeDensityToggle({
     required this.current,

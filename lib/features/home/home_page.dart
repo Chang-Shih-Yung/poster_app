@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
+import 'package:shared_preferences/shared_preferences.dart';
+
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/glass.dart';
 import '../../core/widgets/shimmer_placeholder.dart';
@@ -57,6 +59,37 @@ IconData _iconFromName(String? name) {
 // HomePage
 // ---------------------------------------------------------------------------
 
+/// Density modes for the 探索 (HomePage) feed.
+///   M (medium): horizontal-scroll cards per section (default).
+///   S (small):  each section becomes a vertical list of compact rows
+///               with a 40×56 thumb + title + meta + heart.
+enum HomeDensity { medium, small }
+
+class HomeDensityNotifier extends Notifier<HomeDensity> {
+  static const _prefsKey = 'home.density';
+  @override
+  HomeDensity build() {
+    // Hydrate async — UI starts in M, switches when prefs load.
+    SharedPreferences.getInstance().then((p) {
+      final v = p.getString(_prefsKey);
+      if (v == 'S') state = HomeDensity.small;
+    });
+    return HomeDensity.medium;
+  }
+
+  void toggle() {
+    state = state == HomeDensity.medium
+        ? HomeDensity.small
+        : HomeDensity.medium;
+    SharedPreferences.getInstance().then((p) =>
+        p.setString(_prefsKey, state == HomeDensity.medium ? 'M' : 'S'));
+  }
+}
+
+final homeDensityProvider =
+    NotifierProvider<HomeDensityNotifier, HomeDensity>(
+        HomeDensityNotifier.new);
+
 class HomePage extends ConsumerWidget {
   const HomePage({super.key});
 
@@ -68,6 +101,7 @@ class HomePage extends ConsumerWidget {
     final profile = profileAsync.asData?.value;
     final favIds = ref.watch(favoriteIdsProvider).asData?.value ?? {};
     final sectionsAsync = ref.watch(homeSectionsV2Provider);
+    final density = ref.watch(homeDensityProvider);
 
     return Scaffold(
       backgroundColor: AppTheme.bg,
@@ -79,6 +113,7 @@ class HomePage extends ConsumerWidget {
             delegate: _HomeGlassHeader(
               topInset: topInset,
               profile: profile,
+              density: density,
               onProfileTap: () => context.push('/profile'),
               onSearchTap: () {
                 HapticFeedback.selectionClick();
@@ -87,6 +122,10 @@ class HomePage extends ConsumerWidget {
               onUploadTap: () {
                 HapticFeedback.selectionClick();
                 context.push('/upload');
+              },
+              onDensityToggle: () {
+                HapticFeedback.selectionClick();
+                ref.read(homeDensityProvider.notifier).toggle();
               },
             ),
           ),
@@ -117,7 +156,11 @@ class HomePage extends ConsumerWidget {
                 // Server already applied visibility gate. Empty items → hide.
                 if (s.isEmpty) continue;
                 slivers.add(SliverToBoxAdapter(
-                  child: _DynamicSectionRow(section: s, favIds: favIds),
+                  child: _DynamicSectionRow(
+                    section: s,
+                    favIds: favIds,
+                    density: density,
+                  ),
                 ));
               }
               return slivers;
@@ -142,15 +185,19 @@ class _HomeGlassHeader extends SliverPersistentHeaderDelegate {
   _HomeGlassHeader({
     required this.topInset,
     required this.profile,
+    required this.density,
     required this.onProfileTap,
     required this.onSearchTap,
     required this.onUploadTap,
+    required this.onDensityToggle,
   });
   final double topInset;
   final AppUser? profile;
+  final HomeDensity density;
   final VoidCallback onProfileTap;
   final VoidCallback onSearchTap;
   final VoidCallback onUploadTap;
+  final VoidCallback onDensityToggle;
 
   static const double _bar = 56;
 
@@ -161,10 +208,6 @@ class _HomeGlassHeader extends SliverPersistentHeaderDelegate {
 
   @override
   Widget build(BuildContext ctx, double shrink, bool overlaps) {
-    // Wrap in SizedBox.expand so the sliver's paint extent matches its
-    // layout extent — BackdropFilter inside SliverPersistentHeader can
-    // otherwise cause "layoutExtent exceeds paintExtent" because the
-    // child reports a smaller paint size than the sliver expects.
     return SizedBox.expand(
       child: Glass(
         blur: 20,
@@ -190,6 +233,15 @@ class _HomeGlassHeader extends SliverPersistentHeaderDelegate {
                     ),
               ),
               const Spacer(),
+              // v13: density toggle as a single circular GlassButton
+              // that morphs between grid / list icons (iOS Photos-style
+              // — shows current state, tap to flip). Uses
+              // AnimatedSwitcher for a soft fade between icons.
+              _DensityMorphButton(
+                density: density,
+                onTap: onDensityToggle,
+              ),
+              const SizedBox(width: 6),
               GlassButton(
                 icon: LucideIcons.search,
                 size: 34,
@@ -214,7 +266,56 @@ class _HomeGlassHeader extends SliverPersistentHeaderDelegate {
 
   @override
   bool shouldRebuild(_HomeGlassHeader old) =>
-      old.topInset != topInset || old.profile?.avatarUrl != profile?.avatarUrl;
+      old.topInset != topInset ||
+      old.profile?.avatarUrl != profile?.avatarUrl ||
+      old.density != density;
+}
+
+/// v13 density morph button — single circular GlassButton showing the
+/// current density's icon (grid for M, list for S). Tap to flip.
+/// AnimatedSwitcher fades between icons so the change feels native
+/// instead of a hard swap. iOS Photos-style.
+class _DensityMorphButton extends StatelessWidget {
+  const _DensityMorphButton({required this.density, required this.onTap});
+  final HomeDensity density;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final icon = density == HomeDensity.medium
+        ? LucideIcons.layoutGrid
+        : LucideIcons.list;
+    return Semantics(
+      button: true,
+      label: density == HomeDensity.medium ? '網格檢視' : '列表檢視',
+      child: GestureDetector(
+        onTap: onTap,
+        child: Glass(
+          blur: 18,
+          tint: 0.5,
+          borderRadius: BorderRadius.circular(999),
+          padding: EdgeInsets.zero,
+          child: SizedBox(
+            width: 34,
+            height: 34,
+            child: Center(
+              child: AnimatedSwitcher(
+                duration: AppTheme.motionFast,
+                transitionBuilder: (child, anim) =>
+                    FadeTransition(opacity: anim, child: child),
+                child: Icon(
+                  icon,
+                  key: ValueKey(density),
+                  size: 17,
+                  color: Colors.white.withValues(alpha: 0.85),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -229,9 +330,14 @@ class _HomeGlassHeader extends SliverPersistentHeaderDelegate {
 //   follow_feed                          → _FollowFeedRow
 
 class _DynamicSectionRow extends StatelessWidget {
-  const _DynamicSectionRow({required this.section, required this.favIds});
+  const _DynamicSectionRow({
+    required this.section,
+    required this.favIds,
+    required this.density,
+  });
   final HomeSectionV2 section;
   final Set<String> favIds;
+  final HomeDensity density;
 
   @override
   Widget build(BuildContext context) {
@@ -261,15 +367,12 @@ class _DynamicSectionRow extends StatelessWidget {
       case 'recent_approved':
       case 'for_you':
       case 'for_you_cf':
-        // All five return plain Poster rows (with optional
-        // recommendation_score for for_you variants — currently we don't
-        // surface the score in UI, but it could power "because you
-        // favorited X" hints later).
         return _SectionRow(
           items: section.asPosters(),
           favIds: favIds,
           title: section.titleZh,
           icon: _iconFromName(section.icon),
+          density: density,
         );
       default:
         return const SizedBox.shrink();
@@ -287,11 +390,13 @@ class _SectionRow extends StatelessWidget {
     required this.favIds,
     required this.title,
     required this.icon,
+    required this.density,
   });
   final List<Poster> items;
   final Set<String> favIds;
   final String title;
   final IconData icon;
+  final HomeDensity density;
 
   @override
   Widget build(BuildContext context) {
@@ -321,21 +426,111 @@ class _SectionRow extends StatelessWidget {
 
           const SizedBox(height: 12),
 
-          // Horizontal scroll.
-          SizedBox(
-            height: 220,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
+          // M = horizontal scroll of cards. S = vertical compact list.
+          if (density == HomeDensity.medium)
+            SizedBox(
+              height: 220,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                itemCount: items.length,
+                separatorBuilder: (_, _) => const SizedBox(width: 12),
+                itemBuilder: (_, i) => _FeedCard(
+                  poster: items[i],
+                  isFav: favIds.contains(items[i].id),
+                ),
+              ),
+            )
+          else
+            Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
-              itemCount: items.length,
-              separatorBuilder: (_, _) => const SizedBox(width: 12),
-              itemBuilder: (_, i) => _FeedCard(
-                poster: items[i],
-                isFav: favIds.contains(items[i].id),
+              child: Column(
+                children: items
+                    .map((p) => _CompactRow(
+                          poster: p,
+                          isFav: favIds.contains(p.id),
+                        ))
+                    .toList(growable: false),
               ),
             ),
-          ),
         ],
+      ),
+    );
+  }
+}
+
+/// Compact row for S mode — 40×56 thumb + title + meta + heart.
+/// Renders one Poster as a horizontal row with subtle hairline divider.
+class _CompactRow extends StatelessWidget {
+  const _CompactRow({required this.poster, required this.isFav});
+  final Poster poster;
+  final bool isFav;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return InkWell(
+      onTap: () => context.push('/poster/${poster.id}'),
+      child: Container(
+        decoration: BoxDecoration(
+          border: Border(bottom: BorderSide(color: AppTheme.line1)),
+        ),
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        child: Row(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: SizedBox(
+                width: 40,
+                height: 56,
+                child: CachedNetworkImage(
+                  imageUrl: poster.thumbnailUrl ?? poster.posterUrl,
+                  fit: BoxFit.cover,
+                  placeholder: (_, _) =>
+                      const ColoredBox(color: AppTheme.surfaceRaised),
+                  errorWidget: (_, _, _) =>
+                      const ColoredBox(color: AppTheme.surfaceRaised),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    poster.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: -0.1,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    [
+                      if (poster.year != null) '${poster.year}',
+                      if (poster.director != null) poster.director!,
+                    ].join(' · '),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: AppTheme.textMute,
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (isFav)
+              const Padding(
+                padding: EdgeInsets.only(left: 8),
+                child: Icon(Icons.favorite, size: 14, color: Colors.white),
+              ),
+          ],
+        ),
       ),
     );
   }
