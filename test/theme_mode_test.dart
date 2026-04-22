@@ -22,7 +22,7 @@ void main() {
         reason: 'bg must differ between day and night');
     // Night: kit canonical --ink. Day: neutral white (Threads-style),
     // replacing the earlier warm-paper #F5F2EC per v18 reskin.
-    expect(night, const Color(0xFF07090D));
+    expect(night, const Color(0xFF121212));
     expect(day, const Color(0xFFFFFFFF));
   });
 
@@ -54,7 +54,7 @@ void main() {
 
     await tester.pumpWidget(build());
     final nightBox = tester.widget<ColoredBox>(find.byType(ColoredBox));
-    expect(nightBox.color, const Color(0xFF07090D));
+    expect(nightBox.color, const Color(0xFF121212));
 
     AppTheme.setDayMode(true);
     await tester.pumpWidget(build());
