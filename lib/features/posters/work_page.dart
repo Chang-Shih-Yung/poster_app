@@ -1,11 +1,9 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/app_loader.dart';
-import '../../core/widgets/shimmer_placeholder.dart';
+import '../../core/widgets/ds/ds.dart';
 import '../../data/models/poster.dart';
 import '../../data/models/work.dart';
 import '../../data/repositories/poster_repository.dart';
@@ -154,57 +152,13 @@ class _PosterCell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final thumb = poster.thumbnailUrl ?? poster.posterUrl;
-
-    return GestureDetector(
-      onTap: () => context.push('/poster/${poster.id}'),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(10),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            CachedNetworkImage(
-              imageUrl: thumb,
-              fit: BoxFit.cover,
-              placeholder: (_, _) => const ShimmerPlaceholder(),
-              errorWidget: (_, _, _) => Container(
-                color: AppTheme.surfaceRaised,
-                child: Icon(Icons.broken_image, color: AppTheme.textFaint),
-              ),
-            ),
-            // Bottom gradient + label.
-            if (poster.posterName != null || poster.region != null)
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 0,
-                child: Container(
-                  padding: const EdgeInsets.fromLTRB(10, 30, 10, 8),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        Colors.transparent,
-                        Colors.black.withValues(alpha: 0.75),
-                      ],
-                    ),
-                  ),
-                  child: Text(
-                    poster.posterName ?? '',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.labelMedium?.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-              ),
-          ],
-        ),
-      ),
+    // Work page cells usually show posterName (e.g. "IMAX 限定版")
+    // rather than full title — same tile contract though.
+    return AppPosterTile(
+      imageUrl: poster.thumbnailUrl ?? poster.posterUrl,
+      posterId: poster.id,
+      title: poster.posterName,
+      showOverlayText: poster.posterName != null,
     );
   }
 }

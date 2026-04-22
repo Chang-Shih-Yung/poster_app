@@ -8,6 +8,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/app_loader.dart';
+import '../../core/widgets/ds/ds.dart';
 import '../../data/models/app_user.dart';
 import '../../data/models/poster.dart';
 import '../../data/models/work.dart';
@@ -235,9 +236,12 @@ class _SearchLanding extends ConsumerWidget {
                   padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
                   itemCount: tags.length,
                   separatorBuilder: (_, _) => const SizedBox(width: 6),
-                  itemBuilder: (_, i) => _LandingTagChip(
-                    label: tags[i],
-                    onTap: () => onTagTap(tags[i]),
+                  itemBuilder: (_, i) => Center(
+                    child: AppChip(
+                      label: tags[i],
+                      size: AppChipSize.small,
+                      onTap: () => onTagTap(tags[i]),
+                    ),
                   ),
                 ),
               );
@@ -298,44 +302,6 @@ class _SearchLanding extends ConsumerWidget {
           },
         ),
       ],
-    );
-  }
-}
-
-class _LandingTagChip extends StatelessWidget {
-  const _LandingTagChip({required this.label, required this.onTap});
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Material(
-        color: AppTheme.chipBg,
-        borderRadius: BorderRadius.circular(999),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(999),
-          child: Container(
-            height: 30,
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(999),
-              border: Border.all(color: AppTheme.line1),
-            ),
-            child: Text(
-              label,
-              style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    color: AppTheme.text,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                    letterSpacing: 0,
-                  ),
-            ),
-          ),
-        ),
-      ),
     );
   }
 }
@@ -401,84 +367,15 @@ class _LandingCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return GestureDetector(
-      onTap: () => context.push('/poster/${poster.id}'),
-      child: AspectRatio(
-        aspectRatio: aspectRatio,
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(14),
-          child: Container(
-            decoration: BoxDecoration(
-              color: AppTheme.surfaceRaised,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: AppTheme.line1),
-            ),
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                CachedNetworkImage(
-                  imageUrl: poster.thumbnailUrl ?? poster.posterUrl,
-                  fit: BoxFit.cover,
-                  placeholder: (_, _) =>
-                      ColoredBox(color: AppTheme.surfaceRaised),
-                  errorWidget: (_, _, _) =>
-                      ColoredBox(color: AppTheme.surfaceRaised),
-                ),
-                const Positioned.fill(
-                  child: IgnorePointer(
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.bottomCenter,
-                          end: Alignment.topCenter,
-                          colors: [Color(0xBF000000), Color(0x00000000)],
-                          stops: [0, 0.45],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                Positioned(
-                  left: 10,
-                  right: 10,
-                  bottom: 10,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        poster.title,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.titleSmall?.copyWith(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
-                          height: 1.2,
-                          letterSpacing: -0.2,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        [
-                          if (poster.year != null) '${poster.year}',
-                          if (poster.director != null) poster.director!,
-                        ].join(' · '),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: Colors.white.withValues(alpha: 0.75),
-                          fontSize: 10,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
+    return AppPosterTile(
+      imageUrl: poster.thumbnailUrl ?? poster.posterUrl,
+      posterId: poster.id,
+      title: poster.title,
+      subtitle: [
+        if (poster.year != null) '${poster.year}',
+        if (poster.director != null) poster.director!,
+      ].join(' · '),
+      aspectRatio: aspectRatio,
     );
   }
 }

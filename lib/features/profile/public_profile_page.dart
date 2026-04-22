@@ -1,12 +1,11 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/app_loader.dart';
-import '../../core/widgets/shimmer_placeholder.dart';
+import '../../core/widgets/ds/ds.dart';
 import '../../data/models/poster.dart';
 import '../../data/models/social.dart';
 import '../../data/repositories/follow_repository.dart';
@@ -216,18 +215,10 @@ class _PosterCell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final thumb = poster.thumbnailUrl ?? poster.posterUrl;
-    return GestureDetector(
-      onTap: () => context.push('/poster/${poster.id}'),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(10),
-        child: CachedNetworkImage(
-          imageUrl: thumb,
-          fit: BoxFit.cover,
-          placeholder: (_, _) => const ShimmerPlaceholder(),
-          errorWidget: (_, _, _) => Container(color: AppTheme.surfaceRaised),
-        ),
-      ),
+    return AppPosterTile(
+      imageUrl: poster.thumbnailUrl ?? poster.posterUrl,
+      posterId: poster.id,
+      showOverlayText: false,
     );
   }
 }
