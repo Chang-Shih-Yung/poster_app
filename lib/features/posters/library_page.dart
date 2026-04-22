@@ -18,7 +18,7 @@ import '../../data/repositories/auth_repository.dart';
 import '../../data/repositories/favorite_repository.dart';
 import '../../data/repositories/follow_repository.dart';
 import '../../data/repositories/poster_repository.dart';
-import '../../data/repositories/submission_repository.dart';
+import '../../data/repositories/user_repository.dart';
 
 part 'library_density_views.dart';
 part 'library_chrome_widgets.dart';
@@ -406,9 +406,23 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
     //
     // tag pills + L/M/S row removed per user feedback (2026-04-20).
     final favCount = ref.watch(favoriteIdsProvider).asData?.value.length ?? 0;
-    final mySubsAsync = ref.watch(mySubmissionsV2Provider);
-    final subCount = mySubsAsync.asData?.value.length ?? 0;
     final user = ref.read(currentUserProvider);
+    // "投稿 N" and "已通過 N" must match what the submissions grid
+    // actually shows — approved posters where uploader_id = me. The
+    // old source (mySubmissionsV2Provider → submissions table) counts
+    // pending/rejected rows in the review queue, which has no 1:1
+    // relationship with the posters table after approval (rows may be
+    // removed or stale). Use the same count the public profile RPC
+    // exposes so all three — grid, tab label, and 已通過 stat —
+    // agree on a single source of truth.
+    final subCount = user == null
+        ? 0
+        : (ref
+                .watch(publicProfileProvider(user.id))
+                .asData
+                ?.value
+                ?.approvedPosterCount ??
+            0);
 
     final inner = Column(
         mainAxisSize: MainAxisSize.min,
