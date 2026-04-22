@@ -72,12 +72,45 @@ class _SearchPageState extends ConsumerState<SearchPage> {
     final theme = Theme.of(context);
 
     return Scaffold(
-      backgroundColor: AppTheme.bg,
+      
       body: Column(
         children: [
+          // Top bar: chevron-back + 搜尋 title. Matches the chrome on
+          // 我的投稿 / 粉絲 / 追蹤中 etc. so all push screens share one
+          // header pattern.
+          Padding(
+            padding: EdgeInsets.fromLTRB(4, topInset + 8, 16, 4),
+            child: Row(
+              children: [
+                GestureDetector(
+                  onTap: () {
+                    if (Navigator.of(context).canPop()) {
+                      Navigator.of(context).pop();
+                    } else {
+                      context.go('/');
+                    }
+                  },
+                  behavior: HitTestBehavior.opaque,
+                  child: SizedBox(
+                    width: 44,
+                    height: 44,
+                    child: Icon(LucideIcons.chevronLeft,
+                        size: 24, color: AppTheme.text),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  '搜尋',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
+              ],
+            ),
+          ),
           // Search field.
           Padding(
-            padding: EdgeInsets.fromLTRB(16, topInset + 56, 16, 12),
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
             child: Container(
               decoration: BoxDecoration(
                 color: AppTheme.surfaceRaised,

@@ -10,7 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shimmer/shimmer.dart';
 
 import '../../core/theme/app_theme.dart';
-import '../../core/widgets/glass.dart';
+import '../../core/theme/theme_mode_notifier.dart';
 import '../../data/models/app_user.dart';
 import '../../data/models/poster.dart';
 import '../../data/providers/supabase_providers.dart';
@@ -179,6 +179,9 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
   }
 
   void _onScroll() {
+    // 我的 page is treated as one integrated surface — the top
+    // chrome stays pinned and never hides on scroll (reverted the
+    // floating behaviour: it made the page feel chopped up).
     if (_scrollController.position.pixels >=
         _scrollController.position.maxScrollExtent - 300) {
       _loadMore();
@@ -342,6 +345,11 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
 
   @override
   Widget build(BuildContext context) {
+    // Watch theme mode so LibraryPage rebuilds when user toggles
+    // 白天/夜晚 — without this, the const widget stays cached in the
+    // IndexedStack and the bg lags a frame behind when you pop back
+    // from Profile.
+    ref.watch(themeModeProvider);
     final density = ref.watch(browseDensityProvider);
     final topInset = MediaQuery.paddingOf(context).top;
     final profileAsync = ref.watch(currentProfileProvider);
@@ -352,22 +360,33 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
     final displayItems = _items;
     final favIds = ref.watch(favoriteIdsProvider).asData?.value ?? {};
 
+    // 我的 page scrolls as ONE integrated surface: chrome (avatar +
+    // stats + segmented tabs) is embedded as the first child of the
+    // masonry scroll view and scrolls away with the posters. Only
+    // the L (hero) + S (list) density modes still overlay chrome on
+    // top, because their content is not a simple scroll column.
+    final chrome = _buildTopChrome(context, topInset, density, profile, user);
+    final useInlineChrome = density == BrowseDensity.medium;
+
     return Scaffold(
-      backgroundColor: AppTheme.bg,
+      
       body: Stack(
         children: [
-          // Content fills the scaffold.
           Positioned.fill(
-            child: _buildContent(density, displayItems, favIds),
+            child: _buildContent(
+              density,
+              displayItems,
+              favIds,
+              inlineHeader: useInlineChrome ? chrome : null,
+            ),
           ),
-
-          // Top chrome: always visible.
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            child: _buildTopChrome(context, topInset, density, profile, user),
-          ),
+          if (!useInlineChrome)
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: chrome,
+            ),
         ],
       ),
     );
@@ -471,19 +490,17 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
         ],
       );
 
-    // v13: a single glass strip wraps the chrome. In L mode keep the
-    // dark gradient on top so chrome reads against bright posters.
-    final glass = Glass(
-      blur: 20,
-      tint: 0.5,
-      // Full-width strip — no rounded corners on top/sides.
-      borderRadius: BorderRadius.zero,
-      // Custom border: no top/left/right edges, only bottom hairline.
-      border: Border(
-        bottom: BorderSide(color: AppTheme.line1, width: 0.5),
+    // v18: solid opaque strip (was a blurred Glass). The blur +
+    // tint read as haze over full-bleed L-mode posters and added a
+    // BackdropFilter on every scroll frame. Flat scaffold-colour
+    // with a hairline bottom is cleaner + cheaper.
+    final glass = Container(
+      decoration: BoxDecoration(
+        color: AppTheme.bg,
+        border: Border(
+          bottom: BorderSide(color: AppTheme.line1, width: 0.5),
+        ),
       ),
-      shadow: false,
-      highlight: false,
       child: inner,
     );
 
@@ -511,21 +528,31 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
   }
 
   Widget _buildContent(
-      BrowseDensity density, List<Poster> displayItems, Set<String> favIds) {
+      BrowseDensity density, List<Poster> displayItems, Set<String> favIds,
+      {Widget? inlineHeader}) {
     final topInset = MediaQuery.paddingOf(context).top;
     final bottomInset = MediaQuery.paddingOf(context).bottom;
-    final topPad = _chromeHeight(topInset);
-    final bottomPad = bottomInset + 20;
+    // When the chrome is inlined (M mode), topPad only needs a
+    // 14px gap between the segmented tabs and the first row —
+    // the chrome carries its own safe-area inset. When the chrome
+    // is pinned via Positioned (L/S modes), topPad reserves room
+    // for the entire chrome.
+    final topPad = inlineHeader != null ? 14.0 : _chromeHeight(topInset) + 14;
+    // bottomInset + (~nav pill height 58 + floating offset 20 +
+    // breathing room) so cards don't hug the nav pill.
+    final bottomPad = bottomInset + 110;
 
     if (_firstLoad && _loading) {
       return Padding(
-        padding: EdgeInsets.only(top: topPad, bottom: bottomPad),
+        padding: EdgeInsets.only(
+            top: inlineHeader != null ? topInset : topPad, bottom: bottomPad),
         child: LibraryDensitySkeleton(density: density),
       );
     }
     if (displayItems.isEmpty && !_loading) {
       return Padding(
-        padding: EdgeInsets.only(top: topPad, bottom: bottomPad),
+        padding: EdgeInsets.only(
+            top: inlineHeader != null ? topInset : topPad, bottom: bottomPad),
         child: _meTab == _MeTab.favorites
             ? const _EmptyFavoritesState()
             : const _EmptyState(),
@@ -543,6 +570,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
       favIds: favIds,
       showFav: _meTab == _MeTab.submissions,
       onToggleFavorite: _toggleFavorite,
+      header: inlineHeader,
     );
   }
 }

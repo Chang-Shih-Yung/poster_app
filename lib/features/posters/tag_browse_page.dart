@@ -23,7 +23,7 @@ class TagBrowsePage extends ConsumerWidget {
     final async = ref.watch(browseByTagProvider(slug));
 
     return Scaffold(
-      backgroundColor: AppTheme.bg,
+      
       body: async.when(
         loading: () =>
             const Center(child: CircularProgressIndicator(strokeWidth: 2)),

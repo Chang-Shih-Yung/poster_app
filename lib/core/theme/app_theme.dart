@@ -23,29 +23,116 @@ import 'package:flutter/material.dart';
 /// - Fonts: Inter (latin) + Noto Sans TC (Chinese), w400-w700, no serif.
 /// - Icons: lucide_icons_flutter (rounded line icons).
 class AppTheme {
-  // ── v13 Cool Ink palette ─────────────────────────────────────────────
-  // bg keeps the same NAME as before (so we don't have to rename 200
-  // call sites) but the VALUE shifted from #050506 → #0D1116.
-  static const bg = Color(0xFF0D1116); // ink — primary surface
-  static const ink2 = Color(0xFF10151B); // ink2 — slightly raised
-  static const ink3 = Color(0xFF161C24); // ink3 — card background
-  // Backwards-compat aliases (call sites still reference these names)
-  static const surface = ink2;
-  static const surfaceRaised = ink3;
-  static const surfaceGlass = Color(0x8C141820); // rgba(20,24,32,0.55) — glass tint
+  // ── Day / Night mode (v18 tweak) ─────────────────────────────────────
+  // Static flag, flipped by [themeModeProvider] on startup + at each
+  // toggle. MaterialApp rebuilds on mode change, so every AppTheme.*
+  // getter below resolves against the new value. Keep in lockstep with
+  // the provider — never flip this directly.
+  static bool _day = false;
+  static bool get isDay => _day;
 
-  // Text tokens (all white w/ alpha)
-  static const text = Color(0xFFFFFFFF);
-  static Color get textMute => Colors.white.withValues(alpha: 0.55);
-  static Color get textFaint => Colors.white.withValues(alpha: 0.35);
+  /// Called by `PosterApp.build` before constructing the MaterialApp.
+  /// Safe no-op if value unchanged.
+  static void setDayMode(bool v) {
+    _day = v;
+  }
 
-  // Line tokens
-  static Color get line1 => Colors.white.withValues(alpha: 0.08);
-  static Color get line2 => Colors.white.withValues(alpha: 0.14);
+  // ── Palette — resolves per mode ──────────────────────────────────────
+  // Night: kit canonical Cool Ink (ui_kits/poster/colors_and_type.css).
+  // Day:   neutral black/white (Threads / iOS-system vibe) — pure
+  //        white bg, near-black ink, hairline cool-gray tint on raised
+  //        surfaces so cards stay visible on white without looking
+  //        warm/paper-y. The earlier "warm paper" day palette
+  //        (#F5F2EC) read yellow; this swap mirrors the Threads app
+  //        the user referenced.
 
-  // Chip tokens
-  static Color get chipBg => Colors.white.withValues(alpha: 0.08);
-  static Color get chipBgStrong => Colors.white.withValues(alpha: 0.14);
+  static Color get bg =>
+      _day ? const Color(0xFFFFFFFF) : const Color(0xFF07090D);
+  // Raised surfaces — day uses near-white cool-gray tints so cards
+  // have separation from bg without tinting warm.
+  static Color get ink2 =>
+      _day ? const Color(0xFFF4F5F7) : const Color(0xFF10151B);
+  static Color get ink3 =>
+      _day ? const Color(0xFFECEDEF) : const Color(0xFF161C25);
+  static Color get surface => ink2;
+  static Color get surfaceRaised => ink3;
+  static Color get surfaceGlass => _day
+      ? const Color(0xD9FFFFFF) // rgba(255,255,255,0.85) — day glass strip
+      : const Color(0x8C0E1219); // rgba(14,18,25,0.55) — matches --glass-tint
+
+  // Text — near-black in day, pure white in night. Alpha steps on day
+  // land at 0.60 / 0.40, matching Threads / iOS Settings muted scale.
+  static Color get text =>
+      _day ? const Color(0xFF111111) : const Color(0xFFFFFFFF);
+  static Color get textMute => _day
+      ? Colors.black.withValues(alpha: 0.60)
+      : Colors.white.withValues(alpha: 0.58);
+  static Color get textFaint => _day
+      ? Colors.black.withValues(alpha: 0.40)
+      : Colors.white.withValues(alpha: 0.36);
+
+  // Line tokens — 3 tiers. Day alphas match the kit's night spec
+  // (0.06 / 0.11 / 0.18) so dividers are equally subtle on both.
+  static Color get line1 => _day
+      ? Colors.black.withValues(alpha: 0.06)
+      : Colors.white.withValues(alpha: 0.06);
+  static Color get line2 => _day
+      ? Colors.black.withValues(alpha: 0.11)
+      : Colors.white.withValues(alpha: 0.11);
+  static Color get line3 => _day
+      ? Colors.black.withValues(alpha: 0.18)
+      : Colors.white.withValues(alpha: 0.18);
+
+  // Chip tokens — slightly stronger than hair-soft so pills read as
+  // tappable surfaces, not dividers.
+  static Color get chipBg => _day
+      ? Colors.black.withValues(alpha: 0.05)
+      : Colors.white.withValues(alpha: 0.08);
+  static Color get chipBgStrong => _day
+      ? Colors.black.withValues(alpha: 0.08)
+      : Colors.white.withValues(alpha: 0.14);
+
+  // ── Accent palette — "cool" (kit default) ────────────────────────
+  // Kit: --accent-1 #8FB4FF (lighter / hover)
+  //      --accent-2 #5B8BFF (canonical accent, links / active)
+  //      --accent-bg rgba(91,139,255,0.18) (subtle accent surface)
+  // The kit ships 5 palettes (cool/warm/mono/ember/forest). Cool is
+  // the default and the only one currently in use. Accent is not
+  // overridden in day mode per the kit — same hex both ways.
+  static const Color accent1 = Color(0xFF8FB4FF);
+  static const Color accent2 = Color(0xFF5B8BFF);
+  static const Color accentBg = Color(0x2E5B8BFF); // 0.18 alpha
+
+  // ── Fancy-heart gradient ──────────────────────────────────────────
+  // Kit: --heart-1 / --heart-2 / --heart-3. Used ONLY on the favorite
+  // stamp rendered on "已收藏" poster cards in the 投稿 grid. Not for
+  // tab-bar icons, buttons, or any other affordance.
+  static const Color heart1 = Color(0xFFFFD1DC);
+  static const Color heart2 = Color(0xFFFF6B95);
+  static const Color heart3 = Color(0xFFE11D48);
+
+  // ── Scrim / modal barrier ─────────────────────────────────────────
+  // Night uses a strong black dim (content darkens). Day uses a very
+  // light black tint + a slight white wash so the underlying content
+  // *fades* rather than going charcoal — per reference, drawer
+  // opening on a white app should look like a pale haze, not a
+  // blackout curtain.
+  static Color get scrim => _day
+      ? Colors.black.withValues(alpha: 0.18)
+      : Colors.black.withValues(alpha: 0.55);
+
+  // ── Semantic state colours ────────────────────────────────────────
+  // The kit bans "green success / red error" strips, but it does
+  // allow discrete semantic accents: an unread dot, a favorite
+  // indicator, a destructive action hint, a subtle success tint
+  // (sampled from the "forest" palette) for things like an "approved"
+  // submission notification. These are the canonical hex values the
+  // app has been using inline; lifting them to tokens so a future
+  // palette rework is one file, not a grep.
+  static const Color unreadDot = Color(0xFFFF5C5C);
+  static const Color favoriteActive = Color(0xFFE53935);
+  static const Color danger = Color(0xFFE25C5C);
+  static const Color success = Color(0xFFA8E6B0);
 
   // Motion curves (matches v4 Motion spec)
   static const Curve easeStandard = Cubic(0.2, 0.8, 0.2, 1);
@@ -113,28 +200,47 @@ class AppTheme {
 
   static ThemeData dark() {
     final textTheme = _textTheme();
-    final scheme = ColorScheme.dark(
-      surface: surface,
-      onSurface: text,
-      primary: text,
-      onPrimary: Colors.black,
-      secondary: text,
-      onSecondary: Colors.black,
-      surfaceContainerLowest: bg,
-      surfaceContainerLow: surface,
-      surfaceContainer: surfaceRaised,
-      surfaceContainerHigh: surfaceRaised,
-      surfaceContainerHighest: surfaceRaised,
-      onSurfaceVariant: textMute,
-      outline: line2,
-      outlineVariant: line1,
-      error: const Color(0xFFE86464),
-      onError: Colors.white,
-    );
+    final scheme = _day
+        ? ColorScheme.light(
+            surface: surface,
+            onSurface: text,
+            primary: text,
+            onPrimary: const Color(0xFFF5F2EC),
+            secondary: text,
+            onSecondary: const Color(0xFFF5F2EC),
+            surfaceContainerLowest: bg,
+            surfaceContainerLow: surface,
+            surfaceContainer: surfaceRaised,
+            surfaceContainerHigh: surfaceRaised,
+            surfaceContainerHighest: surfaceRaised,
+            onSurfaceVariant: textMute,
+            outline: line2,
+            outlineVariant: line1,
+            error: const Color(0xFFC0392B),
+            onError: Colors.white,
+          )
+        : ColorScheme.dark(
+            surface: surface,
+            onSurface: text,
+            primary: text,
+            onPrimary: Colors.black,
+            secondary: text,
+            onSecondary: Colors.black,
+            surfaceContainerLowest: bg,
+            surfaceContainerLow: surface,
+            surfaceContainer: surfaceRaised,
+            surfaceContainerHigh: surfaceRaised,
+            surfaceContainerHighest: surfaceRaised,
+            onSurfaceVariant: textMute,
+            outline: line2,
+            outlineVariant: line1,
+            error: const Color(0xFFE86464),
+            onError: Colors.white,
+          );
     return _build(scheme, bg, textTheme);
   }
 
-  static ThemeData light() => dark(); // one mode only
+  static ThemeData light() => dark(); // single resolver, mode via [_day]
 
   static ThemeData _build(
       ColorScheme scheme, Color scaffoldBg, TextTheme textTheme) {
@@ -184,11 +290,13 @@ class AppTheme {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         showCheckmark: false,
       ),
-      // White pill CTA
+      // Inverted pill CTA — fill = ink, label = scaffold bg. Matches
+      // the kit `.btn--solid { background: var(--text); color: var(--ink); }`
+      // and stays readable in both day and night modes.
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
           backgroundColor: text,
-          foregroundColor: Colors.black,
+          foregroundColor: scaffoldBg,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(999),
           ),
@@ -258,7 +366,7 @@ class AppTheme {
         indicatorColor: Colors.transparent,
         iconTheme: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
-            return const IconThemeData(color: text, size: 24);
+            return IconThemeData(color: text, size: 24);
           }
           return IconThemeData(color: textMute, size: 24);
         }),
@@ -301,7 +409,7 @@ class AppTheme {
           borderRadius: BorderRadius.circular(14),
         ),
       ),
-      iconTheme: const IconThemeData(color: text, size: 22),
+      iconTheme: IconThemeData(color: text, size: 22),
       // iOS transitions on every platform (including web) for that slide-in feel.
       pageTransitionsTheme: const PageTransitionsTheme(
         builders: {

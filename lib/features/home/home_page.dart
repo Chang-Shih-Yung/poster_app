@@ -6,14 +6,17 @@ import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../core/theme/app_theme.dart';
-import '../../core/widgets/glass.dart';
+import '../../core/theme/theme_mode_notifier.dart';
 import '../../core/widgets/shimmer_placeholder.dart';
+import '../../core/widgets/two_bar_icon.dart';
 import '../../data/models/app_user.dart';
 import '../../data/models/home_section.dart';
 import '../../data/models/poster.dart';
 import '../../data/models/social.dart';
 import '../../data/repositories/favorite_repository.dart';
 import '../../data/repositories/social_repository.dart';
+import '../profile/follow_pill.dart';
+import '../shell/app_shell.dart';
 
 // ---------------------------------------------------------------------------
 // Section display config
@@ -63,23 +66,48 @@ class HomePage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // HomePage is a const widget sitting inside an IndexedStack — the
+    // Element reuses across theme flips, which means without an
+    // explicit watch its subtree keeps the stale AppTheme.* values
+    // until something else rebuilds it (e.g. user tapping a tab).
+    // This watch makes it rebuild the same frame the user picks
+    // 白天 / 夜晚 / 系統預設, so the 我的 tab is already the new
+    // colour when they pop back from Profile.
+    ref.watch(themeModeProvider);
     final topInset = MediaQuery.paddingOf(context).top;
     final bottomInset = MediaQuery.paddingOf(context).bottom;
     final favIds = ref.watch(favoriteIdsProvider).asData?.value ?? {};
     final sectionsAsync = ref.watch(homeSectionsV2Provider);
 
     return Scaffold(
-      backgroundColor: AppTheme.bg,
+      
       body: CustomScrollView(
         slivers: [
-          // v18 sticky top chrome — just a search icon top-right, no
-          // avatar / title / ＋ / density toggle (avatar lives on the
-          // nav bar as the 我的 tab, ＋ is center of nav bar, M/S is
-          // removed entirely).
-          SliverPersistentHeader(
-            pinned: true,
-            delegate: _HomeGlassHeader(
+          // v18 top chrome: hamburger + search icon on a glass pill.
+          // Floating behaviour (`floating: true, snap: true, pinned:
+          // false`) lets the bar slide off-screen on scroll-down and
+          // snap back on the first scroll-up tick — matches the
+          // IG / Threads / X header pattern the user asked for.
+          SliverAppBar(
+            pinned: false,
+            floating: true,
+            snap: true,
+            automaticallyImplyLeading: false,
+            backgroundColor: Colors.transparent,
+            surfaceTintColor: Colors.transparent,
+            elevation: 0,
+            scrolledUnderElevation: 0,
+            toolbarHeight: 48,
+            titleSpacing: 0,
+            // `primary: true` reserves the status-bar space; the
+            // flexibleSpace widget then paints the full (topInset +
+            // 48) area, with our bar content nudged down by topInset.
+            flexibleSpace: _HomeGlassHeaderBar(
               topInset: topInset,
+              onMenuTap: () {
+                HapticFeedback.selectionClick();
+                openHomeDrawer(context);
+              },
               onSearchTap: () {
                 HapticFeedback.selectionClick();
                 context.push('/search');
@@ -108,14 +136,41 @@ class HomePage extends ConsumerWidget {
               ),
             ],
             data: (sections) {
+              // v18: drop the hardcoded editorial tag sections (經典 /
+              // 日版 / 台版 / 手繪 / 大師 / 收藏必備) that were seeded in
+              // home_sections_config. They felt like a permanent store
+              // shelf; the home page should read as "what's moving
+              // now", driven by trending / follow / recent_approved.
+              // The DB rows stay put so admin / migrations aren't
+              // disturbed — we just filter them on the client.
+              sections = sections
+                  .where((s) => s.sourceType != 'tag_slug')
+                  .toList(growable: false);
+
               final slivers = <Widget>[];
+
+              // ── Editorial hero ────────────────────────────────────
+              // v18 prototype opens with a 16:10 full-bleed card built
+              // from the top trending item. Pulls from the first
+              // trending_favorites section; falls back to the first
+              // popular section if trending is empty.
+              final hero = _pickHero(sections);
+              if (hero != null) {
+                slivers.add(SliverToBoxAdapter(
+                  child: _HeroCard(poster: hero),
+                ));
+              }
+
+              // Skip re-rendering the poster we already promoted to the
+              // hero so it doesn't appear twice in a row.
+              final heroId = hero?.id;
               for (final s in sections) {
-                // Server already applied visibility gate. Empty items → hide.
                 if (s.isEmpty) continue;
                 slivers.add(SliverToBoxAdapter(
                   child: _DynamicSectionRow(
                     section: s,
                     favIds: favIds,
+                    skipPosterId: heroId,
                   ),
                 ));
               }
@@ -137,64 +192,72 @@ class HomePage extends ConsumerWidget {
 // v13 sticky glass top header for explore page
 // ═══════════════════════════════════════════════════════════════════════════
 
-class _HomeGlassHeader extends SliverPersistentHeaderDelegate {
-  _HomeGlassHeader({
+class _HomeGlassHeaderBar extends StatelessWidget {
+  const _HomeGlassHeaderBar({
     required this.topInset,
+    required this.onMenuTap,
     required this.onSearchTap,
   });
   final double topInset;
+  final VoidCallback onMenuTap;
   final VoidCallback onSearchTap;
 
-  static const double _bar = 48;
-
   @override
-  double get minExtent => topInset + _bar;
-  @override
-  double get maxExtent => topInset + _bar;
-
-  @override
-  Widget build(BuildContext ctx, double shrink, bool overlaps) {
-    return SizedBox.expand(
-      child: Glass(
-        blur: 20,
-        tint: 0.5,
-        borderRadius: BorderRadius.zero,
-        border: Border(bottom: BorderSide(color: AppTheme.line1, width: 0.5)),
-        shadow: false,
-        highlight: false,
-        child: Padding(
-          padding: EdgeInsets.fromLTRB(16, topInset + 4, 14, 4),
-          child: Row(
-            children: [
-              const Spacer(),
-              // No background, just a stroke icon — matches v18 spec
-              // (prototype explicitly removes backgrounds from header
-              // icons; they felt web-y).
-              Semantics(
-                label: '搜尋',
-                button: true,
-                child: GestureDetector(
-                  onTap: onSearchTap,
-                  behavior: HitTestBehavior.opaque,
-                  child: const SizedBox(
-                    width: 40,
-                    height: 40,
-                    child: Center(
-                      child: Icon(LucideIcons.search,
-                          size: 22, color: Colors.white),
-                    ),
+  Widget build(BuildContext context) {
+    return Container(
+      // v18 tweak: the top chrome is now a solid opaque strip. The
+      // glass/blur read as haze when it crossed posters; a flat
+      // scaffold-colour bar is cleaner and also lets us drop a
+      // whole BackdropFilter from the tree.
+      decoration: BoxDecoration(
+        color: AppTheme.bg,
+        border: Border(
+          bottom: BorderSide(color: AppTheme.line1, width: 0.5),
+        ),
+      ),
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(14, topInset + 4, 14, 4),
+        child: Row(
+          children: [
+            // Hamburger — opens the IG-style drawer (收藏 / 為你推薦 /
+            // 追蹤中). No bg circle per v18 spec.
+            Semantics(
+              label: '選單',
+              button: true,
+              child: GestureDetector(
+                onTap: onMenuTap,
+                behavior: HitTestBehavior.opaque,
+                child: SizedBox(
+                  width: 40,
+                  height: 40,
+                  child: Center(
+                    child: TwoBarIcon(size: 22, color: AppTheme.text),
                   ),
                 ),
               ),
-            ],
-          ),
+            ),
+            const Spacer(),
+            Semantics(
+              label: '搜尋',
+              button: true,
+              child: GestureDetector(
+                onTap: onSearchTap,
+                behavior: HitTestBehavior.opaque,
+                child: SizedBox(
+                  width: 40,
+                  height: 40,
+                  child: Center(
+                    child: Icon(LucideIcons.search,
+                        size: 22, color: AppTheme.text),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
-
-  @override
-  bool shouldRebuild(_HomeGlassHeader old) => old.topInset != topInset;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -212,24 +275,37 @@ class _DynamicSectionRow extends StatelessWidget {
   const _DynamicSectionRow({
     required this.section,
     required this.favIds,
+    this.skipPosterId,
   });
   final HomeSectionV2 section;
   final Set<String> favIds;
+
+  /// If set, skip any poster with this ID (used to avoid duplicating
+  /// the hero in the row below it).
+  final String? skipPosterId;
 
   @override
   Widget build(BuildContext context) {
     switch (section.sourceType) {
       case 'trending_favorites':
+        final items = section
+            .asTrending()
+            .where((t) => t.poster.id != skipPosterId)
+            .toList(growable: false);
         return _TrendingRow(
-          items: section.asTrending(),
+          items: items,
           favIds: favIds,
           title: section.titleZh,
           icon: _iconFromName(section.icon),
         );
       case 'active_collectors':
+        // Override DB title (活躍收藏家) to the v18 friendlier
+        // "推薦朋友" — the section now leads with a follow-toggle
+        // pill, so framing it as "people you might want to follow"
+        // reads truer than "who's been busy this week".
         return _CollectorsRow(
           items: section.asCollectors(),
-          title: section.titleZh,
+          title: '推薦朋友',
           icon: _iconFromName(section.icon),
         );
       case 'follow_feed':
@@ -244,8 +320,12 @@ class _DynamicSectionRow extends StatelessWidget {
       case 'recent_approved':
       case 'for_you':
       case 'for_you_cf':
+        final items = section
+            .asPosters()
+            .where((p) => p.id != skipPosterId)
+            .toList(growable: false);
         return _SectionRow(
-          items: section.asPosters(),
+          items: items,
           favIds: favIds,
           title: section.titleZh,
           icon: _iconFromName(section.icon),
@@ -253,6 +333,149 @@ class _DynamicSectionRow extends StatelessWidget {
       default:
         return const SizedBox.shrink();
     }
+  }
+}
+
+/// Pick a poster to feature in the editorial hero. Prefers the first
+/// trending_favorites item; falls back to the first popular / recent_approved.
+Poster? _pickHero(List<HomeSectionV2> sections) {
+  for (final s in sections) {
+    if (s.sourceType == 'trending_favorites' && !s.isEmpty) {
+      final t = s.asTrending();
+      if (t.isNotEmpty) return t.first.poster;
+    }
+  }
+  for (final s in sections) {
+    if ((s.sourceType == 'popular' ||
+            s.sourceType == 'recent_approved' ||
+            s.sourceType == 'tag_slug') &&
+        !s.isEmpty) {
+      final p = s.asPosters();
+      if (p.isNotEmpty) return p.first;
+    }
+  }
+  return null;
+}
+
+// ─── Editorial hero card ────────────────────────────────────────────────────
+
+class _HeroCard extends StatelessWidget {
+  const _HeroCard({required this.poster});
+  final Poster poster;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 6, 16, 4),
+      child: GestureDetector(
+        onTap: () => context.push('/poster/${poster.id}'),
+        child: AspectRatio(
+          aspectRatio: 16 / 10,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(18),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                CachedNetworkImage(
+                  imageUrl: poster.thumbnailUrl ?? poster.posterUrl,
+                  fit: BoxFit.cover,
+                  placeholder: (_, _) => const ShimmerPlaceholder(),
+                  errorWidget: (_, _, _) =>
+                      ColoredBox(color: AppTheme.surfaceRaised),
+                ),
+                const DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Color(0x1A070911),
+                        Color(0x33070911),
+                        Color(0xF2070911),
+                      ],
+                      stops: [0.0, 0.45, 1.0],
+                    ),
+                  ),
+                ),
+                // 本週之選 pill
+                Positioned(
+                  top: 14,
+                  left: 14,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.14),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: const Text(
+                      '本週之選',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        letterSpacing: 1.5,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+                // Title / meta
+                Positioned(
+                  left: 18,
+                  right: 18,
+                  bottom: 16,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (poster.tags.isNotEmpty)
+                        Text(
+                          poster.tags.first.toUpperCase(),
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: Colors.white.withValues(alpha: 0.7),
+                            letterSpacing: 2,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      const SizedBox(height: 4),
+                      Text(
+                        poster.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.headlineSmall?.copyWith(
+                          // Kit `.display` spec (ui_kits/poster): 32 / w700
+                          // / ls -0.8 — was 26/ls -0.6 which read softer
+                          // than the prototype. Bumped to match. maxLines
+                          // was 1 which clipped long CJK titles.
+                          color: Colors.white,
+                          fontSize: 32,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: -0.8,
+                          height: 1.02,
+                        ),
+                      ),
+                      if (poster.year != null || poster.director != null) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          [
+                            if (poster.year != null) '${poster.year}',
+                            if (poster.director != null) poster.director!,
+                          ].join(' · '),
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: Colors.white.withValues(alpha: 0.7),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -400,7 +623,7 @@ class _FeedCard extends StatelessWidget {
                       width: 140,
                       placeholder: (_, _) => const ShimmerPlaceholder(),
                       errorWidget: (_, _, _) =>
-                          const ColoredBox(color: AppTheme.surfaceRaised),
+                          ColoredBox(color: AppTheme.surfaceRaised),
                     ),
                     // Uploader avatar overlay (bottom-right, 18px). Tappable
                     // to jump to their profile. Only shown when RPC returned
@@ -458,7 +681,7 @@ class _FeedCard extends StatelessWidget {
                       LucideIcons.heart,
                       size: 14,
                       color: isFav
-                          ? const Color(0xFFE53935)
+                          ? AppTheme.favoriteActive
                           : AppTheme.textFaint,
                     ),
                   ),
@@ -626,15 +849,16 @@ class _TrendingRow extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           SizedBox(
-            height: 240,
+            // 90w poster × 2:3 = 135h, + label below
+            height: 150,
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 20),
               itemCount: items.length,
-              separatorBuilder: (_, _) => const SizedBox(width: 12),
-              itemBuilder: (_, i) => _TrendingCard(
+              separatorBuilder: (_, _) => const SizedBox(width: 14),
+              itemBuilder: (_, i) => _RankedCard(
+                rank: i + 1,
                 item: items[i],
-                isFav: favIds.contains(items[i].poster.id),
               ),
             ),
           ),
@@ -644,10 +868,13 @@ class _TrendingRow extends StatelessWidget {
   }
 }
 
-class _TrendingCard extends StatelessWidget {
-  const _TrendingCard({required this.item, required this.isFav});
+/// v18 prototype "RankedCard" — 260-wide horizontal row combining a
+/// giant hollow rank numeral with a compact 90w / 2:3 poster and three
+/// lines of meta (title · year · director + ♥ / views).
+class _RankedCard extends StatelessWidget {
+  const _RankedCard({required this.rank, required this.item});
+  final int rank;
   final TrendingPoster item;
-  final bool isFav;
 
   @override
   Widget build(BuildContext context) {
@@ -656,71 +883,80 @@ class _TrendingCard extends StatelessWidget {
     return GestureDetector(
       onTap: () => context.push('/poster/${p.id}'),
       child: SizedBox(
-        width: 140,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        width: 250,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Expanded(
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(10),
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    CachedNetworkImage(
-                      imageUrl: p.thumbnailUrl ?? p.posterUrl,
-                      fit: BoxFit.cover,
-                      placeholder: (_, _) => const ShimmerPlaceholder(),
-                      errorWidget: (_, _, _) =>
-                          const ColoredBox(color: AppTheme.surfaceRaised),
-                    ),
-                    // Bottom-right: collector avatar stack + "+N 人收藏"
-                    Positioned(
-                      right: 6,
-                      bottom: 6,
-                      child: _AvatarStack(
-                        users: item.collectors,
-                        extraCount: item.recentFavCount - item.collectors.length,
-                      ),
-                    ),
-                  ],
+            // Hollow rank numeral — paint-stroked text.
+            SizedBox(
+              width: 52,
+              child: Text(
+                rank.toString().padLeft(2, '0'),
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 44,
+                  height: 0.9,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -1,
+                  foreground: Paint()
+                    ..style = PaintingStyle.stroke
+                    ..strokeWidth = 1.2
+                    ..color = AppTheme.line2,
                 ),
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Row(
+            const SizedBox(width: 12),
+            // Poster thumb.
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: SizedBox(
+                width: 86,
+                height: 129,
+                child: CachedNetworkImage(
+                  imageUrl: p.thumbnailUrl ?? p.posterUrl,
+                  fit: BoxFit.cover,
+                  placeholder: (_, _) => const ShimmerPlaceholder(),
+                  errorWidget: (_, _, _) =>
+                      ColoredBox(color: AppTheme.surfaceRaised),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            // Meta column.
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(p.title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.labelMedium?.copyWith(
-                              fontWeight: FontWeight.w600,
-                              color: AppTheme.text,
-                            )),
-                        const SizedBox(height: 1),
-                        Text(
-                          '本週 ${item.recentFavCount} 次收藏',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            color: AppTheme.textFaint,
-                          ),
-                        ),
-                      ],
+                  Text(
+                    p.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: -0.2,
                     ),
                   ),
-                  Padding(
-                    padding: const EdgeInsets.only(left: 4, top: 1),
-                    child: Icon(
-                      LucideIcons.heart,
-                      size: 14,
-                      color:
-                          isFav ? const Color(0xFFE53935) : AppTheme.textFaint,
+                  const SizedBox(height: 2),
+                  Text(
+                    [
+                      if (p.year != null) '${p.year}',
+                      if (p.director != null) p.director!,
+                    ].join(' · '),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: AppTheme.textMute,
+                      letterSpacing: 0,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    '♥ ${item.recentFavCount}',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: AppTheme.textFaint,
+                      letterSpacing: 0,
                     ),
                   ),
                 ],
@@ -729,98 +965,6 @@ class _TrendingCard extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
-}
-
-/// Small overlapping-avatar stack with a "+N" suffix when the total fav
-/// count exceeds the 3 preview avatars. 20px avatars, -8px overlap.
-class _AvatarStack extends StatelessWidget {
-  const _AvatarStack({required this.users, this.extraCount = 0});
-  final List<MiniUser> users;
-  final int extraCount;
-
-  @override
-  Widget build(BuildContext context) {
-    if (users.isEmpty) return const SizedBox.shrink();
-    const size = 20.0;
-    const overlap = 8.0;
-    final totalWidth = (users.length - 1) * (size - overlap) + size;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-      decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.55),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          SizedBox(
-            width: totalWidth,
-            height: size,
-            child: Stack(
-              children: [
-                for (var i = 0; i < users.length; i++)
-                  Positioned(
-                    left: i * (size - overlap),
-                    child: _MiniAvatar(user: users[i], size: size),
-                  ),
-              ],
-            ),
-          ),
-          if (extraCount > 0) ...[
-            const SizedBox(width: 5),
-            Text('+$extraCount',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w600,
-                )),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _MiniAvatar extends StatelessWidget {
-  const _MiniAvatar({required this.user, required this.size});
-  final MiniUser user;
-  final double size;
-
-  @override
-  Widget build(BuildContext context) {
-    final letter =
-        user.name.isNotEmpty ? user.name.characters.first.toUpperCase() : '?';
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        border: Border.all(color: Colors.black, width: 1.5),
-      ),
-      child: ClipOval(
-        child: user.avatarUrl != null && user.avatarUrl!.isNotEmpty
-            ? CachedNetworkImage(
-                imageUrl: user.avatarUrl!,
-                fit: BoxFit.cover,
-                errorWidget: (_, _, _) => _fallback(context, letter),
-              )
-            : _fallback(context, letter),
-      ),
-    );
-  }
-
-  Widget _fallback(BuildContext context, String letter) {
-    return Container(
-      color: AppTheme.chipBgStrong,
-      alignment: Alignment.center,
-      child: Text(letter,
-          style: const TextStyle(
-            fontSize: 9,
-            fontWeight: FontWeight.w700,
-            color: Colors.white,
-          )),
     );
   }
 }
@@ -861,12 +1005,14 @@ class _CollectorsRow extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           SizedBox(
-            height: 200,
+            // Taller row: avatar 68 + name + follow pill (compact) +
+            // a bit of breathing room.
+            height: 150,
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 20),
               itemCount: items.length,
-              separatorBuilder: (_, _) => const SizedBox(width: 12),
+              separatorBuilder: (_, _) => const SizedBox(width: 14),
               itemBuilder: (_, i) => _CollectorCard(collector: items[i]),
             ),
           ),
@@ -876,6 +1022,9 @@ class _CollectorsRow extends StatelessWidget {
   }
 }
 
+/// v18 prototype collector card — compact circular avatar with a
+/// conic-gradient ring, name + activity count below. Matches the
+/// IG "story ring" pattern.
 class _CollectorCard extends StatelessWidget {
   const _CollectorCard({required this.collector});
   final CollectorPreview collector;
@@ -887,64 +1036,65 @@ class _CollectorCard extends StatelessWidget {
     final letter = name.characters.first.toUpperCase();
     return GestureDetector(
       onTap: () => context.push('/user/${collector.userId}'),
-      child: Container(
-        width: 150,
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: AppTheme.surfaceRaised,
-          border: Border.all(color: AppTheme.line1),
-          borderRadius: BorderRadius.circular(14),
-        ),
+      child: SizedBox(
+        width: 88,
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            // Avatar.
-            ClipOval(
-              child: SizedBox(
-                width: 48,
-                height: 48,
-                child: collector.avatarUrl != null &&
-                        collector.avatarUrl!.isNotEmpty
-                    ? CachedNetworkImage(
-                        imageUrl: collector.avatarUrl!,
-                        fit: BoxFit.cover,
-                        errorWidget: (_, _, _) =>
-                            _avatarFallback(context, letter),
-                      )
-                    : _avatarFallback(context, letter),
+            // Conic-gradient ring around the avatar. 2px band, 68px total.
+            // Uses theme-aware tokens so day mode renders a visible ring
+            // (earlier pure-white ring disappeared on the beige scaffold).
+            Container(
+              width: 68,
+              height: 68,
+              padding: const EdgeInsets.all(2),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: SweepGradient(
+                  colors: [
+                    AppTheme.text,
+                    AppTheme.text.withValues(alpha: 0.6),
+                    AppTheme.line2,
+                    AppTheme.text,
+                  ],
+                  stops: const [0.0, 0.5, 0.8, 1.0],
+                ),
+              ),
+              child: Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: AppTheme.bg,
+                ),
+                padding: const EdgeInsets.all(2),
+                child: ClipOval(
+                  child: (collector.avatarUrl != null &&
+                          collector.avatarUrl!.isNotEmpty)
+                      ? CachedNetworkImage(
+                          imageUrl: collector.avatarUrl!,
+                          fit: BoxFit.cover,
+                          errorWidget: (_, _, _) =>
+                              _avatarFallback(context, letter),
+                        )
+                      : _avatarFallback(context, letter),
+                ),
               ),
             ),
             const SizedBox(height: 8),
-            Text(name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.labelMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: AppTheme.text,
-                )),
-            const SizedBox(height: 2),
             Text(
-              '${collector.activityCount} 次活動',
-              style: theme.textTheme.labelSmall
-                  ?.copyWith(color: AppTheme.textFaint),
-            ),
-            const SizedBox(height: 10),
-            // Mini thumb row — up to 3 recently-favorited poster thumbnails.
-            SizedBox(
-              height: 48,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  for (var i = 0; i < 3; i++) ...[
-                    if (i < collector.recentPosters.length)
-                      _MiniThumb(url: collector.recentPosters[i].displayUrl)
-                    else
-                      _MiniThumbEmpty(),
-                    if (i < 2) const SizedBox(width: 4),
-                  ],
-                ],
+              name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.labelMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+                fontSize: 11,
+                letterSpacing: 0,
               ),
             ),
+            const SizedBox(height: 6),
+            // v18: activity count replaced by a direct follow toggle.
+            // FollowPill handles "me / self-follow / already following"
+            // internally; hides when viewing yourself.
+            FollowPill(targetUserId: collector.userId, compact: true),
           ],
         ),
       ),
@@ -960,43 +1110,6 @@ class _CollectorCard extends StatelessWidget {
               .textTheme
               .titleSmall
               ?.copyWith(fontWeight: FontWeight.w600)),
-    );
-  }
-}
-
-class _MiniThumb extends StatelessWidget {
-  const _MiniThumb({required this.url});
-  final String url;
-  @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(4),
-      child: SizedBox(
-        width: 32,
-        height: 48,
-        child: url.isEmpty
-            ? Container(color: AppTheme.chipBg)
-            : CachedNetworkImage(
-                imageUrl: url,
-                fit: BoxFit.cover,
-                placeholder: (_, _) => const ShimmerPlaceholder(),
-                errorWidget: (_, _, _) => Container(color: AppTheme.chipBg),
-              ),
-      ),
-    );
-  }
-}
-
-class _MiniThumbEmpty extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 32,
-      height: 48,
-      decoration: BoxDecoration(
-        color: AppTheme.chipBg,
-        borderRadius: BorderRadius.circular(4),
-      ),
     );
   }
 }

@@ -79,6 +79,20 @@ class SocialRepository {
         .map((r) => Poster.fromRow(r as Map<String, dynamic>))
         .toList(growable: false);
   }
+
+  /// `for_you_feed_v1(limit)` — tag-affinity personalised feed, real-time,
+  /// excludes posters the viewer has already favorited. Same RPC the
+  /// search page's 為你推薦 landing grid uses, so the drawer's 為你推薦
+  /// page ends up with identical content for a given viewer at a given
+  /// moment.
+  Future<List<Poster>> forYouFeedV1({int limit = 60}) async {
+    final result =
+        await _client.rpc('for_you_feed_v1', params: {'p_limit': limit});
+    final rows = (result as List?) ?? const [];
+    return rows
+        .map((r) => Poster.fromRow(r as Map<String, dynamic>))
+        .toList(growable: false);
+  }
 }
 
 final socialRepositoryProvider = Provider<SocialRepository>((ref) {

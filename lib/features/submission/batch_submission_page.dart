@@ -345,12 +345,15 @@ class _BatchSubmissionPageState extends ConsumerState<BatchSubmissionPage> {
                 child: Padding(
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   child: _submitting
-                      ? const SizedBox(
+                      ? SizedBox(
                           width: 20,
                           height: 20,
+                          // Spinner matches the FilledButton foreground
+                          // (AppTheme.bg) so it's visible against the
+                          // inverted-pill fill in both day and night.
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            color: Colors.white,
+                            color: AppTheme.bg,
                           ),
                         )
                       : Text('送出 ${_cards.length} 張'),

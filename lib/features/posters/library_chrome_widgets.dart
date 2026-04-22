@@ -325,8 +325,11 @@ class _MeProfileRow extends StatelessWidget {
   }
 }
 
-/// Segmented sub-tab — text + 2px white underline when active. Used
-/// for 收藏 / 投稿 split below the filter chrome.
+/// Segmented sub-tab — text + 2px underline (ink colour) when active.
+/// Used for 收藏 / 投稿 split below the filter chrome. Uses
+/// `AppTheme.text` so the underline flips to near-black in day mode —
+/// previously hardcoded to `Colors.white` which disappeared on the
+/// new neutral-white day scaffold.
 class _SegTab extends StatelessWidget {
   const _SegTab({
     required this.label,
@@ -346,7 +349,7 @@ class _SegTab extends StatelessWidget {
         decoration: BoxDecoration(
           border: Border(
             bottom: BorderSide(
-              color: active ? Colors.white : Colors.transparent,
+              color: active ? AppTheme.text : Colors.transparent,
               width: 2,
             ),
           ),
@@ -356,7 +359,7 @@ class _SegTab extends StatelessWidget {
           label,
           style: Theme.of(context).textTheme.labelLarge?.copyWith(
                 fontSize: 13,
-                color: active ? Colors.white : AppTheme.textMute,
+                color: active ? AppTheme.text : AppTheme.textMute,
                 fontWeight: active ? FontWeight.w600 : FontWeight.w500,
                 letterSpacing: 0,
               ),
@@ -500,11 +503,23 @@ class _MeStatsRow extends ConsumerWidget {
     }
     return Row(
       children: [
-        _Stat(n: followers, label: '追蹤者'),
+        _Stat(
+          n: followers,
+          label: '粉絲',
+          onTap: () => context.push('/home/collection/followers'),
+        ),
         _StatDivider(),
-        _Stat(n: following, label: '追蹤中'),
+        _Stat(
+          n: following,
+          label: '追蹤中',
+          onTap: () => context.push('/home/collection/following'),
+        ),
         _StatDivider(),
-        _Stat(n: subCount, label: '已通過'),
+        _Stat(
+          n: subCount,
+          label: '已通過',
+          onTap: () => context.push('/me/submissions'),
+        ),
         const Spacer(),
         _EditPill(),
       ],
@@ -513,13 +528,14 @@ class _MeStatsRow extends ConsumerWidget {
 }
 
 class _Stat extends StatelessWidget {
-  const _Stat({required this.n, required this.label});
+  const _Stat({required this.n, required this.label, this.onTap});
   final int? n;
   final String label;
+  final VoidCallback? onTap;
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Column(
+    final inner = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisAlignment: MainAxisAlignment.center,
       mainAxisSize: MainAxisSize.min,
@@ -543,6 +559,15 @@ class _Stat extends StatelessWidget {
           ),
         ),
       ],
+    );
+    if (onTap == null) return inner;
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.selectionClick();
+        onTap!();
+      },
+      behavior: HitTestBehavior.opaque,
+      child: inner,
     );
   }
 }

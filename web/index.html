@@ -20,16 +20,31 @@
   <link rel="manifest" href="manifest.json">
 
   <!--
-    First-paint styling (EPIC 12). Matches AppTheme.bg (#050506) so the
-    browser doesn't flash white while Flutter + CanvasKit + fonts are
-    booting. Splash element is removed once Flutter's glass-pane appears.
+    First-paint styling (v18). Matches the canonical `--ink` / day
+    `--ink` from ui_kits/poster/colors_and_type.css, with a
+    prefers-color-scheme guard so users on a light-mode OS don't see
+    a dark flash before Flutter renders the white day scaffold.
   -->
   <style>
+    :root {
+      --splash-bg: #07090D;
+      --splash-fg: #FFFFFF;
+      --splash-hair: rgba(255, 255, 255, 0.15);
+      --splash-hair-hi: rgba(255, 255, 255, 0.55);
+    }
+    @media (prefers-color-scheme: light) {
+      :root {
+        --splash-bg: #FFFFFF;
+        --splash-fg: #111111;
+        --splash-hair: rgba(0, 0, 0, 0.12);
+        --splash-hair-hi: rgba(0, 0, 0, 0.55);
+      }
+    }
     html, body {
       margin: 0;
       padding: 0;
       height: 100%;
-      background-color: #050506;
+      background-color: var(--splash-bg);
       overflow: hidden;
     }
     #splash {
@@ -39,8 +54,8 @@
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      background-color: #050506;
-      color: #ffffff;
+      background-color: var(--splash-bg);
+      color: var(--splash-fg);
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI",
                    "PingFang TC", "Microsoft JhengHei", sans-serif;
       z-index: 9999;
@@ -63,8 +78,8 @@
     #splash .spinner {
       width: 20px;
       height: 20px;
-      border: 2px solid rgba(255, 255, 255, 0.15);
-      border-top-color: rgba(255, 255, 255, 0.55);
+      border: 2px solid var(--splash-hair);
+      border-top-color: var(--splash-hair-hi);
       border-radius: 50%;
       animation: spin 1s linear infinite;
     }

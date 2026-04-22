@@ -1,6 +1,9 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../core/constants/enums.dart';
 import '../../core/constants/region_labels.dart';
@@ -14,25 +17,103 @@ class MySubmissionsPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(mySubmissionsV2Provider);
-    return Scaffold(
-      appBar: AppBar(title: const Text('我的投稿')),
-      body: async.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('載入失敗：$e')),
-        data: (items) {
-          if (items.isEmpty) {
-            return const Center(child: Text('你還沒投稿過海報。'));
-          }
-          return RefreshIndicator(
-            onRefresh: () async => ref.invalidate(mySubmissionsV2Provider),
-            child: ListView.separated(
-              padding: const EdgeInsets.all(12),
-              itemCount: items.length,
-              separatorBuilder: (_, _) => const SizedBox(height: 12),
-              itemBuilder: (_, i) => _SubmissionTile(submission: items[i]),
+    final topInset = MediaQuery.paddingOf(context).top;
+    // No AppBar — the enclosing `_BackablePage` already provides a
+    // floating chevron-left. A second Material AppBar was surfacing a
+    // duplicate back button. Render a minimal inline title row instead.
+    return Padding(
+      padding: EdgeInsets.only(top: topInset + 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(72, 6, 20, 12),
+            child: Text(
+              '我的投稿',
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
             ),
-          );
-        },
+          ),
+          Expanded(
+            child: async.when(
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (e, _) => Center(child: Text('載入失敗：$e')),
+              data: (items) {
+                if (items.isEmpty) {
+                  return Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(32),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(LucideIcons.upload,
+                              size: 36, color: AppTheme.textFaint),
+                          const SizedBox(height: 12),
+                          Text(
+                            '還沒投稿過',
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleMedium
+                                ?.copyWith(fontWeight: FontWeight.w600),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            '把你收藏中最特別的那一張寄出，讓更多人看到。',
+                            textAlign: TextAlign.center,
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodySmall
+                                ?.copyWith(color: AppTheme.textMute),
+                          ),
+                          const SizedBox(height: 18),
+                          Material(
+                            color: AppTheme.text,
+                            borderRadius: BorderRadius.circular(999),
+                            child: InkWell(
+                              onTap: () {
+                                HapticFeedback.selectionClick();
+                                context.push('/upload');
+                              },
+                              borderRadius: BorderRadius.circular(999),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 22, vertical: 10),
+                                child: Text(
+                                  '寄出第一張',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .labelLarge
+                                      ?.copyWith(
+                                        color: AppTheme.bg,
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 13,
+                                        letterSpacing: 0,
+                                      ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }
+                return RefreshIndicator(
+                  onRefresh: () async =>
+                      ref.invalidate(mySubmissionsV2Provider),
+                  child: ListView.separated(
+                    padding: const EdgeInsets.all(12),
+                    itemCount: items.length,
+                    separatorBuilder: (_, _) => const SizedBox(height: 12),
+                    itemBuilder: (_, i) =>
+                        _SubmissionTile(submission: items[i]),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -31,7 +31,7 @@ class PublicProfilePage extends ConsumerWidget {
     final postersAsync = ref.watch(_postersByUploaderProvider(userId));
 
     return Scaffold(
-      backgroundColor: AppTheme.bg,
+      
       body: profileAsync.when(
         loading: () =>
             const Center(child: CircularProgressIndicator(strokeWidth: 2)),
@@ -277,7 +277,7 @@ class _StatsRow extends StatelessWidget {
 
     return Row(
       children: [
-        stat('${stats?.followerCount ?? "—"}', '追蹤者'),
+        stat('${stats?.followerCount ?? "—"}', '粉絲'),
         const SizedBox(width: 24),
         stat('${stats?.followingCount ?? "—"}', '追蹤中'),
         const SizedBox(width: 24),

@@ -62,7 +62,7 @@ class PosterDetailPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(_posterByIdProvider(posterId));
     return Scaffold(
-      backgroundColor: AppTheme.bg,
+      
       extendBodyBehindAppBar: true,
       body: async.when(
         loading: () => const _LoadingView(),
@@ -248,7 +248,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                                     ? Icons.favorite
                                     : LucideIcons.heart,
                                 color: isFav
-                                    ? const Color(0xFFFF5C5C)
+                                    ? AppTheme.favoriteActive
                                     : Colors.white,
                                 onTap: favIdsReady
                                     ? toggleFav
@@ -326,7 +326,7 @@ class _FujiDrawerState extends State<_FujiDrawer> {
       curve: AppTheme.easeStandard,
       alignment: Alignment.topCenter,
       child: Glass(
-        blur: 24,
+        blur: 14,
         tint: 0.65,
         borderRadius: BorderRadius.circular(24),
         padding: const EdgeInsets.fromLTRB(20, 6, 20, 18),
@@ -730,9 +730,9 @@ class _RelatedCard extends StatelessWidget {
                   imageUrl: poster.thumbnailUrl ?? poster.posterUrl,
                   fit: BoxFit.cover,
                   placeholder: (_, _) =>
-                      const ColoredBox(color: AppTheme.surfaceRaised),
+                      ColoredBox(color: AppTheme.surfaceRaised),
                   errorWidget: (_, _, _) =>
-                      const ColoredBox(color: AppTheme.surfaceRaised),
+                      ColoredBox(color: AppTheme.surfaceRaised),
                 ),
                 // Bottom gradient for title.
                 const Positioned(

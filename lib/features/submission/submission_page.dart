@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -79,6 +80,13 @@ class _SubmissionPageState extends ConsumerState<SubmissionPage> {
 
   bool _submitting = false;
 
+  // v18: previously every keystroke in the title field called setState
+  // on the entire submission form (~a dozen widgets incl. image preview
+  // + tag picker) just so the 送審 pill could toggle its enabled state.
+  // That stuttered on older Android when typing long CJK titles. Now
+  // the StickyHeader wraps the pill in an AnimatedBuilder listening to
+  // this controller — only the pill rebuilds on keystroke.
+
   Uint8List? get _primaryImageBytes =>
       _images.isEmpty ? null : _images[_primaryIdx.clamp(0, _images.length - 1)].bytes;
   CompressedImages? get _primaryCompressed =>
@@ -111,9 +119,60 @@ class _SubmissionPageState extends ConsumerState<SubmissionPage> {
   /// compressed on-device and appended to [_images]. Progress and
   /// per-file skip reasons are surfaced in the UI (overlay during,
   /// dialog at end).
+  ///
+  /// Presents a native iOS action sheet: 拍照 / 從相簿選擇 / 取消.
+  /// Camera path uses ImagePicker.pickImage(source: camera) so we get
+  /// the device capture flow instead of the browser file chooser.
+  /// Ask the user how to source the image(s). Returns null if cancelled.
+  /// iOS action sheet style; Web falls back to gallery since there's no
+  /// meaningful camera tier.
+  Future<ImageSource?> _pickSource() async {
+    // Cupertino widgets inherit SF Pro by default; CJK chars render
+    // as tofu if our bundled NotoSansTC isn't explicitly re-applied
+    // (action sheets bypass MaterialApp's theme fallback). Use a
+    // DefaultTextStyle wrapper around the sheet so every label
+    // resolves to NotoSansTC.
+    const font = TextStyle(fontFamily: 'NotoSansTC');
+    return await showCupertinoModalPopup<ImageSource>(
+      context: context,
+      builder: (ctx) => DefaultTextStyle.merge(
+        style: font,
+        child: CupertinoActionSheet(
+          title: const Text('加入海報', style: font),
+          actions: [
+            CupertinoActionSheetAction(
+              onPressed: () => Navigator.pop(ctx, ImageSource.camera),
+              child: const Text('拍照', style: font),
+            ),
+            CupertinoActionSheetAction(
+              onPressed: () => Navigator.pop(ctx, ImageSource.gallery),
+              child: const Text('從相簿選擇', style: font),
+            ),
+          ],
+          cancelButton: CupertinoActionSheetAction(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('取消', style: font),
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _addImages() async {
     final picker = ImagePicker();
-    final files = await picker.pickMultiImage();
+    final source = await _pickSource();
+    if (source == null) return;
+
+    List<XFile> files;
+    if (source == ImageSource.camera) {
+      final shot = await picker.pickImage(
+        source: ImageSource.camera,
+        preferredCameraDevice: CameraDevice.rear,
+      );
+      files = shot == null ? const <XFile>[] : [shot];
+    } else {
+      files = await picker.pickMultiImage();
+    }
     if (files.isEmpty) return;
 
     setState(() {
@@ -488,7 +547,7 @@ class _SubmissionPageState extends ConsumerState<SubmissionPage> {
     final signedIn = ref.watch(currentUserProvider) != null;
     if (!signedIn) {
       return Scaffold(
-        backgroundColor: AppTheme.bg,
+        
         body: Center(
           child: Text('請先登入才能上傳',
               style: TextStyle(color: AppTheme.textMute)),
@@ -500,16 +559,28 @@ class _SubmissionPageState extends ConsumerState<SubmissionPage> {
     final theme = Theme.of(context);
 
     return Scaffold(
-      backgroundColor: AppTheme.bg,
+      
       body: Stack(
         children: [
           _buildScrollableForm(topInset, theme),
-          // v13 sticky header — back arrow + 上傳海報 title + 送出 pill.
-          StickyHeader(
-            title: '上傳海報',
-            actionLabel: '送出',
-            actionLoading: _submitting || _compressing,
-            onAction: (_submitting || _compressing) ? null : _showPreview,
+          // v18 sticky header — X (no bg circle) + 上傳海報 + 送審 pill.
+          // The pill lights up only when a title + at least one image
+          // are present, matching the prototype's canSubmit gate.
+          // AnimatedBuilder listens to the title controller so only
+          // the header (not the whole form tree) rebuilds per keystroke.
+          AnimatedBuilder(
+            animation: _titleZhController,
+            builder: (_, _) => StickyHeader(
+              title: '上傳海報',
+              actionLabel: '送審',
+              backText: '取消',
+              actionLoading: _submitting || _compressing,
+              actionEnabled: !_submitting &&
+                  !_compressing &&
+                  _images.isNotEmpty &&
+                  _titleZhController.text.trim().isNotEmpty,
+              onAction: (_submitting || _compressing) ? null : _showPreview,
+            ),
           ),
         ],
       ),
@@ -584,87 +655,59 @@ class _SubmissionPageState extends ConsumerState<SubmissionPage> {
             ),
             const SizedBox(height: 16),
 
-            // ── Required: 作品中文名（auto-suggest） ──
-            _WorkTitleAutocomplete(
-              controller: _titleZhController,
-              workRepo: ref.read(workRepositoryProvider),
-            ),
-            const SizedBox(height: 12),
-
-            // ── Basic row: 英文名 + 年份 ──
-            Row(
-              children: [
-                Expanded(
-                  flex: 2,
-                  child: _DarkField(
-                    controller: _titleEnController,
-                    label: '英文名',
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _DarkField(
-                    controller: _yearController,
-                    label: '上映年份',
-                    keyboardType: TextInputType.number,
-                    validator: (v) {
-                      if (v == null || v.trim().isEmpty) return null;
-                      final n = int.tryParse(v.trim());
-                      if (n == null || n < 1900 || n > 2100) return '格式錯誤';
-                      return null;
-                    },
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-
-            // ── Poster name ──
-            _DarkField(
-              controller: _posterNameController,
-              label: '海報名稱',
-              hint: '如：正式版、角色版A…',
-            ),
-            const SizedBox(height: 12),
-
-            // ── Region dropdown ──
-            _DarkDropdown<Region>(
-              label: '地區',
-              value: _region,
-              items: Region.values,
-              labelOf: (r) => regionLabels[r] ?? r.value,
-              onChanged: (v) {
-                if (v != null) setState(() => _region = v);
-              },
-            ),
-            const SizedBox(height: 12),
-
-            // ── Release type + Size ──
-            Row(
-              children: [
-                Expanded(
-                  child: _DarkDropdown<ReleaseType>(
-                    label: '發行類型',
-                    value: _releaseType,
-                    items: ReleaseType.values,
-                    labelOf: (r) => releaseTypeLabels[r] ?? r.value,
-                    onChanged: (v) => setState(() => _releaseType = v),
-                    allowNull: true,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _DarkDropdown<SizeType>(
-                    label: '尺寸',
-                    value: _sizeType,
-                    items: SizeType.values,
-                    labelOf: (s) => sizeTypeLabels[s] ?? s.value,
-                    onChanged: (v) => setState(() => _sizeType = v),
-                    allowNull: true,
-                  ),
-                ),
-              ],
-            ),
+            // ── Basic info (all required-ish fields merged into a
+            //    single grouped list so the form reads as one block).
+            _FormGroup(children: [
+              _WorkTitleAutocomplete(
+                controller: _titleZhController,
+                workRepo: ref.read(workRepositoryProvider),
+              ),
+              _DarkField(
+                controller: _titleEnController,
+                label: '英文名',
+              ),
+              _DarkField(
+                controller: _yearController,
+                label: '上映年份',
+                keyboardType: TextInputType.number,
+                validator: (v) {
+                  if (v == null || v.trim().isEmpty) return null;
+                  final n = int.tryParse(v.trim());
+                  if (n == null || n < 1900 || n > 2100) return '格式錯誤';
+                  return null;
+                },
+              ),
+              _DarkField(
+                controller: _posterNameController,
+                label: '海報名稱',
+                hint: '如：正式版、角色版A…',
+              ),
+              _DarkDropdown<Region>(
+                label: '地區',
+                value: _region,
+                items: Region.values,
+                labelOf: (r) => regionLabels[r] ?? r.value,
+                onChanged: (v) {
+                  if (v != null) setState(() => _region = v);
+                },
+              ),
+              _DarkDropdown<ReleaseType>(
+                label: '發行類型',
+                value: _releaseType,
+                items: ReleaseType.values,
+                labelOf: (r) => releaseTypeLabels[r] ?? r.value,
+                onChanged: (v) => setState(() => _releaseType = v),
+                allowNull: true,
+              ),
+              _DarkDropdown<SizeType>(
+                label: '尺寸',
+                value: _sizeType,
+                items: SizeType.values,
+                labelOf: (s) => sizeTypeLabels[s] ?? s.value,
+                onChanged: (v) => setState(() => _sizeType = v),
+                allowNull: true,
+              ),
+            ]),
 
             const SizedBox(height: 20),
 
@@ -695,130 +738,96 @@ class _SubmissionPageState extends ConsumerState<SubmissionPage> {
             if (_showAdvanced) ...[
               const SizedBox(height: 14),
 
-              // ── Channel section ──
+              // ── Tag picker (EPIC 18-9): faceted taxonomy ──
+              // Moved inside 進階 per v18 spec — 進階 is now the single
+              // home for all optional / structured metadata. The picker
+              // itself was simplified (no per-category search input)
+              // so the chip rows feel like direct tappable categories,
+              // not search forms.
+              _SectionLabel(label: '分類'),
+              const SizedBox(height: 8),
+              TagPicker(
+                selected: _selectedTags,
+                onChanged: (m) => setState(() => _selectedTags = m),
+              ),
+
+              const SizedBox(height: 16),
+
+              // ── Group C: 通路 / 獨家 ───────────────────
               _SectionLabel(label: '通路'),
               const SizedBox(height: 8),
-              _DarkDropdown<ChannelCategory>(
-                label: '通路類型',
-                value: _channelCategory,
-                items: ChannelCategory.values,
-                labelOf: (c) => channelCategoryLabels[c] ?? c.value,
-                onChanged: (v) => setState(() => _channelCategory = v),
-                allowNull: true,
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: _DarkField(
-                      controller: _channelTypeController,
-                      label: '通路細項',
-                      hint: '如：IMAX, 4DX…',
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _DarkField(
-                      controller: _channelNameController,
-                      label: '通路名稱',
-                      hint: '如：威秀、秀泰…',
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-
-              // ── Exclusive toggle ──
-              Row(
-                children: [
-                  Text(
-                    '獨家',
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: AppTheme.textMute,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Switch.adaptive(
-                    value: _isExclusive,
-                    onChanged: (v) => setState(() => _isExclusive = v),
-                    activeTrackColor: AppTheme.text,
-                  ),
-                ],
-              ),
-              if (_isExclusive) ...[
-                const SizedBox(height: 8),
-                _DarkField(
-                  controller: _exclusiveNameController,
-                  label: '獨家名稱',
-                  hint: '如：影城獨家版…',
+              _FormGroup(children: [
+                _DarkDropdown<ChannelCategory>(
+                  label: '通路類型',
+                  value: _channelCategory,
+                  items: ChannelCategory.values,
+                  labelOf: (c) => channelCategoryLabels[c] ?? c.value,
+                  onChanged: (v) => setState(() => _channelCategory = v),
+                  allowNull: true,
                 ),
-              ],
+                _DarkField(
+                  controller: _channelTypeController,
+                  label: '通路細項',
+                  hint: '如：IMAX, 4DX…',
+                ),
+                _DarkField(
+                  controller: _channelNameController,
+                  label: '通路名稱',
+                  hint: '如：威秀、秀泰…',
+                ),
+                _SwitchRow(
+                  label: '獨家',
+                  value: _isExclusive,
+                  onChanged: (v) => setState(() => _isExclusive = v),
+                ),
+                if (_isExclusive)
+                  _DarkField(
+                    controller: _exclusiveNameController,
+                    label: '獨家名稱',
+                    hint: '如：影城獨家版…',
+                  ),
+              ]),
 
               const SizedBox(height: 16),
 
-              // ── Material section ──
+              // ── Group D: 材質 / 版本 ───────────────────
               _SectionLabel(label: '材質 / 版本'),
               const SizedBox(height: 8),
-              Row(
-                children: [
-                  Expanded(
-                    child: _DarkField(
-                      controller: _materialTypeController,
-                      label: '材質',
-                      hint: '如：紙質、金屬…',
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _DarkField(
-                      controller: _versionLabelController,
-                      label: '版本標記',
-                      hint: '如：v2, 修正版…',
-                    ),
-                  ),
-                ],
-              ),
+              _FormGroup(children: [
+                _DarkField(
+                  controller: _materialTypeController,
+                  label: '材質',
+                  hint: '如：紙質、金屬…',
+                ),
+                _DarkField(
+                  controller: _versionLabelController,
+                  label: '版本標記',
+                  hint: '如：v2, 修正版…',
+                ),
+              ]),
 
               const SizedBox(height: 16),
 
-              // ── Source section ──
+              // ── Group E: 來源 ───────────────────────────
               _SectionLabel(label: '來源'),
               const SizedBox(height: 8),
-              _DarkField(
-                controller: _sourceUrlController,
-                label: '來源網址',
-                keyboardType: TextInputType.url,
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: _DarkField(
-                      controller: _sourcePlatformController,
-                      label: '來源平台',
-                      hint: '如：Facebook, X…',
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _DarkField(
-                      controller: _sourceNoteController,
-                      label: '備註',
-                    ),
-                  ),
-                ],
-              ),
+              _FormGroup(children: [
+                _DarkField(
+                  controller: _sourceUrlController,
+                  label: '來源網址',
+                  keyboardType: TextInputType.url,
+                ),
+                _DarkField(
+                  controller: _sourcePlatformController,
+                  label: '來源平台',
+                  hint: '如：Facebook, X…',
+                ),
+                _DarkField(
+                  controller: _sourceNoteController,
+                  label: '備註',
+                ),
+              ]),
             ],
-
-            const SizedBox(height: 24),
-
-            // ── Tag picker (EPIC 18-9): faceted taxonomy ──
-            _SectionLabel(label: '分類'),
-            const SizedBox(height: 8),
-            TagPicker(
-              selected: _selectedTags,
-              onChanged: (m) => setState(() => _selectedTags = m),
-            ),
 
             const SizedBox(height: 24),
 
@@ -828,52 +837,10 @@ class _SubmissionPageState extends ConsumerState<SubmissionPage> {
               onChanged: (v) => setState(() => _aiDeclaration = v),
             ),
 
-            const SizedBox(height: 20),
-
-            // ── Submit button ──
-            SizedBox(
-              height: 50,
-              child: FilledButton(
-                onPressed: (_submitting || _compressing) ? null : _showPreview,
-                style: FilledButton.styleFrom(
-                  backgroundColor: AppTheme.text,
-                  foregroundColor: Colors.black,
-                  disabledBackgroundColor: AppTheme.line2,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                ),
-                child: (_submitting || _compressing)
-                    ? Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: AppTheme.textMute,
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Text(
-                            _compressing ? '壓縮中…' : '上傳中…',
-                            style: theme.textTheme.labelLarge?.copyWith(
-                              color: AppTheme.textMute,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      )
-                    : Text(
-                        '預覽並送出',
-                        style: theme.textTheme.labelLarge?.copyWith(
-                          color: Colors.black,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-              ),
-            ),
+            // Inner "預覽並送出" button removed in v18: the top-right
+            // 送審 pill already triggers the same preview → confirm →
+            // submit flow; having both felt redundant on a mobile
+            // modal sheet.
           ],
         ),
       ),
@@ -1007,7 +974,10 @@ class _ImagePreview extends StatelessWidget {
   }
 }
 
-/// Dark-themed form field.
+/// iOS-style form row — label stacked on top of an un-bordered text
+/// field. Designed to live inside a [_FormGroup] (which paints the
+/// rounded card bg + hairlines between rows). Mirrors the Threads /
+/// iOS Settings grouped-list aesthetic.
 class _DarkField extends StatelessWidget {
   const _DarkField({
     required this.controller,
@@ -1024,44 +994,125 @@ class _DarkField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return TextFormField(
-      controller: controller,
-      keyboardType: keyboardType,
-      validator: validator,
-      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            color: AppTheme.text,
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            label,
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: AppTheme.textMute,
+              fontSize: 12,
+              letterSpacing: 0,
+              fontWeight: FontWeight.w600,
+            ),
           ),
-      decoration: InputDecoration(
-        labelText: label,
-        hintText: hint,
-        labelStyle: TextStyle(color: AppTheme.textMute, fontSize: 14),
-        hintStyle: TextStyle(color: AppTheme.textFaint, fontSize: 14),
-        filled: true,
-        fillColor: AppTheme.surfaceRaised,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: AppTheme.line1),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: AppTheme.line1),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: AppTheme.textMute),
-        ),
-        errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFFE53935)),
-        ),
+          TextFormField(
+            controller: controller,
+            keyboardType: keyboardType,
+            validator: validator,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: AppTheme.text,
+              fontSize: 15,
+            ),
+            decoration: InputDecoration(
+              hintText: hint,
+              hintStyle: TextStyle(color: AppTheme.textFaint, fontSize: 15),
+              isDense: true,
+              filled: false,
+              contentPadding: const EdgeInsets.symmetric(vertical: 6),
+              border: InputBorder.none,
+              enabledBorder: InputBorder.none,
+              focusedBorder: InputBorder.none,
+              errorBorder: InputBorder.none,
+              disabledBorder: InputBorder.none,
+            ),
+          ),
+        ],
       ),
     );
   }
 }
 
-/// Dark-themed dropdown field.
+/// Switch row designed for use inside a [_FormGroup]. Label left,
+/// Switch.adaptive right — matches the iOS Settings pattern.
+class _SwitchRow extends StatelessWidget {
+  const _SwitchRow({
+    required this.label,
+    required this.value,
+    required this.onChanged,
+  });
+  final String label;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 8, 6, 8),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: AppTheme.text,
+                    fontSize: 15,
+                  ),
+            ),
+          ),
+          CupertinoSwitch(
+            value: value,
+            activeTrackColor: AppTheme.accent2,
+            onChanged: onChanged,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Rounded-card wrapper around a stack of form rows, with 0.5px
+/// hairlines injected between rows. iOS Settings grouped-list
+/// pattern. Accepts any widget as a row (text field, dropdown row,
+/// switch row, etc.) so consumers can mix & match.
+class _FormGroup extends StatelessWidget {
+  const _FormGroup({required this.children});
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceRaised,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (var i = 0; i < children.length; i++) ...[
+            children[i],
+            if (i < children.length - 1)
+              Padding(
+                padding: const EdgeInsets.only(left: 14),
+                child: Container(height: 0.5, color: AppTheme.line1),
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// iOS-style dropdown — renders as a tappable row (label left, current
+/// value right, chevron) and opens a [CupertinoActionSheet] with one
+/// button per option when tapped. Replaces `DropdownButtonFormField`
+/// which looks Material everywhere.
 class _DarkDropdown<T> extends StatelessWidget {
   const _DarkDropdown({
     required this.label,
@@ -1080,48 +1131,100 @@ class _DarkDropdown<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DropdownButtonFormField<T>(
-      initialValue: value,
-      onChanged: onChanged,
-      isExpanded: true,
-      dropdownColor: AppTheme.surfaceRaised,
-      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            color: AppTheme.text,
+    final theme = Theme.of(context);
+    final displayText = value == null ? '未指定' : labelOf(value as T);
+    return Material(
+      color: AppTheme.surfaceRaised,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        onTap: () => _openSheet(context),
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(14, 12, 12, 14),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      label,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: AppTheme.textMute,
+                        fontSize: 12,
+                        letterSpacing: 0,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      displayText,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: value == null
+                            ? AppTheme.textFaint
+                            : AppTheme.text,
+                        fontSize: 15,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(LucideIcons.chevronRight,
+                  size: 16, color: AppTheme.textFaint),
+            ],
           ),
-      decoration: InputDecoration(
-        labelText: label,
-        labelStyle: TextStyle(color: AppTheme.textMute, fontSize: 14),
-        filled: true,
-        fillColor: AppTheme.surfaceRaised,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: AppTheme.line1),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: AppTheme.line1),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: AppTheme.textMute),
         ),
       ),
-      items: [
-        if (allowNull)
-          DropdownMenuItem<T>(
-            value: null,
-            child: Text('未指定',
-                style: TextStyle(color: AppTheme.textFaint)),
-          ),
-        ...items.map((item) => DropdownMenuItem<T>(
-              value: item,
-              child: Text(labelOf(item)),
-            )),
-      ],
     );
   }
+
+  Future<void> _openSheet(BuildContext context) async {
+    HapticFeedback.selectionClick();
+    // NotoSansTC override — Cupertino widgets default to SF Pro and
+    // tofu on first paint for CJK. See _pickSource in submission_page
+    // for the same treatment.
+    const font = TextStyle(fontFamily: 'NotoSansTC');
+    final picked = await showCupertinoModalPopup<_PickResult<T>>(
+      context: context,
+      builder: (ctx) => DefaultTextStyle.merge(
+        style: font,
+        child: CupertinoActionSheet(
+          title: Text(label, style: font),
+          actions: [
+            if (allowNull)
+              CupertinoActionSheetAction(
+                onPressed: () =>
+                    Navigator.of(ctx).pop(_PickResult<T>.none()),
+                isDestructiveAction: value == null,
+                child: const Text('未指定', style: font),
+              ),
+            ...items.map((item) => CupertinoActionSheetAction(
+                  onPressed: () =>
+                      Navigator.of(ctx).pop(_PickResult<T>(item)),
+                  isDefaultAction: value == item,
+                  child: Text(labelOf(item), style: font),
+                )),
+          ],
+          cancelButton: CupertinoActionSheetAction(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('取消', style: font),
+          ),
+        ),
+      ),
+    );
+    if (picked != null) onChanged(picked.value);
+  }
+}
+
+/// Triple-state result so we can tell "user picked 未指定" (null) from
+/// "user cancelled" (no emission). CupertinoActionSheet itself returns
+/// `null` on cancel, which would collide with "null is a valid choice"
+/// if we simply returned `T?` directly.
+class _PickResult<T> {
+  const _PickResult(this.value);
+  const _PickResult.none() : value = null;
+  final T? value;
 }
 
 // ---------------------------------------------------------------------------
@@ -1189,51 +1292,56 @@ class _WorkTitleAutocompleteState extends State<_WorkTitleAutocomplete> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
       children: [
-        TextFormField(
-          controller: widget.controller,
-          validator: (v) => (v == null || v.trim().isEmpty) ? '必填' : null,
-          onChanged: _onChanged,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: AppTheme.text,
+        Padding(
+          padding: const EdgeInsets.fromLTRB(14, 10, 14, 4),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                '作品中文名 *',
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: AppTheme.textMute,
+                      fontSize: 12,
+                      letterSpacing: 0,
+                      fontWeight: FontWeight.w600,
+                    ),
               ),
-          decoration: InputDecoration(
-            labelText: '作品中文名 *',
-            hintText: '輸入 2 字以上自動建議',
-            labelStyle: TextStyle(color: AppTheme.textMute, fontSize: 14),
-            hintStyle: TextStyle(color: AppTheme.textFaint, fontSize: 14),
-            filled: true,
-            fillColor: AppTheme.surfaceRaised,
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: AppTheme.line1),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: AppTheme.line1),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: AppTheme.textMute),
-            ),
-            errorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: Color(0xFFE53935)),
-            ),
+              TextFormField(
+                controller: widget.controller,
+                validator: (v) =>
+                    (v == null || v.trim().isEmpty) ? '必填' : null,
+                onChanged: _onChanged,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: AppTheme.text,
+                      fontSize: 15,
+                    ),
+                decoration: InputDecoration(
+                  hintText: '輸入 2 字以上自動建議',
+                  hintStyle:
+                      TextStyle(color: AppTheme.textFaint, fontSize: 15),
+                  isDense: true,
+                  filled: false,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 6),
+                  border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  errorBorder: InputBorder.none,
+                  disabledBorder: InputBorder.none,
+                ),
+              ),
+            ],
           ),
         ),
         if (_showSuggestions)
-          Container(
-            margin: const EdgeInsets.only(top: 4),
-            decoration: BoxDecoration(
-              color: AppTheme.surfaceRaised,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppTheme.line1),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: _suggestions.map((w) {
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(left: 14),
+                child: Container(height: 0.5, color: AppTheme.line1),
+              ),
+              ..._suggestions.map((w) {
                 return InkWell(
                   onTap: () {
                     widget.controller.text = w.displayTitle;
@@ -1243,7 +1351,7 @@ class _WorkTitleAutocompleteState extends State<_WorkTitleAutocomplete> {
                   },
                   child: Padding(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 10),
+                        horizontal: 14, vertical: 10),
                     child: Row(
                       children: [
                         Expanded(
@@ -1263,8 +1371,8 @@ class _WorkTitleAutocompleteState extends State<_WorkTitleAutocomplete> {
                     ),
                   ),
                 );
-              }).toList(),
-            ),
+              }),
+            ],
           ),
       ],
     );

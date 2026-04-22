@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../core/theme/app_theme.dart';
-import '../../core/widgets/sticky_header.dart';
+import '../../core/theme/theme_mode_notifier.dart';
 
 /// v18 notifications centre — **UI shell only, no backend yet**.
 ///
@@ -22,61 +22,57 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
 
   @override
   Widget build(BuildContext context) {
+    // Watch theme mode so this shell tab rebuilds on day/night flip
+    // (otherwise the const widget stays cached in the IndexedStack).
+    ref.watch(themeModeProvider);
+    final topInset = MediaQuery.paddingOf(context).top;
     final bottomInset = MediaQuery.paddingOf(context).bottom;
-    final headerH = StickyHeader.heightWithInset(context);
-
-    return Scaffold(
-      backgroundColor: AppTheme.bg,
-      body: Stack(
-        children: [
-          Positioned(
-            top: headerH,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: Column(
-              children: [
-                _TabRow(tab: _tab, onChange: (t) => setState(() => _tab = t)),
-                Expanded(
-                  child: _demoItems.isEmpty
-                      ? const _EmptyView()
-                      : ListView(
-                          padding: EdgeInsets.only(
-                              top: 8, bottom: bottomInset + 120),
-                          children: [
-                            _GroupHeader(label: '今天'),
-                            ..._demoItems
-                                .where((e) => e.group == _Group.today)
-                                .where(_tabFilter)
-                                .map((e) => _NotifTile(item: e)),
-                            _GroupHeader(label: '本週'),
-                            ..._demoItems
-                                .where((e) => e.group == _Group.week)
-                                .where(_tabFilter)
-                                .map((e) => _NotifTile(item: e)),
-                            _GroupHeader(label: '更早'),
-                            ..._demoItems
-                                .where((e) => e.group == _Group.earlier)
-                                .where(_tabFilter)
-                                .map((e) => _NotifTile(item: e)),
-                          ],
-                        ),
-                ),
-              ],
+    // Rendered inside the shell — no back chrome, the bottom nav stays
+    // visible. Content just needs enough bottom padding to clear the
+    // floating pill tab bar (≈80dp above the safe-area inset).
+    return Column(
+      children: [
+        SizedBox(height: topInset + 16),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              '通知',
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -0.3,
+                  ),
             ),
           ),
-          StickyHeader(
-            title: '通知',
-            actionLabel: '全部已讀',
-            onAction: () {
-              // TODO: mark-all-read when backend exists.
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('已全部標為已讀')),
-              );
-            },
-          ),
-        ],
-      ),
+        ),
+        _TabRow(tab: _tab, onChange: (t) => setState(() => _tab = t)),
+        Expanded(
+          child: _demoItems.isEmpty
+              ? const _EmptyView()
+              : ListView(
+                  padding: EdgeInsets.only(
+                      top: 8, bottom: bottomInset + 120),
+                  children: [
+                    _GroupHeader(label: '今天'),
+                    ..._demoItems
+                        .where((e) => e.group == _Group.today)
+                        .where(_tabFilter)
+                        .map((e) => _NotifTile(item: e)),
+                    _GroupHeader(label: '本週'),
+                    ..._demoItems
+                        .where((e) => e.group == _Group.week)
+                        .where(_tabFilter)
+                        .map((e) => _NotifTile(item: e)),
+                    _GroupHeader(label: '更早'),
+                    ..._demoItems
+                        .where((e) => e.group == _Group.earlier)
+                        .where(_tabFilter)
+                        .map((e) => _NotifTile(item: e)),
+                  ],
+                ),
+        ),
+      ],
     );
   }
 
@@ -98,6 +94,9 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
 
 enum _NotifTab { all, social, system }
 
+/// v18 capsule filter — scrollable pill row, not an underlined tab bar.
+/// Matches how IG / X filter notifications. Active pill fills white on
+/// ink, inactive pills are outlined ghosts.
 class _TabRow extends StatelessWidget {
   const _TabRow({required this.tab, required this.onChange});
   final _NotifTab tab;
@@ -105,45 +104,41 @@ class _TabRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: AppTheme.line1)),
-      ),
-      child: Row(
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
         children: [
-          _tab('全部', _NotifTab.all),
-          _tab('互動', _NotifTab.social),
-          _tab('系統', _NotifTab.system),
+          _pill(context, '全部', _NotifTab.all),
+          _pill(context, '互動', _NotifTab.social),
+          _pill(context, '系統', _NotifTab.system),
         ],
       ),
     );
   }
 
-  Widget _tab(String label, _NotifTab t) {
+  Widget _pill(BuildContext context, String label, _NotifTab t) {
     final active = t == tab;
-    return Expanded(
-      child: GestureDetector(
-        onTap: () => onChange(t),
-        behavior: HitTestBehavior.opaque,
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 14),
-          decoration: BoxDecoration(
-            border: Border(
-              bottom: BorderSide(
-                color: active ? Colors.white : Colors.transparent,
-                width: 2,
+    return GestureDetector(
+      onTap: () => onChange(t),
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 140),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+        decoration: BoxDecoration(
+          color: active ? AppTheme.text : Colors.transparent,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+            color: active ? AppTheme.text : AppTheme.line2,
+          ),
+        ),
+        child: Text(
+          label,
+          style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+                color: active ? AppTheme.bg : AppTheme.text,
               ),
-            ),
-          ),
-          alignment: Alignment.center,
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: active ? FontWeight.w600 : FontWeight.w500,
-              color: active ? Colors.white : AppTheme.textMute,
-            ),
-          ),
         ),
       ),
     );
@@ -220,8 +215,8 @@ class _NotifTile extends StatelessWidget {
               width: 8,
               height: 8,
               margin: const EdgeInsets.only(top: 8),
-              decoration: const BoxDecoration(
-                color: Color(0xFFFF5C5C),
+              decoration: BoxDecoration(
+                color: AppTheme.unreadDot,
                 shape: BoxShape.circle,
               ),
             ),
@@ -245,10 +240,10 @@ class _ActorAvatar extends StatelessWidget {
       _NotifType.rejected => LucideIcons.x,
     };
     final tint = switch (item.type) {
-      _NotifType.favorite => const Color(0xFFFF5C5C),
-      _NotifType.follow => const Color(0xFF8FB4FF),
-      _NotifType.comment => const Color(0xFFA8E6B0),
-      _NotifType.approved => const Color(0xFFA8E6B0),
+      _NotifType.favorite => AppTheme.unreadDot,
+      _NotifType.follow => AppTheme.accent1,
+      _NotifType.comment => AppTheme.success,
+      _NotifType.approved => AppTheme.success,
       _NotifType.rejected => AppTheme.textMute,
     };
     return Container(

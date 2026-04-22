@@ -1,4 +1,10 @@
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/cupertino.dart'
+    show
+        CupertinoActionSheet,
+        CupertinoActionSheetAction,
+        CupertinoSwitch,
+        showCupertinoModalPopup;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -6,13 +12,11 @@ import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../core/theme/app_theme.dart';
+import '../../core/theme/theme_mode_notifier.dart';
 import '../../data/models/app_user.dart';
 import '../../data/providers/supabase_providers.dart';
 import '../../data/repositories/auth_repository.dart';
-import '../../data/repositories/favorite_repository.dart';
-import '../../data/repositories/submission_repository.dart';
 import '../../data/repositories/user_repository.dart';
-import '../shell/app_shell.dart';
 
 /// Profile page — v11 simplified.
 ///
@@ -27,9 +31,9 @@ class ProfilePage extends ConsumerWidget {
     if (user == null) {
       // Shouldn't happen in v11 (profile only reachable when signed in),
       // but handle gracefully.
-      return const Scaffold(
-        backgroundColor: AppTheme.bg,
-        body: Center(child: Text('請先登入')),
+      return Scaffold(
+        
+        body: const Center(child: Text('請先登入')),
       );
     }
 
@@ -63,37 +67,18 @@ class _SignedInView extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final submissionsAsync = ref.watch(mySubmissionsV2Provider);
-    final favCount = ref.watch(favoriteIdsProvider).asData?.value.length;
     final topInset = MediaQuery.paddingOf(context).top;
 
+    // "你的內容" section (我的收藏 / 我的投稿) removed — both
+    // destinations are already reachable from the 我的 tab's stats
+    // row (粉絲 / 追蹤中 / 已通過) and the home drawer's 收藏 entry.
+    // Keeping them here felt duplicative once those wiring up.
     return ListView(
       padding: EdgeInsets.fromLTRB(20, topInset + 56, 20, 120),
       children: [
         _IdentityCard(email: email, profile: profile),
-        const SizedBox(height: 20),
-        _SectionLabel(label: '你的內容'),
-        const SizedBox(height: 10),
-        _CardRow(
-          icon: LucideIcons.heart,
-          label: '我的收藏',
-          trailing: favCount?.toString(),
-          onTap: () {
-            // 我的收藏 = 我的 tab filtered by favorites (default).
-            // Jump to tab 1 + pop profile page so the shell is visible.
-            ref.read(shellTabProvider.notifier).setIndex(1);
-            context.pop();
-          },
-        ),
-        const SizedBox(height: 8),
-        _CardRow(
-          icon: LucideIcons.upload,
-          label: '我的投稿',
-          trailing: submissionsAsync.asData?.value.length.toString(),
-          onTap: () => context.push('/me/submissions'),
-        ),
         if (profile?.isAdmin == true) ...[
-          const SizedBox(height: 20),
+          const SizedBox(height: 28),
           _SectionLabel(label: '管理'),
           const SizedBox(height: 10),
           _CardRow(
@@ -109,36 +94,87 @@ class _SignedInView extends ConsumerWidget {
           ),
         ],
         const SizedBox(height: 20),
+        _SectionLabel(label: '外觀'),
+        const SizedBox(height: 10),
+        const _ThemeModeRow(),
+        const SizedBox(height: 20),
         _SectionLabel(label: '個人檔案設定'),
         const SizedBox(height: 10),
-        _CardRow(
-          icon: LucideIcons.userPen,
-          label: '編輯個人檔案',
-          onTap: () => context.push('/profile/edit'),
-        ),
-        const SizedBox(height: 8),
+        // 編輯個人檔案 row removed — the inline 編輯 pill on the
+        // identity card at the top already does the same thing, and
+        // having both felt like duplication on a thin settings page.
         _PrivacyToggle(profile: profile),
         const SizedBox(height: 28),
-        _GhostPill(
+        // 切換帳號 (accent text) — Supabase keeps only one session per
+        // client, so functionally this is the same as signing out and
+        // signing back in. We surface it separately because users
+        // coming from IG/Threads expect the affordance; it keeps the
+        // sign-in screen's Google button primed for a different
+        // account without the mental overhead of "did I really just
+        // log out for good?".
+        _TextActionRow(
+          label: '切換帳號',
+          color: AppTheme.accent2,
+          onTap: () => _performSignOut(context, ref),
+        ),
+        const SizedBox(height: 4),
+        _TextActionRow(
           label: '登出',
-          icon: LucideIcons.logOut,
-          onTap: () async {
-            HapticFeedback.selectionClick();
-            // Pop the profile page first so we don't briefly render
-            // signed-out content with auth-required widgets still mounted.
-            // Then await Supabase signOut and force-navigate to /signin
-            // (the GoRouter redirect would also fire, but we don't want
-            // to depend on the auth-stream race winning before any
-            // already-loaded provider tries to refetch with no session).
-            final router = GoRouter.of(context);
-            await ref.read(authRepositoryProvider).signOut();
-            // Drop any cached user-scoped data so the next sign-in
-            // doesn't briefly flash the previous account's profile.
-            ref.invalidate(currentProfileProvider);
-            router.go('/signin');
-          },
+          color: AppTheme.danger,
+          onTap: () => _performSignOut(context, ref),
         ),
       ],
+    );
+  }
+
+  Future<void> _performSignOut(BuildContext context, WidgetRef ref) async {
+    HapticFeedback.selectionClick();
+    // Pop the profile page first so we don't briefly render
+    // signed-out content with auth-required widgets still mounted.
+    // Then await Supabase signOut and force-navigate to /signin
+    // (the GoRouter redirect would also fire, but we don't want
+    // to depend on the auth-stream race winning before any
+    // already-loaded provider tries to refetch with no session).
+    final router = GoRouter.of(context);
+    await ref.read(authRepositoryProvider).signOut();
+    // Drop any cached user-scoped data so the next sign-in
+    // doesn't briefly flash the previous account's profile.
+    ref.invalidate(currentProfileProvider);
+    router.go('/signin');
+  }
+}
+
+/// Borderless text-link row — used for 登出 / 切換帳號. No icon, no
+/// card chrome; just a coloured label that fills the row so it reads
+/// as a commitment (vs an ordinary settings list item).
+class _TextActionRow extends StatelessWidget {
+  const _TextActionRow({
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        child: Container(
+          height: 48,
+          alignment: Alignment.center,
+          child: Text(
+            label,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: color,
+                ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -236,48 +272,9 @@ class _IdentityCard extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(width: 12),
-          // Inline 編輯 pill — direct affordance, no need to scroll.
-          const _EditPill(),
+          // 編輯 pill removed per v18 spec — editing profile now
+          // lives only via the library (我的) → 編輯檔案 affordance.
         ],
-      ),
-    );
-  }
-}
-
-/// v13 inline 編輯 pill — opens /profile/edit. Sits on the right side
-/// of the identity row.
-class _EditPill extends StatelessWidget {
-  const _EditPill();
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: AppTheme.chipBg,
-      borderRadius: BorderRadius.circular(999),
-      child: InkWell(
-        onTap: () {
-          HapticFeedback.selectionClick();
-          GoRouter.of(context).push('/profile/edit');
-        },
-        borderRadius: BorderRadius.circular(999),
-        child: Container(
-          height: 30,
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(color: AppTheme.line2),
-          ),
-          alignment: Alignment.center,
-          child: Text(
-            '編輯',
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  fontWeight: FontWeight.w500,
-                  fontSize: 12,
-                  letterSpacing: 0,
-                ),
-          ),
-        ),
       ),
     );
   }
@@ -326,11 +323,9 @@ class _CardRow extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.onTap,
-    this.trailing,
   });
   final IconData icon;
   final String label;
-  final String? trailing;
   final VoidCallback onTap;
 
   @override
@@ -360,15 +355,6 @@ class _CardRow extends StatelessWidget {
                   ),
                 ),
               ),
-              if (trailing != null) ...[
-                Text(
-                  trailing!,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: AppTheme.textMute,
-                  ),
-                ),
-                const SizedBox(width: 8),
-              ],
               Icon(LucideIcons.chevronRight,
                   size: 16, color: AppTheme.textFaint),
             ],
@@ -376,6 +362,100 @@ class _CardRow extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+/// Theme row — tap the row to open a CupertinoActionSheet with
+/// 白天 / 夜晚 / 系統預設. Replaces the segmented pill (which looked
+/// like a browser form control). Matches the iOS Settings pattern.
+class _ThemeModeRow extends ConsumerWidget {
+  const _ThemeModeRow();
+
+  String _labelFor(AppThemeMode m) => switch (m) {
+        AppThemeMode.day => '白天',
+        AppThemeMode.night => '夜晚',
+        AppThemeMode.system => '系統預設',
+      };
+
+  IconData _iconFor(AppThemeMode m) => switch (m) {
+        AppThemeMode.day => LucideIcons.sun,
+        AppThemeMode.night => LucideIcons.moon,
+        AppThemeMode.system => LucideIcons.sunMoon,
+      };
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final mode = ref.watch(themeModeProvider);
+    return Material(
+      color: AppTheme.surfaceRaised,
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        onTap: () => _openSheet(context, ref),
+        borderRadius: BorderRadius.circular(18),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+          decoration: BoxDecoration(
+            border: Border.all(color: AppTheme.line1),
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: Row(
+            children: [
+              Icon(_iconFor(mode), size: 20, color: AppTheme.text),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Text(
+                  '主題',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w500,
+                      ),
+                ),
+              ),
+              Text(
+                _labelFor(mode),
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: AppTheme.textMute,
+                    ),
+              ),
+              const SizedBox(width: 6),
+              Icon(LucideIcons.chevronRight,
+                  size: 16, color: AppTheme.textFaint),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openSheet(BuildContext context, WidgetRef ref) async {
+    HapticFeedback.selectionClick();
+    // NotoSansTC override — Cupertino widgets default to SF Pro and
+    // tofu CJK on first paint without this.
+    const font = TextStyle(fontFamily: 'NotoSansTC');
+    final current = ref.read(themeModeProvider);
+    final picked = await showCupertinoModalPopup<AppThemeMode>(
+      context: context,
+      builder: (ctx) => DefaultTextStyle.merge(
+        style: font,
+        child: CupertinoActionSheet(
+          title: const Text('主題', style: font),
+          actions: [
+            for (final m in AppThemeMode.values)
+              CupertinoActionSheetAction(
+                onPressed: () => Navigator.of(ctx).pop(m),
+                isDefaultAction: m == current,
+                child: Text(_labelFor(m), style: font),
+              ),
+          ],
+          cancelButton: CupertinoActionSheetAction(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('取消', style: font),
+          ),
+        ),
+      ),
+    );
+    if (picked != null) {
+      await ref.read(themeModeProvider.notifier).setMode(picked);
+    }
   }
 }
 
@@ -430,8 +510,13 @@ class _PrivacyToggleState extends ConsumerState<_PrivacyToggle> {
               ],
             ),
           ),
-          Switch.adaptive(
+          // Explicit CupertinoSwitch — `Switch.adaptive` was falling
+          // back to the Material visual on Android web (which renders
+          // as the user's "原生的破東西" complaint). Forcing Cupertino
+          // gives the iOS pill-shaped toggle on every platform.
+          CupertinoSwitch(
             value: isPublic,
+            activeTrackColor: AppTheme.accent2,
             onChanged: _saving || widget.profile == null
                 ? null
                 : (v) => _toggle(v),
@@ -471,45 +556,3 @@ class _PrivacyToggleState extends ConsumerState<_PrivacyToggle> {
 // _BioRow removed — profile editing is now done via the dedicated
 // /profile/edit page (see profile_edit_page.dart).
 
-class _GhostPill extends StatelessWidget {
-  const _GhostPill({
-    required this.label,
-    required this.icon,
-    required this.onTap,
-  });
-  final String label;
-  final IconData icon;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      borderRadius: BorderRadius.circular(999),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(999),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
-          decoration: BoxDecoration(
-            border: Border.all(color: AppTheme.line2),
-            borderRadius: BorderRadius.circular(999),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, size: 16, color: AppTheme.textMute),
-              const SizedBox(width: 8),
-              Text(
-                label,
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      color: AppTheme.textMute,
-                    ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}

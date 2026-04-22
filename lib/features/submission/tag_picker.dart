@@ -102,24 +102,10 @@ class _CategorySection extends ConsumerStatefulWidget {
 }
 
 class _CategorySectionState extends ConsumerState<_CategorySection> {
-  final _searchCtrl = TextEditingController();
-  Timer? _debounce;
-  String _query = '';
+  // v18 — per-category search input was removed; each category now
+  // shows its tags as direct tappable chips (+ a 建議新增 link at the
+  // end). Keeping the field felt like a nested form inside a form.
   bool _expanded = false;
-
-  @override
-  void dispose() {
-    _searchCtrl.dispose();
-    _debounce?.cancel();
-    super.dispose();
-  }
-
-  void _onSearchChanged(String v) {
-    _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 200), () {
-      if (mounted) setState(() => _query = v.trim());
-    });
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -218,31 +204,17 @@ class _CategorySectionState extends ConsumerState<_CategorySection> {
                 error: (e, _) => Text('載入失敗：$e',
                     style: TextStyle(color: AppTheme.textMute)),
                 data: (tags) {
-                  final filtered = _filterTags(tags, _query);
+                  final visible =
+                      tags.where((t) => !t.deprecated).toList(growable: false);
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Search field.
-                      TextField(
-                        controller: _searchCtrl,
-                        onChanged: _onSearchChanged,
-                        style: theme.textTheme.bodyMedium,
-                        decoration: InputDecoration(
-                          hintText: '搜尋 ${widget.category.titleZh}…',
-                          prefixIcon: Icon(LucideIcons.search,
-                              size: 16, color: AppTheme.textMute),
-                          isDense: true,
-                          contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 10),
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      // Tag chips (selectable).
+                      // Tag chips — direct tap, no nested search field.
                       Wrap(
                         spacing: 6,
                         runSpacing: 6,
                         children: [
-                          for (final t in filtered)
+                          for (final t in visible)
                             _TagChip(
                               tag: t,
                               selected: widget.selectedIds.contains(t.id),
@@ -256,20 +228,17 @@ class _CategorySectionState extends ConsumerState<_CategorySection> {
                             ),
                         ],
                       ),
-                      if (filtered.isEmpty) ...[
+                      if (visible.isEmpty) ...[
                         const SizedBox(height: 12),
                         Text(
-                          _query.isEmpty ? '此類別尚無 tag。' : '找不到符合「$_query」的 tag。',
+                          '此類別尚無 tag。',
                           style: theme.textTheme.bodySmall
                               ?.copyWith(color: AppTheme.textFaint),
                         ),
                       ],
                       if (widget.category.allowsSuggestion) ...[
                         const SizedBox(height: 12),
-                        _SuggestLink(
-                          category: widget.category,
-                          prefill: _query,
-                        ),
+                        _SuggestLink(category: widget.category),
                       ],
                     ],
                   );
@@ -281,19 +250,6 @@ class _CategorySectionState extends ConsumerState<_CategorySection> {
     );
   }
 
-  /// Filter tags by query + float "其他" to bottom + exclude deprecated.
-  List<Tag> _filterTags(List<Tag> tags, String q) {
-    final query = q.toLowerCase();
-    final visible = tags.where((t) => !t.deprecated).toList();
-
-    if (query.isEmpty) return visible;
-
-    return visible.where((t) {
-      if (t.labelZh.toLowerCase().contains(query)) return true;
-      if (t.labelEn.toLowerCase().contains(query)) return true;
-      return t.aliases.any((a) => a.toLowerCase().contains(query));
-    }).toList();
-  }
 }
 
 class _TagChip extends StatelessWidget {
@@ -360,9 +316,8 @@ class _TagChip extends StatelessWidget {
 
 /// "Don't see what you want? Suggest a new tag" link that opens a form.
 class _SuggestLink extends ConsumerWidget {
-  const _SuggestLink({required this.category, this.prefill});
+  const _SuggestLink({required this.category});
   final TagCategory category;
-  final String? prefill;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -388,10 +343,7 @@ class _SuggestLink extends ConsumerWidget {
   Future<void> _openForm(BuildContext context, WidgetRef ref) async {
     await showDialog<void>(
       context: context,
-      builder: (ctx) => _SuggestDialog(
-        category: category,
-        prefill: prefill,
-      ),
+      builder: (ctx) => _SuggestDialog(category: category),
     );
   }
 }
@@ -404,28 +356,20 @@ class _SuggestLink extends ConsumerWidget {
 /// If they ignore hints and submit, the server gateway may still auto-merge
 /// at similarity ≥ 0.95 (e.g. "Miyazaki" → "宮崎駿" via alias).
 class _SuggestDialog extends ConsumerStatefulWidget {
-  const _SuggestDialog({required this.category, this.prefill});
+  const _SuggestDialog({required this.category});
   final TagCategory category;
-  final String? prefill;
 
   @override
   ConsumerState<_SuggestDialog> createState() => _SuggestDialogState();
 }
 
 class _SuggestDialogState extends ConsumerState<_SuggestDialog> {
-  late final TextEditingController _labelZhCtrl;
+  final _labelZhCtrl = TextEditingController();
   final _labelEnCtrl = TextEditingController();
   final _reasonCtrl = TextEditingController();
   Timer? _debounce;
   String _currentQuery = '';
   bool _submitting = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _labelZhCtrl = TextEditingController(text: widget.prefill ?? '');
-    _currentQuery = widget.prefill?.trim() ?? '';
-  }
 
   @override
   void dispose() {

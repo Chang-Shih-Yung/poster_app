@@ -124,7 +124,7 @@ class _ProfileEditPageState extends ConsumerState<ProfileEditPage> {
     final profileAsync = ref.watch(currentProfileProvider);
 
     return Scaffold(
-      backgroundColor: AppTheme.bg,
+      
       body: profileAsync.when(
         loading: () =>
             const Center(child: CircularProgressIndicator(strokeWidth: 2)),

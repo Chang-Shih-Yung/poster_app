@@ -108,9 +108,9 @@ class _FullBleedFeedState extends State<_FullBleedFeed>
                         imageUrl: poster.posterUrl,
                         fit: BoxFit.cover,
                         placeholder: (_, _) =>
-                            const ColoredBox(color: AppTheme.surfaceRaised),
+                            ColoredBox(color: AppTheme.surfaceRaised),
                         errorWidget: (_, _, _) =>
-                            const ColoredBox(color: AppTheme.surfaceRaised),
+                            ColoredBox(color: AppTheme.surfaceRaised),
                       ),
                       // Gradient overlays.
                       const DecoratedBox(
@@ -185,7 +185,7 @@ class _FullBleedFeedState extends State<_FullBleedFeed>
                             size: 22,
                             color: favIds.contains(items[
                                     heroIndex.clamp(0, items.length - 1)].id)
-                                ? const Color(0xFFE53935)
+                                ? AppTheme.favoriteActive
                                 : Colors.white.withValues(alpha: 0.4),
                           ),
                         ),
@@ -324,6 +324,7 @@ class _MediumGrid extends StatelessWidget {
     required this.favIds,
     required this.onToggleFavorite,
     this.showFav = true,
+    this.header,
   });
   final ScrollController controller;
   final List<Poster> items;
@@ -337,6 +338,11 @@ class _MediumGrid extends StatelessWidget {
   /// 收藏 segmented tab where the category itself already implies
   /// "favorited". Submissions use showFav=true with the fancy heart.
   final bool showFav;
+
+  /// Optional widget rendered BEFORE the masonry rows, inside the
+  /// same scroll view. Used by 我的 to inline the avatar/stats/tabs
+  /// chrome so the whole page scrolls together as one surface.
+  final Widget? header;
 
   @override
   Widget build(BuildContext context) {
@@ -367,34 +373,43 @@ class _MediumGrid extends StatelessWidget {
 
     return SingleChildScrollView(
       controller: controller,
-      padding: EdgeInsets.fromLTRB(12, topPadding, 12, bottomPadding),
+      // Horizontal padding stays constant; vertical gap below the
+      // chrome (if any) is provided by `topPadding`. When a header
+      // is inlined, it ignores the outer horizontal padding and
+      // renders edge-to-edge — so we wrap it in a Transform to
+      // punch through, then the masonry picks up at 12px gutters.
+      padding: EdgeInsets.only(bottom: bottomPadding),
       child: Column(
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  children: colA
-                      .map((p) => Padding(
-                            padding: const EdgeInsets.only(bottom: 8),
-                            child: renderCard(p),
-                          ))
-                      .toList(),
+          ?header,
+          Padding(
+            padding: EdgeInsets.fromLTRB(12, topPadding, 12, 0),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    children: colA
+                        .map((p) => Padding(
+                              padding: const EdgeInsets.only(bottom: 5),
+                              child: renderCard(p),
+                            ))
+                        .toList(),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Column(
-                  children: colB
-                      .map((p) => Padding(
-                            padding: const EdgeInsets.only(bottom: 8),
-                            child: renderCard(p),
-                          ))
-                      .toList(),
+                const SizedBox(width: 5),
+                Expanded(
+                  child: Column(
+                    children: colB
+                        .map((p) => Padding(
+                              padding: const EdgeInsets.only(bottom: 5),
+                              child: renderCard(p),
+                            ))
+                        .toList(),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
           if (trailingLoader)
             Padding(
@@ -461,9 +476,9 @@ class _MasonryCard extends StatelessWidget {
                     imageUrl: poster.thumbnailUrl ?? poster.posterUrl,
                     fit: BoxFit.cover,
                     placeholder: (_, _) =>
-                        const ColoredBox(color: AppTheme.surfaceRaised),
+                        ColoredBox(color: AppTheme.surfaceRaised),
                     errorWidget: (_, _, _) =>
-                        const ColoredBox(color: AppTheme.surfaceRaised),
+                        ColoredBox(color: AppTheme.surfaceRaised),
                   ),
                   // Bottom gradient to lift title.
                   const Positioned.fill(
@@ -627,9 +642,9 @@ class _SmallTile extends StatelessWidget {
                     imageUrl: poster.thumbnailUrl ?? poster.posterUrl,
                     fit: BoxFit.cover,
                     placeholder: (_, _) =>
-                        const ColoredBox(color: AppTheme.surfaceRaised),
+                        ColoredBox(color: AppTheme.surfaceRaised),
                     errorWidget: (_, _, _) =>
-                        const ColoredBox(color: AppTheme.surfaceRaised),
+                        ColoredBox(color: AppTheme.surfaceRaised),
                   ),
                 ),
               ),
@@ -676,7 +691,7 @@ class _SmallTile extends StatelessWidget {
                       LucideIcons.heart,
                       size: 16,
                       color: isFavorited
-                          ? const Color(0xFFE53935)
+                          ? AppTheme.favoriteActive
                           : AppTheme.textFaint,
                     ),
                   ),
@@ -725,13 +740,13 @@ class _FancyHeartPainter extends CustomPainter {
     // Outer glow — crimson-alpha blurred behind the fill.
     canvas.drawShadow(path, const Color(0xFFFF4678), 6, true);
 
-    // Gradient fill pink → crimson.
+    // Gradient fill pink → crimson (kit --heart-1/2/3).
     final fill = Paint()
-      ..shader = const LinearGradient(
+      ..shader = LinearGradient(
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
-        colors: [Color(0xFFFFD1DC), Color(0xFFFF6B95), Color(0xFFE11D48)],
-        stops: [0, 0.5, 1],
+        colors: [AppTheme.heart1, AppTheme.heart2, AppTheme.heart3],
+        stops: const [0, 0.5, 1],
       ).createShader(const Rect.fromLTWH(0, 0, 34, 34));
     canvas.drawPath(path, fill);
 

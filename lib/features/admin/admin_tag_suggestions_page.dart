@@ -21,10 +21,10 @@ class AdminTagSuggestionsPage extends ConsumerWidget {
     final catsAsync = ref.watch(tagCategoriesProvider);
 
     return Scaffold(
-      backgroundColor: AppTheme.bg,
+      
       appBar: AppBar(
         title: const Text('分類建議審核'),
-        backgroundColor: AppTheme.bg,
+        
         actions: [
           IconButton(
             icon: const Icon(LucideIcons.list),
@@ -1016,7 +1016,7 @@ class _TaxonomyOverviewDialog extends ConsumerWidget {
     final tagsAsync = ref.watch(allCanonicalTagsProvider);
 
     return Dialog(
-      backgroundColor: AppTheme.bg,
+      
       child: Container(
         width: 500,
         constraints: const BoxConstraints(maxHeight: 640),

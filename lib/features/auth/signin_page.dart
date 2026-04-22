@@ -18,26 +18,31 @@ class SigninPage extends ConsumerWidget {
     final bottomInset = MediaQuery.paddingOf(context).bottom;
 
     return Scaffold(
-      backgroundColor: AppTheme.bg,
+      
       // v13: ambient radial gradient (Cool Ink with a hint of warm
       // blue light at top-left + dusky blue at bottom-right). The
       // background does the visual lifting; copy stays minimal.
       body: Stack(
         children: [
-          const Positioned.fill(
+          Positioned.fill(
             child: DecoratedBox(
               decoration: BoxDecoration(
+                // Radial wash that lifts the top-left corner off pure
+                // ink. `ink2` is the kit's raised-surface shade; the
+                // outer stop uses `AppTheme.bg` so a future theme flip
+                // (day mode on signin) inherits the right base.
                 gradient: RadialGradient(
-                  center: Alignment(-0.4, -0.7),
+                  center: const Alignment(-0.4, -0.7),
                   radius: 1.1,
-                  colors: [Color(0xFF1A2230), Color(0xFF0D1116)],
-                  stops: [0.0, 0.55],
+                  colors: [AppTheme.ink2, AppTheme.bg],
+                  stops: const [0.0, 0.55],
                 ),
               ),
             ),
           ),
-          // Soft secondary glow bottom-right to give depth without
-          // introducing accent colour.
+          // Soft secondary glow bottom-right — uses the cool accent
+          // from the kit (`--accent-2 #5B8BFF`) at 18% alpha, matching
+          // the kit's `--accent-bg` recipe.
           Positioned.fill(
             child: IgnorePointer(
               child: DecoratedBox(
@@ -46,7 +51,7 @@ class SigninPage extends ConsumerWidget {
                     center: const Alignment(0.7, 0.9),
                     radius: 0.9,
                     colors: [
-                      const Color(0xFF5078C8).withValues(alpha: 0.18),
+                      AppTheme.accentBg,
                       Colors.transparent,
                     ],
                     stops: const [0.0, 0.5],
@@ -67,7 +72,9 @@ class SigninPage extends ConsumerWidget {
                     fontSize: 26,
                     fontWeight: FontWeight.w700,
                     letterSpacing: 6,
-                    color: Colors.white,
+                    // Day mode inverts the scaffold to white — the brand
+                    // must flip to near-black to stay readable.
+                    color: AppTheme.text,
                   ),
                 ),
                 const SizedBox(height: 14),
@@ -104,6 +111,10 @@ class SigninPage extends ConsumerWidget {
   }
 }
 
+/// Inverted pill button — fill is the ink colour of the current mode
+/// (white in night, near-black in day) with the label/icon inverted
+/// to match (`AppTheme.bg`). Named "white" for historical reasons
+/// (night-only origin); the fill is theme-adaptive.
 class _WhitePill extends StatelessWidget {
   const _WhitePill({
     required this.label,
@@ -116,6 +127,9 @@ class _WhitePill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // `fg` is always the contrast of `AppTheme.text`. Matches the kit's
+    // `.btn--solid { background: var(--text); color: var(--ink); }`.
+    final fg = AppTheme.bg;
     return Material(
       color: AppTheme.text,
       borderRadius: BorderRadius.circular(999),
@@ -128,12 +142,12 @@ class _WhitePill extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, size: 18, color: Colors.black),
+              Icon(icon, size: 18, color: fg),
               const SizedBox(width: 10),
               Text(
                 label,
                 style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      color: Colors.black,
+                      color: fg,
                       fontWeight: FontWeight.w600,
                       letterSpacing: 0.2,
                     ),

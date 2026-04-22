@@ -23,7 +23,7 @@ class Glass extends StatelessWidget {
   const Glass({
     super.key,
     required this.child,
-    this.blur = 20,
+    this.blur = 10,
     this.tint = 0.55,
     this.borderRadius = const BorderRadius.all(Radius.circular(0)),
     this.border,

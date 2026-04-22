@@ -23,7 +23,7 @@ class WorkPage extends ConsumerWidget {
     final postersAsync = ref.watch(postersByWorkIdProvider(workId));
 
     return Scaffold(
-      backgroundColor: AppTheme.bg,
+      
       body: workAsync.when(
         loading: () =>
             const Center(child: CircularProgressIndicator(strokeWidth: 2)),
