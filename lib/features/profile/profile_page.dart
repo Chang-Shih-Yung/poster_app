@@ -35,12 +35,11 @@ class ProfilePage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(currentUserProvider);
     if (user == null) {
-      // Shouldn't happen in v11 (profile only reachable when signed in),
-      // but handle gracefully.
-      return Scaffold(
-        
-        body: const Center(child: Text('請先登入')),
-      );
+      // Reaches here only transiently — between signOut() firing and
+      // the router's auth listener redirecting to /signin. A loader
+      // reads as "switching..." rather than the alarming "請先登入"
+      // on an otherwise-blank page the user saw for half a second.
+      return const Scaffold(body: AppLoader.centered());
     }
 
     final profileAsync = ref.watch(currentProfileProvider);
@@ -112,31 +111,51 @@ class _SignedInView extends ConsumerWidget {
         _TextActionRow(
           label: '切換帳號',
           color: AppTheme.accent2,
-          onTap: () => _performSignOut(context, ref),
+          onTap: () => _signOutAndGo(context, ref, switchAccount: true),
         ),
         const SizedBox(height: 4),
         _TextActionRow(
           label: '登出',
           color: AppTheme.danger,
-          onTap: () => _performSignOut(context, ref),
+          onTap: () => _signOutAndGo(context, ref, switchAccount: false),
         ),
       ],
     );
   }
 
-  Future<void> _performSignOut(BuildContext context, WidgetRef ref) async {
+  /// Two paths out of the signed-in profile page.
+  ///
+  /// **Switch account** ([switchAccount] = true): do NOT call
+  /// `signOut()`. Just navigate to `/signin?switch=1` — the sign-in
+  /// page picks up the flag and immediately fires Google OAuth with
+  /// `prompt=select_account`, so the user sees the account chooser.
+  /// When they pick a different Google account, Supabase atomically
+  /// replaces the session; the auth listener (in app_router) detects
+  /// the user id change and invalidates every user-scoped cache.
+  /// Picking the same account is a no-op, which is the right
+  /// behaviour for "I changed my mind".
+  ///
+  /// **Sign out** ([switchAccount] = false): navigate first so
+  /// ProfilePage dismounts before the session drops (otherwise the
+  /// rebuild-with-null-user shows a loader flash). Then await
+  /// `signOut()` and invalidate caches defensively — the auth
+  /// listener will do the same, but this pair of calls makes the
+  /// cleanup deterministic.
+  Future<void> _signOutAndGo(
+    BuildContext context,
+    WidgetRef ref, {
+    required bool switchAccount,
+  }) async {
     HapticFeedback.selectionClick();
-    // Pop the profile page first so we don't briefly render
-    // signed-out content with auth-required widgets still mounted.
-    // Then await Supabase signOut and force-navigate to /signin
-    // (the GoRouter redirect would also fire, but we don't want
-    // to depend on the auth-stream race winning before any
-    // already-loaded provider tries to refetch with no session).
     final router = GoRouter.of(context);
+
+    if (switchAccount) {
+      router.go('/signin?switch=1');
+      return;
+    }
+
+    router.go('/signin');
     await ref.read(authRepositoryProvider).signOut();
-    // Drop every cache keyed to the previous user so the next
-    // sign-in starts clean — no stale favorites / submissions /
-    // follower counts / home feed bleeding across accounts.
     ref.invalidate(currentProfileProvider);
     ref.invalidate(favoritesProvider);
     ref.invalidate(favoriteIdsProvider);
@@ -145,7 +164,6 @@ class _SignedInView extends ConsumerWidget {
     ref.invalidate(myTagSuggestionsProvider);
     ref.invalidate(publicProfileProvider);
     ref.invalidate(userRelationshipStatsProvider);
-    router.go('/signin');
   }
 }
 

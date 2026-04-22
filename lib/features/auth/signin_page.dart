@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart'; // TODO(v11): remove when Google logo is replaced
 
 import '../../core/theme/app_theme.dart';
@@ -9,11 +10,45 @@ import '../../data/repositories/auth_repository.dart';
 /// Signin page — v11 extreme minimal.
 ///
 /// Brand name + one line + Google button. That's it.
-class SigninPage extends ConsumerWidget {
+///
+/// Supports a `?switch=1` query param: when present, auto-launches
+/// Google OAuth with `prompt=select_account` the moment the page
+/// mounts. Users tapping 切換帳號 on the profile page land here and
+/// are handed straight to Google's account chooser without an
+/// extra click on the 使用 Google 登入 button.
+class SigninPage extends ConsumerStatefulWidget {
   const SigninPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<SigninPage> createState() => _SigninPageState();
+}
+
+class _SigninPageState extends ConsumerState<SigninPage> {
+  bool _autoLaunched = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Query-param read lives here (not initState) because
+    // GoRouterState depends on inherited widgets which aren't ready
+    // until first dependency change.
+    if (_autoLaunched) return;
+    final q = GoRouterState.of(context).uri.queryParameters;
+    if (q['switch'] == '1') {
+      _autoLaunched = true;
+      // Fire-and-forget on next frame — Supabase OAuth is a full-page
+      // redirect on web, so we just need to kick it off.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ref
+            .read(authRepositoryProvider)
+            .signInWithGoogle(forceAccountPicker: true);
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final bottomInset = MediaQuery.paddingOf(context).bottom;
 
@@ -90,7 +125,13 @@ class SigninPage extends ConsumerWidget {
                   icon: PhosphorIconsRegular.googleLogo,
                   onTap: () {
                     HapticFeedback.selectionClick();
-                    ref.read(authRepositoryProvider).signInWithGoogle();
+                    // Manual taps always show Google's picker — users
+                    // land here via 切換帳號 or after a session expiry,
+                    // and silently re-signing the cached account is
+                    // the wrong default in both cases.
+                    ref
+                        .read(authRepositoryProvider)
+                        .signInWithGoogle(forceAccountPicker: true);
                   },
                 ),
                 const SizedBox(height: 12),

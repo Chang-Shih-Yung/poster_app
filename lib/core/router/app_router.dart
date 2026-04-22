@@ -74,8 +74,17 @@ final routerProvider = Provider<GoRouter>((ref) {
       final signedIn = ref.read(isSignedInProvider);
       final loc = state.matchedLocation;
       final onSignin = loc == '/signin';
+      // Switch-account flow: the user taps 切換帳號 on the profile
+      // page, which navigates here with ?switch=1. At that instant
+      // they are still technically signed in (signOut hasn't
+      // completed yet, and for atomic account replacement via
+      // Google's picker we don't need to signOut at all). Without
+      // this escape hatch the redirect would bounce them straight
+      // back to `/` and the sign-in page never gets a chance to
+      // mount + auto-trigger OAuth.
+      final isSwitchFlow = state.uri.queryParameters['switch'] == '1';
       if (!signedIn && !onSignin) return '/signin';
-      if (signedIn && onSignin) return '/';
+      if (signedIn && onSignin && !isSwitchFlow) return '/';
       return null;
     },
     routes: [

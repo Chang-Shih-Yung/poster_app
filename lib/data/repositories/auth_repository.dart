@@ -10,13 +10,23 @@ class AuthRepository {
 
   final SupabaseClient _client;
 
-  Future<void> signInWithGoogle() async {
+  /// Sign in via Google OAuth.
+  ///
+  /// Set [forceAccountPicker] true when the user explicitly wants
+  /// "切換帳號" — Google caches the last consented account and
+  /// silently signs back in by default, which is the opposite of
+  /// what the user just asked for. `prompt=select_account` forces
+  /// Google to show the chooser every time.
+  Future<void> signInWithGoogle({bool forceAccountPicker = false}) async {
     final redirectTo = kIsWeb
         ? null
         : 'io.supabase.posterapp://login-callback/';
     await _client.auth.signInWithOAuth(
       OAuthProvider.google,
       redirectTo: redirectTo,
+      queryParams: forceAccountPicker
+          ? const {'prompt': 'select_account'}
+          : null,
     );
   }
 
