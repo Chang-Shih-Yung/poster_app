@@ -186,8 +186,11 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
               child: Column(
                 children: [
                   // ── Hero (full-bleed poster + Fuji drawer overlay) ──
+                  // Slightly less than full-height so the "相關海報"
+                  // eyebrow below peeks above the fold — Spotify-style
+                  // scroll-affordance hint that there is more content.
                   SizedBox(
-                    height: screenH,
+                    height: screenH - 64,
                     child: Stack(
                       fit: StackFit.expand,
                       children: [
@@ -326,8 +329,8 @@ class _FujiDrawerState extends State<_FujiDrawer> {
       curve: AppTheme.easeStandard,
       alignment: Alignment.topCenter,
       child: Glass(
-        blur: 14,
-        tint: 0.65,
+        blur: 18,
+        tint: 0.42,
         borderRadius: BorderRadius.circular(24),
         padding: const EdgeInsets.fromLTRB(20, 6, 20, 18),
         // Drop the inset top highlight — Glass paints a 1px white
@@ -376,6 +379,7 @@ class _FujiDrawerState extends State<_FujiDrawer> {
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: theme.textTheme.headlineLarge?.copyWith(
+                  color: Colors.white,
                   fontSize: 32,
                   height: 1.05,
                   fontWeight: FontWeight.w600,
@@ -387,8 +391,9 @@ class _FujiDrawerState extends State<_FujiDrawer> {
               const SizedBox(height: 4),
               Text(
                 p.director!,
-                style: theme.textTheme.bodyMedium
-                    ?.copyWith(color: AppTheme.textMute),
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: Colors.white.withValues(alpha: 0.72),
+                ),
               ),
             ],
             // Everything below title + director collapses together:
@@ -401,8 +406,10 @@ class _FujiDrawerState extends State<_FujiDrawer> {
               Container(
                 decoration: BoxDecoration(
                   border: Border(
-                    top: BorderSide(color: AppTheme.line1),
-                    bottom: BorderSide(color: AppTheme.line1),
+                    top: BorderSide(
+                        color: Colors.white.withValues(alpha: 0.1)),
+                    bottom: BorderSide(
+                        color: Colors.white.withValues(alpha: 0.1)),
                   ),
                 ),
                 padding: const EdgeInsets.symmetric(vertical: 14),
@@ -466,7 +473,7 @@ class _Eyebrow extends StatelessWidget {
     return Text(
       parts.join(' · '),
       style: Theme.of(context).textTheme.labelSmall?.copyWith(
-            color: AppTheme.textMute,
+            color: Colors.white.withValues(alpha: 0.65),
             letterSpacing: 2,
             fontWeight: FontWeight.w600,
           ),
@@ -515,7 +522,7 @@ class _Stat extends StatelessWidget {
         Text(
           label,
           style: theme.textTheme.labelSmall?.copyWith(
-            color: AppTheme.textFaint,
+            color: Colors.white.withValues(alpha: 0.5),
             letterSpacing: 1,
             fontWeight: FontWeight.w600,
           ),
@@ -574,18 +581,20 @@ class _ExpandedInfo extends ConsumerWidget {
               child: Row(
                 children: [
                   Icon(LucideIcons.layers,
-                      size: 13, color: AppTheme.textFaint),
+                      size: 13,
+                      color: Colors.white.withValues(alpha: 0.55)),
                   const SizedBox(width: 6),
                   Text(
                     '看這部作品的所有海報',
                     style: theme.textTheme.labelMedium?.copyWith(
-                      color: AppTheme.textFaint,
+                      color: Colors.white.withValues(alpha: 0.65),
                       fontWeight: FontWeight.w500,
                     ),
                   ),
                   const SizedBox(width: 4),
                   Icon(LucideIcons.chevronRight,
-                      size: 13, color: AppTheme.textFaint),
+                      size: 13,
+                      color: Colors.white.withValues(alpha: 0.55)),
                 ],
               ),
             ),
@@ -787,14 +796,14 @@ class _MiniChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: AppTheme.chipBg,
+        color: Colors.white.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: AppTheme.line1),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
       ),
       child: Text(
         label,
         style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: AppTheme.text,
+              color: Colors.white,
               letterSpacing: 0.6,
               fontWeight: FontWeight.w500,
             ),
@@ -820,14 +829,14 @@ class _TappableTagChip extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           decoration: BoxDecoration(
-            color: AppTheme.chipBg,
+            color: Colors.white.withValues(alpha: 0.08),
             borderRadius: BorderRadius.circular(999),
-            border: Border.all(color: AppTheme.line1),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
           ),
           child: Text(
             '# $label',
             style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: AppTheme.text,
+                  color: Colors.white,
                   letterSpacing: 0.4,
                   fontWeight: FontWeight.w500,
                 ),

@@ -534,14 +534,32 @@ class _MasonryCard extends StatelessWidget {
                       ],
                     ),
                   ),
-                  // Fancy heart — gradient-filled + white border + glow.
-                  // Only shown when showFav=true (投稿 tab) AND the
-                  // poster is actually favorited.
+                  // Favorite indicator — shown when showFav=true
+                  // (投稿 tab) AND the poster is actually favorited.
+                  // Single filled heart icon on a soft pill so it reads
+                  // on any poster background without the gradient/SVG
+                  // circus of the old v18 _FancyHeart.
                   if (showFav && isFavorited)
-                    const Positioned(
+                    Positioned(
                       top: 8,
                       right: 8,
-                      child: _FancyHeart(size: 14),
+                      child: Container(
+                        width: 26,
+                        height: 26,
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.38),
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.18),
+                            width: 0.5,
+                          ),
+                        ),
+                        child: Icon(
+                          Icons.favorite,
+                          size: 14,
+                          color: AppTheme.favoriteActive,
+                        ),
+                      ),
                     ),
                 ],
               ),
@@ -705,73 +723,3 @@ class _SmallTile extends StatelessWidget {
   }
 }
 
-/// v18 fancy heart — gradient pink-to-crimson fill + white stroke +
-/// drop-shadow glow. Direct port of prototype's FancyHeart: painted
-/// inline with SVG so we don't depend on a rich-icon font.
-class _FancyHeart extends StatelessWidget {
-  const _FancyHeart({required this.size});
-  final double size;
-
-  @override
-  Widget build(BuildContext context) {
-    return CustomPaint(
-      size: Size(size + 10, size + 10),
-      painter: _FancyHeartPainter(),
-    );
-  }
-}
-
-class _FancyHeartPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    // Scale factor based on 34x34 viewBox used by the prototype SVG.
-    final s = size.width / 34.0;
-    canvas.save();
-    canvas.scale(s, s);
-
-    final path = Path()
-      ..moveTo(17, 28.5)
-      ..cubicTo(5, 20.5, 2.5, 14.5, 4.5, 10)
-      ..cubicTo(7, 4.5, 13.5, 4, 17, 9)
-      ..cubicTo(20.5, 4, 27, 4.5, 29.5, 10)
-      ..cubicTo(31.5, 14.5, 29, 20.5, 17, 28.5)
-      ..close();
-
-    // Outer glow — crimson-alpha blurred behind the fill.
-    canvas.drawShadow(path, const Color(0xFFFF4678), 6, true);
-
-    // Gradient fill pink → crimson (kit --heart-1/2/3).
-    final fill = Paint()
-      ..shader = LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [AppTheme.heart1, AppTheme.heart2, AppTheme.heart3],
-        stops: const [0, 0.5, 1],
-      ).createShader(const Rect.fromLTWH(0, 0, 34, 34));
-    canvas.drawPath(path, fill);
-
-    // Soft white stroke outline.
-    final stroke = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.2
-      ..strokeJoin = StrokeJoin.round
-      ..color = Colors.white.withValues(alpha: 0.9);
-    canvas.drawPath(path, stroke);
-
-    // Tiny highlight arc top-left for that "jelly" look.
-    final highlight = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.4
-      ..strokeCap = StrokeCap.round
-      ..color = Colors.white.withValues(alpha: 0.75);
-    final hl = Path()
-      ..moveTo(11, 10.5)
-      ..cubicTo(12, 9, 14, 8.8, 15.5, 10.5);
-    canvas.drawPath(hl, highlight);
-
-    canvas.restore();
-  }
-
-  @override
-  bool shouldRepaint(_FancyHeartPainter old) => false;
-}
