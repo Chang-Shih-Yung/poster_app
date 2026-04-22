@@ -5,6 +5,13 @@ import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../data/providers/supabase_providers.dart';
+import '../../data/repositories/auth_repository.dart';
+import '../../data/repositories/favorite_repository.dart';
+import '../../data/repositories/follow_repository.dart';
+import '../../data/repositories/social_repository.dart';
+import '../../data/repositories/submission_repository.dart';
+import '../../data/repositories/tag_suggestion_repository.dart';
+import '../../data/repositories/user_repository.dart';
 import '../../features/admin/admin_review_page.dart';
 import '../../features/admin/admin_tag_suggestions_page.dart';
 import '../../features/auth/signin_page.dart';
@@ -27,11 +34,33 @@ import '../theme/app_theme.dart';
 import '../theme/theme_mode_notifier.dart';
 
 /// Fires whenever auth state changes so GoRouter re-evaluates redirects.
+///
+/// Also drops every cache keyed to the signed-in user whenever the
+/// auth user id changes — sign-out clears them explicitly in
+/// `_performSignOut`, but this catches sign-in flips too (OAuth return,
+/// token refresh onto a different account, session expiry + resign)
+/// where the new user would otherwise briefly see stale data from the
+/// previous one.
 class _AuthListenable extends ChangeNotifier {
   _AuthListenable(Ref ref) {
+    String? lastUserId = ref.read(currentUserProvider)?.id;
     ref.listen(
       authStateChangesProvider,
-      (_, _) => notifyListeners(),
+      (_, _) {
+        notifyListeners();
+        final nextUserId = ref.read(currentUserProvider)?.id;
+        if (nextUserId != lastUserId) {
+          lastUserId = nextUserId;
+          ref.invalidate(currentProfileProvider);
+          ref.invalidate(favoritesProvider);
+          ref.invalidate(favoriteIdsProvider);
+          ref.invalidate(mySubmissionsV2Provider);
+          ref.invalidate(homeSectionsV2Provider);
+          ref.invalidate(myTagSuggestionsProvider);
+          ref.invalidate(publicProfileProvider);
+          ref.invalidate(userRelationshipStatsProvider);
+        }
+      },
       fireImmediately: false,
     );
   }

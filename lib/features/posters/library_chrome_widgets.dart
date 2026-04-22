@@ -133,63 +133,65 @@ class LibraryDensitySkeleton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Shimmer.fromColors(
-      baseColor: AppTheme.surfaceRaised,
-      highlightColor: AppTheme.chipBgStrong,
-      child: switch (density) {
-        BrowseDensity.large => Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-            child: Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(28),
-              ),
+    // v19: drop the reflective shimmer sweep (was using
+    // Shimmer.fromColors with white tiles → read as "iridescent cards"
+    // rather than "pending content"). Now just flat muted-surface
+    // rectangles in the grid positions — the layout alone tells you
+    // content is loading. IG / Threads do exactly this.
+    final fill = AppTheme.surfaceRaised;
+    return switch (density) {
+      BrowseDensity.large => Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+          child: Container(
+            decoration: BoxDecoration(
+              color: fill,
+              borderRadius: BorderRadius.circular(28),
             ),
           ),
-        BrowseDensity.medium => GridView.builder(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 40),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              mainAxisSpacing: 14,
-              crossAxisSpacing: 14,
-              childAspectRatio: 0.64,
-            ),
-            itemCount: 6,
-            itemBuilder: (_, _) => Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(18),
-              ),
+        ),
+      BrowseDensity.medium => GridView.builder(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 40),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            mainAxisSpacing: 14,
+            crossAxisSpacing: 14,
+            childAspectRatio: 0.64,
+          ),
+          itemCount: 6,
+          itemBuilder: (_, _) => Container(
+            decoration: BoxDecoration(
+              color: fill,
+              borderRadius: BorderRadius.circular(18),
             ),
           ),
-        BrowseDensity.small => ListView.separated(
-            padding: const EdgeInsets.fromLTRB(20, 8, 20, 40),
-            itemCount: 8,
-            separatorBuilder: (_, _) => const SizedBox(height: 12),
-            itemBuilder: (_, _) => Row(
-              children: [
-                Container(
-                  width: 56,
-                  height: 56,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
+        ),
+      BrowseDensity.small => ListView.separated(
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 40),
+          itemCount: 8,
+          separatorBuilder: (_, _) => const SizedBox(height: 12),
+          itemBuilder: (_, _) => Row(
+            children: [
+              Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  color: fill,
+                  borderRadius: BorderRadius.circular(8),
                 ),
-                const SizedBox(width: 14),
-                Expanded(
-                    child: Container(
-                  height: 14,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                )),
-              ],
-            ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                  child: Container(
+                height: 14,
+                decoration: BoxDecoration(
+                  color: fill,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              )),
+            ],
           ),
-      },
-    );
+        ),
+    };
   }
 }
 

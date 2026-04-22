@@ -16,6 +16,11 @@ import '../../core/theme/theme_mode_notifier.dart';
 import '../../data/models/app_user.dart';
 import '../../data/providers/supabase_providers.dart';
 import '../../data/repositories/auth_repository.dart';
+import '../../data/repositories/favorite_repository.dart';
+import '../../data/repositories/follow_repository.dart';
+import '../../data/repositories/social_repository.dart';
+import '../../data/repositories/submission_repository.dart';
+import '../../data/repositories/tag_suggestion_repository.dart';
 import '../../data/repositories/user_repository.dart';
 
 /// Profile page — v11 simplified.
@@ -137,9 +142,17 @@ class _SignedInView extends ConsumerWidget {
     // already-loaded provider tries to refetch with no session).
     final router = GoRouter.of(context);
     await ref.read(authRepositoryProvider).signOut();
-    // Drop any cached user-scoped data so the next sign-in
-    // doesn't briefly flash the previous account's profile.
+    // Drop every cache keyed to the previous user so the next
+    // sign-in starts clean — no stale favorites / submissions /
+    // follower counts / home feed bleeding across accounts.
     ref.invalidate(currentProfileProvider);
+    ref.invalidate(favoritesProvider);
+    ref.invalidate(favoriteIdsProvider);
+    ref.invalidate(mySubmissionsV2Provider);
+    ref.invalidate(homeSectionsV2Provider);
+    ref.invalidate(myTagSuggestionsProvider);
+    ref.invalidate(publicProfileProvider);
+    ref.invalidate(userRelationshipStatsProvider);
     router.go('/signin');
   }
 }

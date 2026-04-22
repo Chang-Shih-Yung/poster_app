@@ -44,7 +44,7 @@ dependencies:
   supabase_flutter: ^2.12.2
   uuid: ^4.5.3
   shared_preferences: ^2.5.5
-  shimmer: ^3.0.0
+  # shimmer dropped v19 — no more reflective sweep, just flat placeholders
   # google_fonts dropped — see EPIC 12 / app_theme.dart
   sentry_flutter: ^8.14.2
   phosphor_flutter: ^2.1.0
