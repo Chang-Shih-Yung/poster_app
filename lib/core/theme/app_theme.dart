@@ -46,62 +46,71 @@ class AppTheme {
   //        (#F5F2EC) read yellow; this swap mirrors the Threads app
   //        the user referenced.
 
+  // ── Palette: aligned to Spotify Encore tokens ─────────────────────
+  // Night values match Spotify's content-first darkness: #121212 bg,
+  // #181818 card, stepped surface tones for elevation. Day palette
+  // stays parked for a future editorial-white mode but is currently
+  // unreachable (setDayMode is hard-locked to false in main.dart).
+  //
+  // Colours: the app is monochrome by design — posters do all the
+  // chromatic work. The only remaining hue is `favoriteActive` red,
+  // kept as a semantic signal for the heart. No blue / green accent.
   static Color get bg =>
-      _day ? const Color(0xFFFFFFFF) : const Color(0xFF07090D);
-  // Raised surfaces — day uses near-white cool-gray tints so cards
-  // have separation from bg without tinting warm.
-  static Color get ink2 =>
-      _day ? const Color(0xFFF4F5F7) : const Color(0xFF10151B);
-  static Color get ink3 =>
-      _day ? const Color(0xFFECEDEF) : const Color(0xFF161C25);
-  static Color get surface => ink2;
-  static Color get surfaceRaised => ink3;
+      _day ? const Color(0xFFFFFFFF) : const Color(0xFF121212);
+  static Color get surface =>
+      _day ? const Color(0xFFF4F5F7) : const Color(0xFF181818);
+  static Color get surfaceAlt =>
+      _day ? const Color(0xFFECEDEF) : const Color(0xFF1F1F1F);
+  static Color get surfaceRaised =>
+      _day ? const Color(0xFFE4E5E8) : const Color(0xFF252525);
+  // Legacy aliases — ink2/3 were the pre-v19 names; kept so existing
+  // widget code keeps compiling during the design-system rollout.
+  static Color get ink2 => surface;
+  static Color get ink3 => surfaceAlt;
   static Color get surfaceGlass => _day
-      ? const Color(0xD9FFFFFF) // rgba(255,255,255,0.85) — day glass strip
-      : const Color(0x8C0E1219); // rgba(14,18,25,0.55) — matches --glass-tint
+      ? const Color(0xD9FFFFFF)
+      : const Color(0x8C141414); // rgba(20,20,20,0.55)
 
-  // Text — near-black in day, pure white in night. Alpha steps on day
-  // land at 0.60 / 0.40, matching Threads / iOS Settings muted scale.
+  // Text — Spotify palette: #ffffff / #b3b3b3 / #7c7c7c.
   static Color get text =>
       _day ? const Color(0xFF111111) : const Color(0xFFFFFFFF);
   static Color get textMute => _day
-      ? Colors.black.withValues(alpha: 0.60)
-      : Colors.white.withValues(alpha: 0.58);
+      ? const Color(0xFF6B6B6B) // near-equiv to 60% black
+      : const Color(0xFFB3B3B3); // Spotify secondary
   static Color get textFaint => _day
-      ? Colors.black.withValues(alpha: 0.40)
-      : Colors.white.withValues(alpha: 0.36);
+      ? const Color(0xFF999999)
+      : const Color(0xFF7C7C7C); // Spotify tertiary
 
-  // Line tokens — 3 tiers. Day alphas match the kit's night spec
-  // (0.06 / 0.11 / 0.18) so dividers are equally subtle on both.
+  // Line tokens — concrete dark neutrals on night (no more alpha-
+  // based tinting that shifted with background). Matches Spotify's
+  // stepped borders `#2a2a2a` / `#4d4d4d` / `#7c7c7c`.
   static Color get line1 => _day
-      ? Colors.black.withValues(alpha: 0.06)
-      : Colors.white.withValues(alpha: 0.06);
+      ? const Color(0xFFEDEDED)
+      : const Color(0xFF2A2A2A); // hairline
   static Color get line2 => _day
-      ? Colors.black.withValues(alpha: 0.11)
-      : Colors.white.withValues(alpha: 0.11);
+      ? const Color(0xFFDEDEDE)
+      : const Color(0xFF4D4D4D); // visible border
   static Color get line3 => _day
-      ? Colors.black.withValues(alpha: 0.18)
-      : Colors.white.withValues(alpha: 0.18);
+      ? const Color(0xFFBFBFBF)
+      : const Color(0xFF7C7C7C); // prominent
 
-  // Chip tokens — slightly stronger than hair-soft so pills read as
-  // tappable surfaces, not dividers.
+  // Chip tokens — surfaces, not dividers. Aligned with Spotify's
+  // dark pill (#1f1f1f) and its pressed variant.
   static Color get chipBg => _day
-      ? Colors.black.withValues(alpha: 0.05)
-      : Colors.white.withValues(alpha: 0.08);
+      ? const Color(0xFFE4E5E8)
+      : const Color(0xFF1F1F1F);
   static Color get chipBgStrong => _day
-      ? Colors.black.withValues(alpha: 0.08)
-      : Colors.white.withValues(alpha: 0.14);
+      ? const Color(0xFFD6D7DA)
+      : const Color(0xFF2A2A2A);
 
-  // ── Accent palette — "cool" (kit default) ────────────────────────
-  // Kit: --accent-1 #8FB4FF (lighter / hover)
-  //      --accent-2 #5B8BFF (canonical accent, links / active)
-  //      --accent-bg rgba(91,139,255,0.18) (subtle accent surface)
-  // The kit ships 5 palettes (cool/warm/mono/ember/forest). Cool is
-  // the default and the only one currently in use. Accent is not
-  // overridden in day mode per the kit — same hex both ways.
+  // ── Accent palette (retained, currently unused) ──────────────────
+  // v19 removes blue/green accents from the product surface. These
+  // constants stay so any lingering imports keep compiling; new code
+  // should NOT use them. The monochrome rule is: white for active,
+  // muted grey for inactive, red only for the favorite heart.
   static const Color accent1 = Color(0xFF8FB4FF);
   static const Color accent2 = Color(0xFF5B8BFF);
-  static const Color accentBg = Color(0x2E5B8BFF); // 0.18 alpha
+  static const Color accentBg = Color(0x2E5B8BFF);
 
   // ── Fancy-heart gradient ──────────────────────────────────────────
   // Kit: --heart-1 / --heart-2 / --heart-3. Used ONLY on the favorite
@@ -151,6 +160,29 @@ class AppTheme {
   static const double s8 = 32;
   static const double s10 = 40;
   static const double s12 = 48;
+
+  // ── Corner-radius scale (Spotify Encore) ─────────────────────────
+  // Aligned to Spotify's actual values, which are SMALLER than the
+  // 14-28px we used pre-v19. Use these instead of hardcoded Radius
+  // numbers sprinkled across widgets.
+  //
+  //   r1   2px — badges, tags
+  //   r2   4px — inputs, small chips
+  //   r3   6px — album thumbs, small cards
+  //   r4   8px — standard cards (default)
+  //   r5  12px — panels, dialogs
+  //   r6  16px — sheets / bottom drawers
+  //   r7  20px — large overlays
+  //   pill  — fully rounded (500+ → use 9999)
+  //   circle — 50% (icon buttons, avatars, play button)
+  static const double r1 = 2;
+  static const double r2 = 4;
+  static const double r3 = 6;
+  static const double r4 = 8;
+  static const double r5 = 12;
+  static const double r6 = 16;
+  static const double r7 = 20;
+  static const double rPill = 9999;
 
   static TextTheme _textTheme() {
     final base = ThemeData.dark().textTheme;
@@ -267,12 +299,11 @@ class AppTheme {
         iconTheme: IconThemeData(color: text, size: 22),
       ),
       cardTheme: CardThemeData(
-        color: surfaceRaised,
+        color: surface,
         elevation: 0,
         surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-          side: BorderSide(color: line1),
+          borderRadius: BorderRadius.circular(r4),
         ),
         margin: EdgeInsets.zero,
       ),
