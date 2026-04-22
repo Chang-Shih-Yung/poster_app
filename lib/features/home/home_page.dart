@@ -7,6 +7,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/theme_mode_notifier.dart';
+import '../../core/widgets/ds/ds.dart';
 import '../../core/widgets/shimmer_placeholder.dart';
 import '../../core/widgets/two_bar_icon.dart';
 import '../../data/models/app_user.dart';
@@ -493,6 +494,9 @@ class _SectionRow extends StatelessWidget {
   final List<Poster> items;
   final Set<String> favIds;
   final String title;
+  // Legacy; home icons were per-section (trending / recent / etc).
+  // Kept for call-site compatibility but no longer rendered — the
+  // AppSectionHeader layout lets the title carry the whole eyebrow.
   final IconData icon;
 
   @override
@@ -503,26 +507,8 @@ class _SectionRow extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Section header.
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Row(
-              children: [
-                Icon(icon, size: 16, color: AppTheme.textMute),
-                const SizedBox(width: 6),
-                Text(
-                  title,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: AppTheme.text,
-                      ),
-                ),
-              ],
-            ),
-          ),
-
+          AppSectionHeader(title: title),
           const SizedBox(height: 12),
-
           // v18: horizontal-scroll only (density toggle removed).
           SizedBox(
             height: 220,
@@ -833,20 +819,7 @@ class _TrendingRow extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Row(
-              children: [
-                Icon(icon, size: 16, color: AppTheme.textMute),
-                const SizedBox(width: 6),
-                Text(title,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                          color: AppTheme.text,
-                        )),
-              ],
-            ),
-          ),
+          AppSectionHeader(title: title),
           const SizedBox(height: 12),
           SizedBox(
             // 90w poster × 2:3 = 135h, + label below
@@ -989,20 +962,7 @@ class _CollectorsRow extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Row(
-              children: [
-                Icon(icon, size: 16, color: AppTheme.textMute),
-                const SizedBox(width: 6),
-                Text(title,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                          color: AppTheme.text,
-                        )),
-              ],
-            ),
-          ),
+          AppSectionHeader(title: title),
           const SizedBox(height: 12),
           SizedBox(
             // Taller row: avatar 68 + name + follow pill (compact) +
@@ -1136,20 +1096,7 @@ class _FollowFeedRow extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Row(
-              children: [
-                Icon(icon, size: 16, color: AppTheme.textMute),
-                const SizedBox(width: 6),
-                Text(title,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                          color: AppTheme.text,
-                        )),
-              ],
-            ),
-          ),
+          AppSectionHeader(title: title),
           const SizedBox(height: 12),
           SizedBox(
             height: 220,

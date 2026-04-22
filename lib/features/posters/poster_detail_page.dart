@@ -202,9 +202,14 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                             ),
                           ),
                         ),
-                        // Single soft gradient: lifts top chrome + sits the
-                        // glass drawer on a shadow so it doesn't hover
-                        // mid-air over a bright image.
+                        // Spotify-style bottom fade. Image fades into
+                        // surfaceAlt (#1F1F1F) — 4 brightness units
+                        // darker than the _RelatedSection below
+                        // (surfaceRaised #252525). That tiny delta is
+                        // enough for the rounded-top sheet to read as
+                        // "rising out of the haze" while hiding the
+                        // hard seam the user was seeing against pure
+                        // black. Top chrome still gets its 45% dim.
                         const Positioned.fill(
                           child: IgnorePointer(
                             child: DecoratedBox(
@@ -213,12 +218,12 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                                   begin: Alignment.topCenter,
                                   end: Alignment.bottomCenter,
                                   colors: [
-                                    Color(0x73000000), // 0.45
+                                    Color(0x73000000), // 0.45 top dim
                                     Color(0x00000000),
                                     Color(0x00000000),
-                                    Color(0xEB000000), // 0.92
+                                    Color(0xFF1F1F1F), // surfaceAlt at hem
                                   ],
-                                  stops: [0.0, 0.20, 0.45, 1.0],
+                                  stops: [0.0, 0.20, 0.50, 1.0],
                                 ),
                               ),
                             ),
@@ -305,8 +310,8 @@ class _FujiDrawerState extends State<_FujiDrawer> {
       curve: AppTheme.easeStandard,
       alignment: Alignment.topCenter,
       child: Glass(
-        blur: 26,
-        tint: 0.28,
+        blur: 30,
+        tint: 0.18,
         borderRadius: BorderRadius.circular(24),
         padding: const EdgeInsets.fromLTRB(20, 6, 20, 18),
         // Drop the inset top highlight — Glass paints a 1px white
@@ -633,19 +638,29 @@ class _RelatedSection extends ConsumerWidget {
       data: (items) {
         if (items.isEmpty) return const SizedBox.shrink();
 
-        // Soften the peek seam. The hero bottom is a dark gradient,
-        // so using AppTheme.bg (same near-black in night mode)
-        // buried the rounded corners invisibly — the user saw a flat
-        // hairline where the card was supposed to lift. Switching to
-        // surfaceRaised makes the card one shade lighter than the
-        // gradient behind it, and the 28px top-only radius reads as
-        // a sheet gently rising out of the hero below.
+        // Soften the peek seam — Spotify style.
+        //
+        // Hero fade ends at surfaceAlt (#1F1F1F); this sheet sits on
+        // surfaceRaised (#252525). 4 brightness units of delta is
+        // enough for the rounded top to register as a sheet rising
+        // out of a hazy dark zone rather than a pure-black seam.
+        //
+        // A subtle upward boxShadow (negative Y offset, low alpha)
+        // adds a breath of haze right at the seam — the rounded
+        // corners read as "lifted" instead of "cut".
         return Container(
           decoration: BoxDecoration(
             color: AppTheme.surfaceRaised,
             borderRadius: const BorderRadius.vertical(
               top: Radius.circular(28),
             ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.45),
+                blurRadius: 24,
+                offset: const Offset(0, -12),
+              ),
+            ],
           ),
           padding: EdgeInsets.only(
             top: 28,

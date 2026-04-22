@@ -8,7 +8,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/theme_mode_notifier.dart';
 import '../../core/widgets/app_loader.dart';
-import '../../core/widgets/shimmer_placeholder.dart';
+import '../../core/widgets/ds/ds.dart';
 import '../../data/models/poster.dart';
 import '../../data/providers/supabase_providers.dart';
 import '../../data/repositories/favorite_repository.dart';
@@ -388,47 +388,10 @@ class _PosterTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () => context.push('/poster/${poster.id}'),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(12),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            CachedNetworkImage(
-              imageUrl: poster.thumbnailUrl ?? poster.posterUrl,
-              fit: BoxFit.cover,
-              placeholder: (_, _) => const ShimmerPlaceholder(),
-              errorWidget: (_, _, _) =>
-                  ColoredBox(color: AppTheme.surfaceRaised),
-            ),
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: Container(
-                padding: const EdgeInsets.fromLTRB(10, 16, 10, 8),
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [Colors.transparent, Color(0xB3000000)],
-                  ),
-                ),
-                child: Text(
-                  poster.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w600,
-                      ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
+    return AppPosterTile(
+      imageUrl: poster.thumbnailUrl ?? poster.posterUrl,
+      posterId: poster.id,
+      title: poster.title,
     );
   }
 }
