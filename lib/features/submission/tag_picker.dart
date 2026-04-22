@@ -7,6 +7,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/app_loader.dart';
+import '../../core/widgets/ds/ds.dart';
 import '../../data/models/tag.dart';
 import '../../data/repositories/tag_repository.dart';
 import '../../data/repositories/tag_suggestion_repository.dart';
@@ -474,15 +475,14 @@ class _SuggestDialogState extends ConsumerState<_SuggestDialog> {
         ),
       ),
       actions: [
-        TextButton(
+        AppButton.text(
+          label: '取消',
           onPressed: _submitting ? null : () => Navigator.pop(context),
-          child: const Text('取消'),
         ),
-        FilledButton(
-          onPressed: _submitting ? null : _submit,
-          child: _submitting
-              ? const AppLoader(size: AppLoaderSize.inline)
-              : const Text('送出建議'),
+        AppButton.primary(
+          label: '送出建議',
+          busy: _submitting,
+          onPressed: _submit,
         ),
       ],
     );

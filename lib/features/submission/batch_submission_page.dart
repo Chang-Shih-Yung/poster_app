@@ -10,6 +10,7 @@ import '../../core/constants/region_labels.dart';
 import '../../core/services/image_compressor.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/app_loader.dart';
+import '../../core/widgets/ds/ds.dart';
 import '../../data/providers/supabase_providers.dart';
 import '../../data/repositories/submission_repository.dart';
 import 'tag_picker.dart';
@@ -269,10 +270,11 @@ class _BatchSubmissionPageState extends ConsumerState<BatchSubmissionPage> {
               const SizedBox(height: 12),
             ],
 
-            OutlinedButton.icon(
+            AppButton.outline(
+              label: '新增一張海報',
+              icon: LucideIcons.plus,
+              fullWidth: true,
               onPressed: _submitting ? null : _addCard,
-              icon: const Icon(LucideIcons.plus, size: 16),
-              label: const Text('新增一張海報'),
             ),
 
             const SizedBox(height: 28),
@@ -339,24 +341,12 @@ class _BatchSubmissionPageState extends ConsumerState<BatchSubmissionPage> {
               ),
             ),
             const SizedBox(height: 20),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed: _submitting || !_allCardsReady ? null : _submit,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  child: _submitting
-                      ? SizedBox(
-                          width: 20,
-                          height: 20,
-                          // Spinner matches the FilledButton foreground
-                          // (AppTheme.bg) so it's visible against the
-                          // inverted-pill fill in both day and night.
-                          child: AppLoader(color: AppTheme.bg),
-                        )
-                      : Text('送出 ${_cards.length} 張'),
-                ),
-              ),
+            AppButton.primary(
+              label: '送出 ${_cards.length} 張',
+              size: AppButtonSize.large,
+              fullWidth: true,
+              busy: _submitting,
+              onPressed: _allCardsReady ? _submit : null,
             ),
           ],
         ),

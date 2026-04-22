@@ -6,6 +6,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../core/constants/region_labels.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/app_loader.dart';
+import '../../core/widgets/ds/ds.dart';
 import '../../data/models/submission.dart';
 import '../../data/models/work.dart';
 import '../../data/repositories/submission_repository.dart';
@@ -238,13 +239,14 @@ class _PendingCardState extends ConsumerState<_PendingCard> {
           decoration: const InputDecoration(hintText: '例如：圖片模糊、重複投稿'),
         ),
         actions: [
-          TextButton(
+          AppButton.text(
+            label: '取消',
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('取消'),
           ),
-          FilledButton(
+          AppButton.primary(
+            label: '退件',
+            destructive: true,
             onPressed: () => Navigator.pop(ctx, controller.text.trim()),
-            child: const Text('退件'),
           ),
         ],
       ),
@@ -378,15 +380,18 @@ class _PendingCardState extends ConsumerState<_PendingCard> {
                       // Action buttons.
                       Row(
                         children: [
-                          FilledButton.icon(
-                            icon: const Icon(Icons.check, size: 16),
-                            label: const Text('核准'),
+                          AppButton.primary(
+                            label: '核准',
+                            icon: Icons.check,
+                            size: AppButtonSize.small,
                             onPressed: _busy ? null : _approve,
                           ),
                           const SizedBox(width: 8),
-                          OutlinedButton.icon(
-                            icon: const Icon(Icons.close, size: 16),
-                            label: const Text('退件'),
+                          AppButton.outline(
+                            label: '退件',
+                            icon: Icons.close,
+                            size: AppButtonSize.small,
+                            destructive: true,
                             onPressed: _busy ? null : _reject,
                           ),
                         ],
@@ -540,13 +545,13 @@ class _WorkMatchDialogState extends ConsumerState<_WorkMatchDialog> {
         ),
       ),
       actions: [
-        TextButton(
+        AppButton.text(
+          label: '取消',
           onPressed: () => Navigator.pop(context),
-          child: const Text('取消'),
         ),
-        OutlinedButton(
+        AppButton.outline(
+          label: '跳過（建立新作品）',
           onPressed: () => Navigator.pop(context, ''),
-          child: const Text('跳過（建立新作品）'),
         ),
       ],
     );

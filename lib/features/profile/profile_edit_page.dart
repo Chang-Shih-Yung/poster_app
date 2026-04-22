@@ -9,6 +9,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../core/services/image_compressor.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/app_loader.dart';
+import '../../core/widgets/ds/ds.dart';
 import '../../core/widgets/sticky_header.dart';
 import '../../data/models/app_user.dart';
 import '../../data/repositories/auth_repository.dart';
@@ -413,10 +414,11 @@ class _LinksEditorState extends State<_LinksEditor> {
               onRemove: () => _removeRow(i),
             ),
           ),
-        OutlinedButton.icon(
+        AppButton.outline(
+          label: widget.value.length >= 5 ? '最多 5 個連結' : '新增連結',
+          icon: LucideIcons.plus,
+          size: AppButtonSize.small,
           onPressed: widget.value.length >= 5 ? null : _addRow,
-          icon: const Icon(LucideIcons.plus, size: 14),
-          label: Text(widget.value.length >= 5 ? '最多 5 個連結' : '新增連結'),
         ),
       ],
     );

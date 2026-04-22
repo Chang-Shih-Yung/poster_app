@@ -162,6 +162,28 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
     final progress = (_dragY / 200).clamp(0.0, 1.0);
     final scale = 1.0 - progress * 0.06;
 
+    // v19 detail layout — the "天才" stack.
+    //
+    // Background layers (don't scroll):
+    //   1. AppTheme.bg solid colour (so any gap between cards is
+    //      pure dark void).
+    //   2. Poster image pinned to the top, occupying ~62% of screen
+    //      height. Stays put while the foreground scrolls past it
+    //      (parallax — Spotify album-page pattern).
+    //   3. Gradient overlay on the image: top dim for chrome
+    //      legibility, bottom fade into AppTheme.bg so the image
+    //      blurs into the dark void below.
+    //
+    // Foreground (scrolls):
+    //   4. SingleChildScrollView holding two floating cards (Fuji
+    //      info, Related posters) separated by a 24px gap so the
+    //      dark bg is visible between them as a "blur transition".
+    //      Top spacer reserves the parallax window.
+    //
+    // Floating chrome:
+    //   5. Close button (chevron down) in the top-left, fixed.
+    final heroH = screenH * 0.62;
+
     return GestureDetector(
       onVerticalDragUpdate: _onVerticalDragUpdate,
       onVerticalDragEnd: _onVerticalDragEnd,
@@ -174,83 +196,73 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
           child: Transform.scale(
             scale: scale,
             alignment: Alignment.topCenter,
-            child: SingleChildScrollView(
-              physics: const ClampingScrollPhysics(),
-              child: Column(
-                children: [
-                  // ── Hero (full-bleed poster + Fuji drawer overlay) ──
-                  // Slightly less than full-height so the "相關海報"
-                  // eyebrow below peeks above the fold — Spotify-style
-                  // scroll-affordance hint that there is more content.
-                  SizedBox(
-                    height: screenH - 64,
-                    child: Stack(
-                      fit: StackFit.expand,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                // Layer 1: solid bg so gaps between cards read as black.
+                Positioned.fill(child: ColoredBox(color: AppTheme.bg)),
+
+                // Layer 2: poster image, pinned to the top, parallax.
+                Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  height: heroH,
+                  child: Hero(
+                    tag: 'poster-${p.id}',
+                    child: CachedNetworkImage(
+                      imageUrl: p.posterUrl,
+                      fit: BoxFit.cover,
+                      placeholder: (_, _) =>
+                          ColoredBox(color: AppTheme.surfaceRaised),
+                      errorWidget: (_, _, _) => ColoredBox(
+                        color: AppTheme.surfaceRaised,
+                        child: Icon(LucideIcons.imageOff,
+                            color: AppTheme.textFaint, size: 40),
+                      ),
+                    ),
+                  ),
+                ),
+
+                // Layer 3: image overlay — top dim + fade-into-bg.
+                Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  height: heroH,
+                  child: const IgnorePointer(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Color(0x73000000), // 0.45 top dim
+                            Color(0x00000000),
+                            Color(0x00000000),
+                            Color(0xFF121212), // AppTheme.bg at hem
+                          ],
+                          stops: [0.0, 0.18, 0.55, 1.0],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+
+                // Layer 4: scrollable foreground.
+                //
+                // Spacer height = heroH - 220 leaves the bottom of the
+                // hero image visible behind the cards' top edge for
+                // the first scroll position, then both cards rise as
+                // the user scrolls.
+                Positioned.fill(
+                  child: SingleChildScrollView(
+                    physics: const ClampingScrollPhysics(),
+                    child: Column(
                       children: [
-                        // Poster image — full bleed.
-                        Hero(
-                          tag: 'poster-${p.id}',
-                          child: CachedNetworkImage(
-                            imageUrl: p.posterUrl,
-                            fit: BoxFit.cover,
-                            placeholder: (_, _) =>
-                                ColoredBox(color: AppTheme.surfaceRaised),
-                            errorWidget: (_, _, _) => ColoredBox(
-                              color: AppTheme.surfaceRaised,
-                              child: Icon(LucideIcons.imageOff,
-                                  color: AppTheme.textFaint, size: 40),
-                            ),
-                          ),
-                        ),
-                        // Spotify-style bottom fade. Image fades into
-                        // surfaceAlt (#1F1F1F) — 4 brightness units
-                        // darker than the _RelatedSection below
-                        // (surfaceRaised #252525). That tiny delta is
-                        // enough for the rounded-top sheet to read as
-                        // "rising out of the haze" while hiding the
-                        // hard seam the user was seeing against pure
-                        // black. Top chrome still gets its 45% dim.
-                        const Positioned.fill(
-                          child: IgnorePointer(
-                            child: DecoratedBox(
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  begin: Alignment.topCenter,
-                                  end: Alignment.bottomCenter,
-                                  colors: [
-                                    Color(0x73000000), // 0.45 top dim
-                                    Color(0x00000000),
-                                    Color(0x00000000),
-                                    Color(0xFF1F1F1F), // surfaceAlt at hem
-                                  ],
-                                  stops: [0.0, 0.20, 0.50, 1.0],
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                        // Top floating glass button — close only.
-                        // v19: dropped the top-right heart. The Fuji
-                        // drawer already has a prominent 已收藏 /
-                        // 加入收藏 pill CTA; two affordances for the
-                        // same action on one screen is clutter.
-                        Positioned(
-                          top: topInset + 12,
-                          left: 16,
-                          child: GlassButton(
-                            icon: LucideIcons.chevronDown,
-                            onTap: () => context.pop(),
-                            semanticsLabel: '關閉',
-                          ),
-                        ),
-                        // Fuji drawer (bottom glass panel).
-                        Positioned(
-                          left: 16,
-                          right: 16,
-                          // Detail page is pushed above the shell, so
-                          // there's no floating tab bar to clear. Sit
-                          // the drawer just above the safe-area edge.
-                          bottom: bottomInset + 16,
+                        SizedBox(height: heroH - 220),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
                           child: _FujiDrawer(
                             poster: p,
                             isFav: isFav,
@@ -258,14 +270,28 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                             onToggleFav: toggleFav,
                           ),
                         ),
+                        const SizedBox(height: 24),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          child: _RelatedSection(poster: p),
+                        ),
+                        SizedBox(height: bottomInset + 32),
                       ],
                     ),
                   ),
+                ),
 
-                  // ── Below the fold: related posters ──
-                  _RelatedSection(poster: p),
-                ],
-              ),
+                // Layer 5: top close button, fixed.
+                Positioned(
+                  top: topInset + 12,
+                  left: 16,
+                  child: GlassButton(
+                    icon: LucideIcons.chevronDown,
+                    onTap: () => context.pop(),
+                    semanticsLabel: '關閉',
+                  ),
+                ),
+              ],
             ),
           ),
         ),
@@ -629,8 +655,6 @@ class _RelatedSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final relatedAsync = ref.watch(_relatedPostersProvider(poster));
-    final theme = Theme.of(context);
-    final bottomInset = MediaQuery.paddingOf(context).bottom;
 
     return relatedAsync.when(
       loading: () => const SizedBox.shrink(),
@@ -638,46 +662,23 @@ class _RelatedSection extends ConsumerWidget {
       data: (items) {
         if (items.isEmpty) return const SizedBox.shrink();
 
-        // Soften the peek seam — Spotify style.
-        //
-        // Hero fade ends at surfaceAlt (#1F1F1F); this sheet sits on
-        // surfaceRaised (#252525). 4 brightness units of delta is
-        // enough for the rounded top to register as a sheet rising
-        // out of a hazy dark zone rather than a pure-black seam.
-        //
-        // A subtle upward boxShadow (negative Y offset, low alpha)
-        // adds a breath of haze right at the seam — the rounded
-        // corners read as "lifted" instead of "cut".
-        return Container(
-          decoration: BoxDecoration(
-            color: AppTheme.surfaceRaised,
-            borderRadius: const BorderRadius.vertical(
-              top: Radius.circular(28),
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.45),
-                blurRadius: 24,
-                offset: const Offset(0, -12),
-              ),
-            ],
-          ),
-          padding: EdgeInsets.only(
-            top: 28,
-            bottom: bottomInset + 32,
-          ),
+        // v19: floating card with rounded corners on ALL sides — sits
+        // over the dark gap that follows the Fuji card, with the
+        // poster image fading to bg behind it. No more bottom-flush
+        // section panel.
+        return AppCard(
+          padding: const EdgeInsets.fromLTRB(0, 18, 0, 18),
+          background: AppTheme.surface,
+          borderRadius: BorderRadius.circular(AppTheme.r5),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: Text(
-                  '相關海報',
-                  style: theme.textTheme.labelMedium?.copyWith(
-                    color: AppTheme.textMute,
-                    letterSpacing: 1.6,
-                    fontWeight: FontWeight.w600,
-                  ),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 18),
+                child: AppSectionHeader(
+                  title: '相關海報',
+                  horizontalPadding: 0,
                 ),
               ),
               const SizedBox(height: 14),
@@ -685,7 +686,7 @@ class _RelatedSection extends ConsumerWidget {
                 height: 200,
                 child: ListView.separated(
                   scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  padding: const EdgeInsets.symmetric(horizontal: 18),
                   itemCount: items.length,
                   separatorBuilder: (_, _) => const SizedBox(width: 12),
                   itemBuilder: (context, i) {

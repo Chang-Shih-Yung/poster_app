@@ -320,7 +320,9 @@ class _BlurredFilterSheetState extends ConsumerState<_BlurredFilterSheet> {
                       Row(
                         children: [
                           Expanded(
-                            child: OutlinedButton(
+                            child: AppButton.outline(
+                              label: '清除',
+                              fullWidth: true,
                               onPressed: () {
                                 setState(() {
                                   _searchController.clear();
@@ -329,15 +331,15 @@ class _BlurredFilterSheetState extends ConsumerState<_BlurredFilterSheet> {
                                   _selectedTags = {};
                                 });
                               },
-                              child: const Text('清除'),
                             ),
                           ),
                           const SizedBox(width: 12),
                           Expanded(
                             flex: 2,
-                            child: FilledButton(
+                            child: AppButton.primary(
+                              label: '套用',
+                              fullWidth: true,
                               onPressed: _apply,
-                              child: const Text('套用'),
                             ),
                           ),
                         ],

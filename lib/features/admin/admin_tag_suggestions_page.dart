@@ -206,13 +206,25 @@ class _SuggestionCard extends ConsumerStatefulWidget {
 
 class _SuggestionCardState extends ConsumerState<_SuggestionCard> {
   bool _busy = false;
+  // v19: admin must explicitly pick a category before any action
+  // resolves — even if it's the same category the suggester filed
+  // it under. Forces a moment of consideration. Null until tapped.
+  String? _pickedCategoryId;
 
   TagCategory? get _category {
+    final id = _pickedCategoryId;
+    if (id == null) return null;
     for (final c in widget.categories) {
-      if (c.id == widget.suggestion.categoryId) return c;
+      if (c.id == id) return c;
     }
     return null;
   }
+
+  /// Display name with the "編輯" stewardship prefix stripped — DB
+  /// has names like "編輯精選" / "編輯地區" but the chip should read
+  /// "精選" / "地區" so it doesn't all start with the same word.
+  String _shortName(String full) =>
+      full.startsWith('編輯') ? full.substring(2) : full;
 
   @override
   Widget build(BuildContext context) {
@@ -233,31 +245,15 @@ class _SuggestionCardState extends ConsumerState<_SuggestionCard> {
           // Category chip (clickable to change) + time.
           Row(
             children: [
-              InkWell(
+              // v19: chip starts blank ("選擇類別"). Admin has to tap
+              // and pick one explicitly, even if they end up choosing
+              // the same bucket the suggester filed it in. The short
+              // name strips the "編輯" prefix so "編輯精選" reads as
+              // "精選".
+              AppChip(
+                label: cat == null ? '選擇類別' : _shortName(cat.titleZh),
+                size: AppChipSize.small,
                 onTap: _busy ? null : _changeCategory,
-                borderRadius: BorderRadius.circular(999),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: AppTheme.chipBg,
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(color: AppTheme.line1),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        cat?.titleZh ?? '未知類別',
-                        style: theme.textTheme.labelSmall
-                            ?.copyWith(color: AppTheme.textMute),
-                      ),
-                      const SizedBox(width: 4),
-                      Icon(LucideIcons.chevronDown,
-                          size: 10, color: AppTheme.textFaint),
-                    ],
-                  ),
-                ),
               ),
               const Spacer(),
               Text(
@@ -341,26 +337,31 @@ class _SuggestionCardState extends ConsumerState<_SuggestionCard> {
           // points at a category that no longer exists in the DB, so
           // 建立新分類 / 合併既有 can't run meaningfully. Admin has to
           // pick a real category via the chip-dropdown above first.
+          // v19: pure text actions. Admin pages don't need filled
+          // pills shouting for attention — they're decision rows for
+          // technical operators, not consumer CTAs. Buttons are
+          // disabled (and visibly faded) until a category is picked.
           Wrap(
-            spacing: 8,
-            runSpacing: 8,
+            spacing: 18,
+            runSpacing: 4,
             children: [
-              AppButton.primary(
+              AppButton.text(
                 label: '建立新分類',
                 icon: LucideIcons.check,
                 size: AppButtonSize.small,
                 onPressed: (_busy || cat == null) ? null : _approve,
               ),
-              AppButton.outline(
-                label: '合併到既有分類',
+              AppButton.text(
+                label: '合併到既有',
                 icon: LucideIcons.gitMerge,
                 size: AppButtonSize.small,
                 onPressed: (_busy || cat == null) ? null : _merge,
               ),
-              AppButton.outline(
-                label: '退回此建議',
+              AppButton.text(
+                label: '退回',
                 icon: LucideIcons.x,
                 size: AppButtonSize.small,
+                destructive: true,
                 onPressed: (_busy || cat == null) ? null : _reject,
               ),
             ],
@@ -396,53 +397,55 @@ class _SuggestionCardState extends ConsumerState<_SuggestionCard> {
     }
   }
 
-  /// Reassign this suggestion to a different category before approving.
-  /// Fixes legacy-migrated suggestions that were all dumped into 編輯精選.
+  /// Pick a category for this suggestion. v19: previously always
+  /// wrote-through to the DB so the categoryId field updated.
+  /// Now records the choice locally; the DB-write happens during
+  /// _approve / _merge so the admin's pick is durable only when they
+  /// commit an action. Cancel / navigate-away discards the pick.
   Future<void> _changeCategory() async {
     final cats = widget.categories;
     final picked = await showDialog<TagCategory>(
       context: context,
       builder: (ctx) => SimpleDialog(
-        title: const Text('改到哪個類別？'),
+        title: const Text('選擇類別'),
         children: [
           for (final c in cats)
-            if (c.id != widget.suggestion.categoryId)
-              SimpleDialogOption(
-                onPressed: () => Navigator.pop(ctx, c),
-                child: Row(
-                  children: [
-                    Text(c.titleZh),
-                    const SizedBox(width: 8),
-                    if (c.descriptionZh != null)
-                      Flexible(
-                        child: Text(
-                          c.descriptionZh!,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.labelSmall
-                              ?.copyWith(color: AppTheme.textFaint),
-                        ),
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(ctx, c),
+              child: Row(
+                children: [
+                  Text(_shortName(c.titleZh)),
+                  const SizedBox(width: 8),
+                  if (c.descriptionZh != null)
+                    Flexible(
+                      child: Text(
+                        c.descriptionZh!,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.labelSmall
+                            ?.copyWith(color: AppTheme.textFaint),
                       ),
-                  ],
-                ),
+                    ),
+                ],
               ),
+            ),
         ],
       ),
     );
     if (picked == null) return;
-    setState(() => _busy = true);
-    try {
-      await ref.read(tagSuggestionRepositoryProvider).changeCategory(
-            suggestionId: widget.suggestion.id,
-            newCategoryId: picked.id,
-          );
-      if (!mounted) return;
-      _toast('已改為「${picked.titleZh}」');
-      ref.invalidate(pendingTagSuggestionsProvider);
-    } catch (e) {
-      _toast('改類別失敗：$e');
-    } finally {
-      if (mounted) setState(() => _busy = false);
+    setState(() => _pickedCategoryId = picked.id);
+    // Best-effort persist so the suggestion's stored categoryId
+    // reflects the pick — non-blocking; UI doesn't gate on it.
+    if (picked.id != widget.suggestion.categoryId) {
+      try {
+        await ref.read(tagSuggestionRepositoryProvider).changeCategory(
+              suggestionId: widget.suggestion.id,
+              newCategoryId: picked.id,
+            );
+        ref.invalidate(pendingTagSuggestionsProvider);
+      } catch (_) {
+        // Silent — admin still has a usable pick locally.
+      }
     }
   }
 
@@ -459,13 +462,14 @@ class _SuggestionCardState extends ConsumerState<_SuggestionCard> {
             decoration: const InputDecoration(hintText: '讓使用者知道為什麼不批准'),
           ),
           actions: [
-            TextButton(
+            AppButton.text(
+              label: '取消',
               onPressed: () => Navigator.pop(ctx, null),
-              child: const Text('取消'),
             ),
-            FilledButton(
+            AppButton.primary(
+              label: '退回',
+              destructive: true,
               onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
-              child: const Text('退回'),
             ),
           ],
         );
@@ -734,9 +738,9 @@ class _MergePickerState extends ConsumerState<_MergePicker> {
         ),
       ),
       actions: [
-        TextButton(
+        AppButton.text(
+          label: '取消',
           onPressed: () => Navigator.pop(context),
-          child: const Text('取消'),
         ),
       ],
     );
@@ -921,15 +925,11 @@ class _MatchRow extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 8),
-        FilledButton.tonalIcon(
+        AppButton.text(
+          label: '一鍵合併',
+          icon: LucideIcons.gitMerge,
+          size: AppButtonSize.small,
           onPressed: busy ? null : onTap,
-          icon: const Icon(LucideIcons.gitMerge, size: 12),
-          label: const Text('一鍵合併', style: TextStyle(fontSize: 12)),
-          style: FilledButton.styleFrom(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            minimumSize: const Size(0, 28),
-            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          ),
         ),
       ],
     );
@@ -1019,38 +1019,23 @@ class _TaxonomyOverviewDialog extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
     final catsAsync = ref.watch(tagCategoriesProvider);
     final tagsAsync = ref.watch(allCanonicalTagsProvider);
 
     return Dialog(
-      
       child: Container(
         width: 500,
-        constraints: const BoxConstraints(maxHeight: 640),
-        padding: const EdgeInsets.fromLTRB(18, 18, 18, 10),
+        constraints: const BoxConstraints(maxHeight: 680),
+        padding: const EdgeInsets.fromLTRB(20, 24, 20, 14),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Icon(LucideIcons.list, size: 16, color: AppTheme.textMute),
-                const SizedBox(width: 6),
-                Text(
-                  '分類一覽',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
+            const AppSectionHeader(
+              title: '分類一覽',
+              subtitle: '官方 10 大類別 · 所有 canonical 分類與別名',
+              horizontalPadding: 0,
             ),
-            const SizedBox(height: 4),
-            Text(
-              '目前官方有 10 大類別，下面是所有 canonical 分類與其別名。審稿前可以先看一下。',
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(color: AppTheme.textMute),
-            ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 18),
             Expanded(
               child: catsAsync.when(
                 loading: () => const AppLoader.centered(),
@@ -1078,9 +1063,9 @@ class _TaxonomyOverviewDialog extends ConsumerWidget {
             ),
             Align(
               alignment: Alignment.centerRight,
-              child: TextButton(
+              child: AppButton.text(
+                label: '關閉',
                 onPressed: () => Navigator.pop(context),
-                child: const Text('關閉'),
               ),
             ),
           ],
@@ -1102,82 +1087,87 @@ class _CategoryBlock extends StatefulWidget {
 class _CategoryBlockState extends State<_CategoryBlock> {
   bool _expanded = false;
 
+  String _shortName(String full) =>
+      full.startsWith('編輯') ? full.substring(2) : full;
+
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          InkWell(
-            onTap: () => setState(() => _expanded = !_expanded),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-              child: Row(
-                children: [
-                  Icon(
-                    _expanded
-                        ? LucideIcons.chevronDown
-                        : LucideIcons.chevronRight,
-                    size: 14,
-                    color: AppTheme.textMute,
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    widget.category.titleZh,
-                    style: theme.textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    '${widget.tags.length} 個分類',
-                    style: theme.textTheme.labelSmall
-                        ?.copyWith(color: AppTheme.textFaint),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          if (_expanded && widget.tags.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 4, 10),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  for (final t in widget.tags)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 3),
-                      child: RichText(
-                        text: TextSpan(
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: AppTheme.textMute,
-                          ),
-                          children: [
-                            TextSpan(
-                              text: t.labelZh,
-                              style: TextStyle(
-                                color: AppTheme.text,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            if (t.labelEn.isNotEmpty && t.labelEn != t.labelZh)
-                              TextSpan(text: ' · ${t.labelEn}'),
-                            if (t.aliases.isNotEmpty)
-                              TextSpan(
-                                text: ' · 別名：${t.aliases.join(" / ")}',
-                                style: TextStyle(color: AppTheme.textFaint),
-                              ),
-                            TextSpan(text: '  （${t.posterCount} 張）'),
-                          ],
+      padding: const EdgeInsets.only(bottom: 10),
+      child: AppCard(
+        padding: const EdgeInsets.fromLTRB(14, 12, 12, 14),
+        background: AppTheme.surfaceAlt,
+        borderRadius: BorderRadius.circular(AppTheme.r4),
+        onTap: () => setState(() => _expanded = !_expanded),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Row(
+                    children: [
+                      Text(
+                        _shortName(widget.category.titleZh),
+                        style: TextStyle(
+                          fontFamily: 'NotoSansTC',
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: AppTheme.text,
                         ),
                       ),
+                      const SizedBox(width: 8),
+                      Text(
+                        '${widget.tags.length}',
+                        style: TextStyle(
+                          fontFamily: 'NotoSansTC',
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                          color: AppTheme.textMute,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(
+                  _expanded
+                      ? LucideIcons.chevronUp
+                      : LucideIcons.chevronDown,
+                  size: 16,
+                  color: AppTheme.textFaint,
+                ),
+              ],
+            ),
+            if (_expanded && widget.tags.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final t in widget.tags)
+                    AppChip(
+                      label: t.aliases.isNotEmpty
+                          ? '${t.labelZh} · ${t.posterCount}'
+                          : '${t.labelZh} · ${t.posterCount}',
+                      size: AppChipSize.small,
                     ),
                 ],
               ),
-            ),
-        ],
+              if (widget.tags.any((t) => t.aliases.isNotEmpty)) ...[
+                const SizedBox(height: 10),
+                Text(
+                  '別名：${widget.tags.where((t) => t.aliases.isNotEmpty).take(3).map((t) => '${t.labelZh} (${t.aliases.take(2).join("/")})').join(' · ')}',
+                  style: TextStyle(
+                    fontFamily: 'NotoSansTC',
+                    fontSize: 11,
+                    color: AppTheme.textFaint,
+                    height: 1.4,
+                  ),
+                ),
+              ],
+            ],
+          ],
+        ),
       ),
     );
   }

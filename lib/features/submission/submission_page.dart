@@ -12,6 +12,7 @@ import '../../core/constants/region_labels.dart';
 import '../../core/services/image_compressor.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/app_loader.dart';
+import '../../core/widgets/ds/ds.dart';
 import '../../core/widgets/sticky_header.dart';
 import '../../data/models/work.dart';
 import '../../data/providers/supabase_providers.dart';
@@ -340,9 +341,9 @@ class _SubmissionPageState extends ConsumerState<SubmissionPage> {
           ),
         ),
         actions: [
-          TextButton(
+          AppButton.text(
+            label: '知道了',
             onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('知道了'),
           ),
         ],
       ),
@@ -1496,21 +1497,19 @@ class _ConfirmSheet extends StatelessWidget {
             Row(
               children: [
                 Expanded(
-                  child: OutlinedButton(
+                  child: AppButton.outline(
+                    label: '返回修改',
+                    fullWidth: true,
                     onPressed: () => Navigator.pop(context, false),
-                    child: const Text('返回修改'),
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   flex: 2,
-                  child: FilledButton(
+                  child: AppButton.primary(
+                    label: '確認送出',
+                    fullWidth: true,
                     onPressed: () => Navigator.pop(context, true),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: AppTheme.text,
-                      foregroundColor: Colors.black,
-                    ),
-                    child: const Text('確認送出'),
                   ),
                 ),
               ],
