@@ -1,92 +1,87 @@
 # Deploy to Vercel (web)
 
-Flutter web → Vercel static hosting. Vercel doesn't have Flutter
-pre-installed, so we build **locally**, then ship the pre-built
-`build/web/` as static files.
+Flutter web → Vercel. **Push-to-deploy**: `git push origin main` triggers
+Vercel to clone, install Flutter, build, and publish. No manual step.
 
 ---
 
-## One-time setup
+## One-time setup (already done)
 
-1. Install the Vercel CLI: `npm i -g vercel` (or `bun i -g vercel`).
-2. `vercel login`.
-3. In the repo root, run `vercel link` — pick/create a project.
+1. `vercel link` in repo root → picked the `poster-app` project.
+2. Vercel Dashboard → Project → **Settings** → **Environment Variables**:
+   - `SUPABASE_URL`
+   - `SUPABASE_ANON_KEY`
+   - `SENTRY_DSN` (optional)
+   - `APP_ENV` (optional, defaults to `prod`)
+   All set for **Production + Preview + Development**.
 
 ---
 
 ## Every deploy
 
 ```bash
-# 1. Build the web bundle (reads .env.dev by default).
-./scripts/build-web.sh .env.dev       # or .env.prod
-
-# 2. Ship it. vercel.json at repo root points to build/web/
-vercel deploy --prod
+git push origin main
 ```
 
-First deploy gives you a URL like `https://poster-app-xyz.vercel.app`.
-Custom domain? `vercel domains add yourdomain.com` + point DNS.
+That's it. Vercel builds in ~3–5 min (first build downloads Flutter SDK,
+subsequent builds reuse the cached clone). Watch progress at
+https://vercel.com/dashboard → Deployments.
+
+---
+
+## How it works
+
+- `vercel.json` → `installCommand: echo skip`, `buildCommand: bash scripts/vercel-build.sh`
+- `scripts/vercel-build.sh` clones Flutter stable into `_flutter/`,
+  puts it on `PATH`, runs `flutter build web --release` with
+  dart-defines from Vercel env vars.
+- `outputDirectory: build/web` is what Vercel publishes.
+- `rewrites: /(.*) → /index.html` keeps GoRouter deep links working.
+- `headers` long-caches hashed JS/wasm (immutable), no-caches `index.html`.
 
 ---
 
 ## Supabase OAuth → Vercel domain
 
-Google sign-in will 400 until you whitelist the Vercel URL in Supabase.
+Google sign-in will 400 until the Vercel URL is whitelisted:
 
-1. Go to your Supabase project → **Authentication** → **URL Configuration**.
-2. Add the Vercel URL(s) to **Redirect URLs**:
-   - `https://poster-app-xyz.vercel.app/**` (prod)
-   - `https://poster-app-xyz-*.vercel.app/**` (preview branches, optional)
-3. Also set **Site URL** to the prod URL so email templates use it.
-
-Re-test Google sign-in.
+1. Supabase → **Authentication** → **URL Configuration**
+2. **Site URL**: `https://poster-app-zeta.vercel.app`
+3. **Redirect URLs** add:
+   - `https://poster-app-zeta.vercel.app/**`
+   - `https://poster-app-zeta.vercel.app/auth/v1/callback`
 
 ---
 
-## What `vercel.json` does
+## Local preview (optional escape hatch)
 
-- `outputDirectory: build/web` — tells Vercel "this dir is my static site".
-- `buildCommand: echo '...'` + `installCommand: echo 'skip'` — Vercel
-  runs no build on its servers; we ship the pre-built dir.
-- `rewrites: /(.*) → /index.html` — GoRouter uses deep links
-  (`/poster/abc`, `/home/collection/favorites`). Without this
-  rewrite, hard-navigating to a deep link 404s on Vercel.
-- `headers` — long-cache hashed JS/wasm/fonts (immutable), no-cache
-  `index.html` so every page load gets the latest bundle.
-- `cleanUrls + trailingSlash: false` — cosmetic.
-
----
-
-## Checking the build before deploy
+If you want to build + preview locally without deploying:
 
 ```bash
-cd build/web
-python3 -m http.server 8080
-# open http://localhost:8080
+./scripts/build-web.sh .env.dev
+cd build/web && python3 -m http.server 8080
 ```
 
-Single-origin headers (COEP/COOP) from `vercel.json` aren't applied
-by the Python server, so some CanvasKit features may render
-differently than on Vercel. If it works here, Vercel will too.
+`scripts/build-web.sh` reads env from `.env.dev` (or pass `.env.prod`).
+Not used by the deploy pipeline — purely for local QA.
 
 ---
 
 ## Troubleshooting
 
-**"白底空白長時間載入中"** — check browser console; usually a
-missing `SUPABASE_URL` dart-define. Re-run `./scripts/build-web.sh`
-after confirming `.env.dev` has the right values.
+**Build fails on Vercel with "SUPABASE_URL not set"** — env var missing
+in Vercel Dashboard. Check Project → Settings → Environment Variables.
 
-**Google sign-in redirects to `127.0.0.1:3000`** — the Supabase
-OAuth provider still has the dev Site URL. Update it to the Vercel
-domain (see above).
+**Build fails with "flutter: command not found"** — `scripts/vercel-build.sh`
+didn't clone Flutter. Check Vercel build logs, usually a git clone timeout;
+retry the deploy.
 
-**`main.dart.js` download is slow on mobile** — ~3.7 MB compressed.
-Vercel serves it gzipped automatically. If first-load TTI is
-painful, we can trial `flutter build web --wasm` (experimental, not
-production-ready on all browsers yet).
+**White screen on production** — browser console will tell you. Usually
+a missing dart-define (Supabase keys). Check env vars + rebuild.
 
-**Stale UI after deploy** — hard-refresh (Cmd/Ctrl+Shift+R). The
-`no-cache` header on `index.html` makes this automatic on revisit,
-but PWA service worker caches can linger. `vercel.json` could ship a
-kill-switch header later if needed.
+**Google sign-in redirects to `127.0.0.1:3000`** — Supabase Site URL is
+still the dev value. Fix in Supabase dashboard (see above).
+
+**Stale UI after deploy** — hard-refresh (Cmd/Ctrl+Shift+R). PWA service
+worker caches sometimes linger. `index.html` is `no-cache`, so normally
+you get the latest on revisit.

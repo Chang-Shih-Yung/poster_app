@@ -33,3 +33,4 @@ supabase/.branches/
 .claude/settings.local.json
 .claude/launch.json
 .vercel
+_flutter/
