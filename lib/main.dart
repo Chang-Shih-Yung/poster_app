@@ -11,6 +11,12 @@ import 'core/theme/app_theme.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   Env.assertConfigured();
+  // v19: cap the in-memory image cache so masonry grids of high-DPR
+  // posters don't OOM the tab. 200MB lets ~100 hero-sized decoded
+  // images sit hot while still leaving headroom for the widget tree.
+  // Per-tile cacheWidth (set in AppPosterTile) bounds individual
+  // decoded sizes; this cap bounds the aggregate.
+  PaintingBinding.instance.imageCache.maximumSizeBytes = 200 * 1024 * 1024;
   await Supabase.initialize(
     url: Env.supabaseUrl,
     anonKey: Env.supabaseAnonKey,

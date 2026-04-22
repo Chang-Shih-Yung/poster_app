@@ -484,16 +484,19 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Row(
                 children: [
+                  // v19: drop the duplicate counts here — the stats row
+                  // above already shows them. Tab labels just say what
+                  // tab you're on.
                   Expanded(
                     child: _SegTab(
-                      label: '收藏 $favCount',
+                      label: '收藏',
                       active: _meTab == _MeTab.favorites,
                       onTap: () => _onSegChange(_MeTab.favorites),
                     ),
                   ),
                   Expanded(
                     child: _SegTab(
-                      label: '投稿 $subCount',
+                      label: '投稿',
                       active: _meTab == _MeTab.submissions,
                       onTap: () => _onSegChange(_MeTab.submissions),
                     ),

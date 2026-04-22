@@ -120,6 +120,7 @@ class _PosterCell extends StatelessWidget {
   Widget build(BuildContext context) {
     return AppPosterTile(
       imageUrl: poster.thumbnailUrl ?? poster.posterUrl,
+      fullImageUrl: poster.posterUrl,
       posterId: poster.id,
       showOverlayText: false,
     );

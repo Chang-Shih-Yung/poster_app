@@ -63,6 +63,12 @@ class AppPosterRow extends StatelessWidget {
                     : CachedNetworkImage(
                         imageUrl: imageUrl!,
                         fit: BoxFit.cover,
+                        // 56-px thumb at 3x DPR = 168px decoded;
+                        // 200 leaves a tiny margin for sharper screens.
+                        memCacheWidth: 200,
+                        maxWidthDiskCache: 400,
+                        fadeInDuration: const Duration(milliseconds: 180),
+                        fadeOutDuration: Duration.zero,
                         placeholder: (_, _) => const ShimmerPlaceholder(),
                         errorWidget: (_, _, _) => ColoredBox(
                           color: AppTheme.surface,

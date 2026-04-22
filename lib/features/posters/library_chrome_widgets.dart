@@ -15,18 +15,25 @@ class _Avatar extends StatelessWidget {
     final name = profile?.displayName.trim() ?? '';
     final letter = name.isNotEmpty ? name.characters.first.toUpperCase() : '?';
 
-    return ClipOval(
-      child: SizedBox(
-        width: size,
-        height: size,
-        child: avatar != null
-            ? CachedNetworkImage(
-                imageUrl: avatar,
-                fit: BoxFit.cover,
-                errorWidget: (_, _, _) =>
-                    _AvatarFallback(letter: letter, size: size),
-              )
-            : _AvatarFallback(letter: letter, size: size),
+    return GestureDetector(
+      onTap: () => showAvatarViewer(
+        context,
+        url: avatar,
+        fallbackLetter: letter,
+      ),
+      child: ClipOval(
+        child: SizedBox(
+          width: size,
+          height: size,
+          child: avatar != null
+              ? CachedNetworkImage(
+                  imageUrl: avatar,
+                  fit: BoxFit.cover,
+                  errorWidget: (_, _, _) =>
+                      _AvatarFallback(letter: letter, size: size),
+                )
+              : _AvatarFallback(letter: letter, size: size),
+        ),
       ),
     );
   }
@@ -248,7 +255,8 @@ class _EmptyFavoritesState extends StatelessWidget {
 // ───────────────────────────────────────────────────────────────────────
 
 /// Profile summary row — 72×72 avatar + name + @handle + bio.
-/// v18 spec; edit pill lives in the stats row below, not here.
+/// v19: 編輯檔案 pill moved into this row (right side), so the stats
+/// row below is purely numbers.
 class _MeProfileRow extends StatelessWidget {
   const _MeProfileRow({
     required this.profile,
@@ -265,10 +273,8 @@ class _MeProfileRow extends StatelessWidget {
         ? fallbackEmail.split('@').first
         : fallbackEmail;
     final name = displayName.isNotEmpty ? displayName : emailPrefix;
-    // v19: prefer the user's claimed handle; fall back to email prefix
-    // when they haven't set one. Display always lower-cased so the
-    // rendered string matches whatever the editor enforced.
-    final handle = '@${profile?.resolvedHandle(emailFallback: emailPrefix) ?? emailPrefix}';
+    final handle =
+        '@${profile?.resolvedHandle(emailFallback: emailPrefix) ?? emailPrefix}';
     final bio = profile?.bio?.trim();
 
     return Row(
@@ -317,6 +323,10 @@ class _MeProfileRow extends StatelessWidget {
             ],
           ),
         ),
+        const SizedBox(width: 8),
+        // 編輯 pill moved up here — sits next to the name. The stats
+        // row below now only shows numbers (粉絲 / 追蹤 / 投稿 / 收藏).
+        _EditPill(),
       ],
     );
   }
@@ -498,6 +508,10 @@ class _MeStatsRow extends ConsumerWidget {
       followers = stats?.followerCount;
       following = stats?.followingCount;
     }
+    // v19: 4-stat row, no edit pill (moved up to _MeProfileRow).
+    // 已通過 → 投稿; new 收藏 stat shows favourite count. Renaming
+    // matches the segmented sub-tabs below so 投稿 reads as one
+    // concept across the page.
     return Row(
       children: [
         _Stat(
@@ -514,11 +528,15 @@ class _MeStatsRow extends ConsumerWidget {
         _StatDivider(),
         _Stat(
           n: subCount,
-          label: '已通過',
+          label: '投稿',
           onTap: () => context.push('/me/submissions'),
         ),
-        const Spacer(),
-        _EditPill(),
+        _StatDivider(),
+        _Stat(
+          n: favCount,
+          label: '收藏',
+          onTap: () => context.push('/home/collection/favorites'),
+        ),
       ],
     );
   }

@@ -156,6 +156,7 @@ class _PosterCell extends StatelessWidget {
     // rather than full title — same tile contract though.
     return AppPosterTile(
       imageUrl: poster.thumbnailUrl ?? poster.posterUrl,
+      fullImageUrl: poster.posterUrl,
       posterId: poster.id,
       title: poster.posterName,
       showOverlayText: poster.posterName != null,

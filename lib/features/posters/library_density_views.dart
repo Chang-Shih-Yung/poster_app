@@ -446,18 +446,18 @@ class _MasonryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // v19: 我的 tab tiles are pure image (no overlay title or
+    // year/director caption). Hover the poster — content is the
+    // poster, not text on top of the poster.
     return AppPosterTile(
       imageUrl: poster.thumbnailUrl ?? poster.posterUrl,
+      fullImageUrl: poster.posterUrl,
       posterId: poster.id,
-      title: poster.title,
-      subtitle: [
-        if (poster.year != null) '${poster.year}',
-        if (poster.director != null) poster.director!,
-      ].join(' · '),
       aspectRatio: aspectRatio,
       favorited: isFavorited,
       showFavIndicator: showFav,
       onLongPress: onToggleFavorite,
+      showOverlayText: false,
     );
   }
 }

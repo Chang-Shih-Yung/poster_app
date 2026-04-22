@@ -67,7 +67,17 @@ class _ProfileBody extends ConsumerWidget {
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    _Avatar(url: profile.avatarUrl),
+                    _Avatar(
+                      url: profile.avatarUrl,
+                      onTap: () => showAvatarViewer(
+                        context,
+                        url: profile.avatarUrl,
+                        fallbackLetter: profile.displayName.isNotEmpty
+                            ? profile.displayName.characters.first
+                                .toUpperCase()
+                            : '?',
+                      ),
+                    ),
                     const SizedBox(width: 14),
                     Expanded(
                       child: Column(
@@ -175,37 +185,39 @@ class _ProfileBody extends ConsumerWidget {
 }
 
 class _Avatar extends StatelessWidget {
-  const _Avatar({this.url});
+  const _Avatar({this.url, this.onTap});
   final String? url;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     const size = 64.0;
-    if (url == null || url!.isEmpty) {
-      return Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(
-          color: AppTheme.surfaceRaised,
-          shape: BoxShape.circle,
-        ),
-        child: Icon(LucideIcons.user, color: AppTheme.textFaint),
-      );
-    }
-    return ClipOval(
-      child: CachedNetworkImage(
-        imageUrl: url!,
-        width: size,
-        height: size,
-        fit: BoxFit.cover,
-        errorWidget: (_, _, _) => Container(
-          width: size,
-          height: size,
-          color: AppTheme.surfaceRaised,
-          child: Icon(LucideIcons.user, color: AppTheme.textFaint),
-        ),
-      ),
-    );
+    final inner = url == null || url!.isEmpty
+        ? Container(
+            width: size,
+            height: size,
+            decoration: BoxDecoration(
+              color: AppTheme.surfaceRaised,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(LucideIcons.user, color: AppTheme.textFaint),
+          )
+        : ClipOval(
+            child: CachedNetworkImage(
+              imageUrl: url!,
+              width: size,
+              height: size,
+              fit: BoxFit.cover,
+              errorWidget: (_, _, _) => Container(
+                width: size,
+                height: size,
+                color: AppTheme.surfaceRaised,
+                child:
+                    Icon(LucideIcons.user, color: AppTheme.textFaint),
+              ),
+            ),
+          );
+    return GestureDetector(onTap: onTap, child: inner);
   }
 }
 
@@ -217,6 +229,7 @@ class _PosterCell extends StatelessWidget {
   Widget build(BuildContext context) {
     return AppPosterTile(
       imageUrl: poster.thumbnailUrl ?? poster.posterUrl,
+      fullImageUrl: poster.posterUrl,
       posterId: poster.id,
       showOverlayText: false,
     );

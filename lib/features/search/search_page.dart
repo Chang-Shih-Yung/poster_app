@@ -325,6 +325,7 @@ class _SearchLanding extends ConsumerWidget {
                     final p = items[i];
                     return AppPosterTile(
                       imageUrl: p.thumbnailUrl ?? p.posterUrl,
+      fullImageUrl: p.posterUrl,
                       posterId: p.id,
                       title: p.title,
                       width: 120,
@@ -702,6 +703,8 @@ class _PosterTile extends StatelessWidget {
                   child: CachedNetworkImage(
                     imageUrl: poster.thumbnailUrl ?? poster.posterUrl,
                     fit: BoxFit.cover,
+                    memCacheWidth: 200,
+                    fadeInDuration: const Duration(milliseconds: 180),
                     errorWidget: (_, _, _) => Container(
                       color: AppTheme.surfaceRaised,
                       child: Icon(LucideIcons.image,

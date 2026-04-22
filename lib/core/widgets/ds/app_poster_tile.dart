@@ -30,6 +30,7 @@ class AppPosterTile extends StatelessWidget {
   const AppPosterTile({
     super.key,
     required this.imageUrl,
+    this.fullImageUrl,
     this.posterId,
     this.title,
     this.subtitle,
@@ -44,8 +45,15 @@ class AppPosterTile extends StatelessWidget {
     this.showOverlayText = true,
   });
 
-  /// Canonical image URL.
+  /// Canonical image URL — what the tile renders. Usually the
+  /// thumbnail.
   final String? imageUrl;
+
+  /// Optional larger image (the source we'll need on the detail
+  /// route). When set + the user taps the default navigation, we
+  /// precacheImage this URL before pushing the route so the detail
+  /// page Hero already has the full-res frame hot in cache.
+  final String? fullImageUrl;
 
   /// Passed purely to give the Hero tag parity with the detail route.
   /// Pass null to skip the Hero.
@@ -81,11 +89,23 @@ class AppPosterTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // v19 image-perf: decode hint capped at 800px (covers 2x DPR
+    // 400-wide hero tiles + portrait orientations). Memory drop
+    // is significant — original posters are routinely 2400-3600px
+    // wide and full decoding eats 100MB+ across a masonry grid.
+    // 200ms fade smooths the loaded reveal so the grid doesn't
+    // pop in like a slideshow.
+    final dpr = MediaQuery.devicePixelRatioOf(context);
+    final decodeWidth = (800 * dpr).toInt();
     final img = imageUrl == null
         ? ColoredBox(color: AppTheme.surface)
         : CachedNetworkImage(
             imageUrl: imageUrl!,
             fit: BoxFit.cover,
+            memCacheWidth: decodeWidth,
+            maxWidthDiskCache: decodeWidth,
+            fadeInDuration: const Duration(milliseconds: 200),
+            fadeOutDuration: Duration.zero,
             placeholder: (_, _) => const ShimmerPlaceholder(),
             errorWidget: (_, _, _) => ColoredBox(
               color: AppTheme.surface,
@@ -200,9 +220,23 @@ class AppPosterTile extends StatelessWidget {
       body = AspectRatio(aspectRatio: aspectRatio!, child: body);
     }
 
+    // Default tap: precache the full-res image (when known) before
+    // pushing the detail route so the Hero animation lands on a
+    // hot frame instead of the white-flash → load-spinner sequence.
     final tap = onTap ??
         (posterId != null
-            ? () => GoRouter.of(context).push('/poster/$posterId')
+            ? () async {
+                final full = fullImageUrl;
+                if (full != null && full.isNotEmpty) {
+                  // Fire-and-forget — don't block navigation if the
+                  // precache stalls; detail page falls back to its
+                  // own load.
+                  precacheImage(NetworkImage(full), context).catchError((_) {});
+                }
+                if (context.mounted) {
+                  GoRouter.of(context).push('/poster/$posterId');
+                }
+              }
             : null);
 
     return AppCard(

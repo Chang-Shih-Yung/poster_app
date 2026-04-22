@@ -15,3 +15,4 @@ export 'app_poster_row.dart';
 export 'app_poster_tile.dart';
 export 'app_section_header.dart';
 export 'app_settings_row.dart';
+export 'avatar_viewer.dart';

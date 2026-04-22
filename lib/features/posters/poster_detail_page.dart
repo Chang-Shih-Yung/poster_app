@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
+import '../../core/services/image_prefetch.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/app_loader.dart';
 import '../../core/widgets/ds/ds.dart';
@@ -663,15 +664,30 @@ class _RelatedSection extends ConsumerWidget {
                   itemCount: items.length,
                   separatorBuilder: (_, _) => const SizedBox(width: 12),
                   itemBuilder: (context, i) {
+                    // Prefetch the next 3 thumbs into the cache so
+                    // they're hot when the user scrolls right.
+                    prefetchAhead(
+                      context: context,
+                      urls: items
+                          .map((p) => p.thumbnailUrl ?? p.posterUrl)
+                          .toList(growable: false),
+                      currentIndex: i,
+                    );
                     final p = items[i];
                     return AppPosterTile(
                       imageUrl: p.thumbnailUrl ?? p.posterUrl,
+                      fullImageUrl: p.posterUrl,
                       posterId: p.id,
                       title: p.title,
                       width: 130,
                       height: 200,
-                      onTap: () =>
-                          context.pushReplacement('/poster/${p.id}'),
+                      onTap: () {
+                        precacheImage(NetworkImage(p.posterUrl), context)
+                            .catchError((_) {});
+                        if (context.mounted) {
+                          context.pushReplacement('/poster/${p.id}');
+                        }
+                      },
                     );
                   },
                 ),
