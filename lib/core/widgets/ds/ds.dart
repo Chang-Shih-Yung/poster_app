@@ -11,4 +11,7 @@ export 'app_button.dart';
 export 'app_card.dart';
 export 'app_chip.dart';
 export 'app_icon_button.dart';
+export 'app_poster_row.dart';
+export 'app_poster_tile.dart';
 export 'app_section_header.dart';
+export 'app_settings_row.dart';
