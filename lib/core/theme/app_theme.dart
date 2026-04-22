@@ -283,7 +283,12 @@ class AppTheme {
       textTheme: textTheme,
       primaryTextTheme: textTheme,
       dividerColor: line1,
-      splashFactory: InkSparkle.splashFactory,
+      // v19: Spotify-clean tap feedback. The Material 3 InkSparkle was
+      // adding a particle-burst that read as visual noise — Spotify's
+      // pattern is "tap = subtle bg darken, no animation". NoSplash
+      // disables the ripple entirely; ButtonStyle.overlayColor (set per
+      // AppButton variant) handles the press-state shading instead.
+      splashFactory: NoSplash.splashFactory,
       canvasColor: scaffoldBg,
       appBarTheme: AppBarTheme(
         backgroundColor: scaffoldBg,
@@ -441,14 +446,20 @@ class AppTheme {
         ),
       ),
       iconTheme: IconThemeData(color: text, size: 22),
-      // iOS transitions on every platform (including web) for that slide-in feel.
+      // v19: Cupertino slide-in was janky on web — the detail page's
+      // parallax Stack + heavy poster image had to render twice (old
+      // page sliding out, new sliding in) and frame-dropped on the
+      // 350ms transition. FadeForwards is the Material 3 default and
+      // composites a single texture per page, which Skia handles
+      // smoothly even with backdrop blur. Same animation on every
+      // platform for parity.
       pageTransitionsTheme: const PageTransitionsTheme(
         builders: {
-          TargetPlatform.android: CupertinoPageTransitionsBuilder(),
-          TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
-          TargetPlatform.macOS: CupertinoPageTransitionsBuilder(),
-          TargetPlatform.linux: CupertinoPageTransitionsBuilder(),
-          TargetPlatform.windows: CupertinoPageTransitionsBuilder(),
+          TargetPlatform.android: FadeForwardsPageTransitionsBuilder(),
+          TargetPlatform.iOS: FadeForwardsPageTransitionsBuilder(),
+          TargetPlatform.macOS: FadeForwardsPageTransitionsBuilder(),
+          TargetPlatform.linux: FadeForwardsPageTransitionsBuilder(),
+          TargetPlatform.windows: FadeForwardsPageTransitionsBuilder(),
         },
       ),
       scrollbarTheme: ScrollbarThemeData(

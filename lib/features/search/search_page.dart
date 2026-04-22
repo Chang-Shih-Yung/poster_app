@@ -110,37 +110,53 @@ class _SearchPageState extends ConsumerState<SearchPage> {
               ],
             ),
           ),
-          // Search field.
+          // Search field — Spotify-style white pill: pure white bg,
+          // dark text, rounded full-pill, no border. The white surface
+          // pops on the dark page bg the way Spotify's search input
+          // does on its black scaffold.
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
             child: Container(
               decoration: BoxDecoration(
-                color: AppTheme.surfaceRaised,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: AppTheme.line1),
+                color: const Color(0xFFFFFFFF),
+                borderRadius: BorderRadius.circular(AppTheme.rPill),
               ),
               child: TextField(
                 controller: _controller,
                 focusNode: _focusNode,
                 onChanged: _onChanged,
-                style: theme.textTheme.bodyLarge,
+                style: const TextStyle(
+                  fontFamily: 'NotoSansTC',
+                  fontSize: 15,
+                  fontWeight: FontWeight.w500,
+                  color: Color(0xFF121212),
+                ),
+                cursorColor: const Color(0xFF121212),
                 decoration: InputDecoration(
                   hintText: '搜尋作品、海報、使用者…',
-                  hintStyle:
-                      TextStyle(color: AppTheme.textFaint, fontSize: 15),
-                  prefixIcon: Icon(LucideIcons.search,
-                      size: 18, color: AppTheme.textMute),
+                  hintStyle: const TextStyle(
+                    fontFamily: 'NotoSansTC',
+                    color: Color(0xFF6B6B6B),
+                    fontSize: 15,
+                    fontWeight: FontWeight.w400,
+                  ),
+                  prefixIcon: const Icon(LucideIcons.search,
+                      size: 18, color: Color(0xFF6B6B6B)),
                   suffixIcon: _controller.text.isEmpty
                       ? null
                       : IconButton(
-                          icon: Icon(LucideIcons.x,
-                              size: 16, color: AppTheme.textMute),
+                          icon: const Icon(LucideIcons.x,
+                              size: 16, color: Color(0xFF6B6B6B)),
                           onPressed: () {
                             _controller.clear();
                             setState(() => _effectiveQuery = '');
                           },
                         ),
+                  filled: true,
+                  fillColor: const Color(0xFFFFFFFF),
                   border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
                   contentPadding:
                       const EdgeInsets.symmetric(horizontal: 4, vertical: 14),
                 ),

@@ -37,7 +37,11 @@ class AppChip extends StatelessWidget {
       AppChipSize.large => (18.0, 10.0, 14.0, 16.0),
     };
 
-    final bg = selected ? AppTheme.text : AppTheme.surfaceAlt;
+    // v19: chip bg uses surfaceRaised (#252525), one shade lighter
+    // than surfaceAlt — pills read clearly on the #121212 page bg
+    // without being heavy. Same value as AppButton.secondary so the
+    // two read as one family.
+    final bg = selected ? AppTheme.text : AppTheme.surfaceRaised;
     final fg = selected ? AppTheme.bg : AppTheme.text;
 
     final inner = Container(

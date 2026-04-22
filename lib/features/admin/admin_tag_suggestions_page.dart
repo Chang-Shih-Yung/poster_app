@@ -1105,28 +1105,14 @@ class _CategoryBlockState extends State<_CategoryBlock> {
             Row(
               children: [
                 Expanded(
-                  child: Row(
-                    children: [
-                      Text(
-                        _shortName(widget.category.titleZh),
-                        style: TextStyle(
-                          fontFamily: 'NotoSansTC',
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          color: AppTheme.text,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        '${widget.tags.length}',
-                        style: TextStyle(
-                          fontFamily: 'NotoSansTC',
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                          color: AppTheme.textMute,
-                        ),
-                      ),
-                    ],
+                  child: Text(
+                    _shortName(widget.category.titleZh),
+                    style: TextStyle(
+                      fontFamily: 'NotoSansTC',
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
+                      color: AppTheme.text,
+                    ),
                   ),
                 ),
                 Icon(

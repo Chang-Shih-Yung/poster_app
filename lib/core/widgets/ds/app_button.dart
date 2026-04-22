@@ -213,9 +213,11 @@ class AppButton extends StatelessWidget {
         );
       case AppButtonVariant.secondary:
         return (
+          // surfaceRaised (#252525) — same family as AppChip's pill
+          // bg, so secondary buttons and chips read as one system.
           enabled
-              ? AppTheme.surfaceAlt
-              : AppTheme.surfaceAlt.withValues(alpha: 0.5),
+              ? AppTheme.surfaceRaised
+              : AppTheme.surfaceRaised.withValues(alpha: 0.5),
           AppTheme.text.withValues(alpha: fadeFg),
           null,
         );

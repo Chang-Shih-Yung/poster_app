@@ -14,6 +14,7 @@ import '../../data/models/app_user.dart';
 import '../../data/models/home_section.dart';
 import '../../data/models/poster.dart';
 import '../../data/models/social.dart';
+import '../../data/providers/supabase_providers.dart';
 import '../../data/repositories/favorite_repository.dart';
 import '../../data/repositories/social_repository.dart';
 import '../profile/follow_pill.dart';
@@ -79,6 +80,7 @@ class HomePage extends ConsumerWidget {
     final bottomInset = MediaQuery.paddingOf(context).bottom;
     final favIds = ref.watch(favoriteIdsProvider).asData?.value ?? {};
     final sectionsAsync = ref.watch(homeSectionsV2Provider);
+    final myId = ref.watch(currentUserProvider)?.id;
 
     return Scaffold(
       
@@ -172,6 +174,7 @@ class HomePage extends ConsumerWidget {
                     section: s,
                     favIds: favIds,
                     skipPosterId: heroId,
+                    skipUserId: myId,
                   ),
                 ));
               }
@@ -277,6 +280,7 @@ class _DynamicSectionRow extends StatelessWidget {
     required this.section,
     required this.favIds,
     this.skipPosterId,
+    this.skipUserId,
   });
   final HomeSectionV2 section;
   final Set<String> favIds;
@@ -284,6 +288,11 @@ class _DynamicSectionRow extends StatelessWidget {
   /// If set, skip any poster with this ID (used to avoid duplicating
   /// the hero in the row below it).
   final String? skipPosterId;
+
+  /// If set, skip any user with this ID — keeps the viewer out of
+  /// "people to follow" lists, which are nonsensical when the user
+  /// shows up as a recommendation for themselves.
+  final String? skipUserId;
 
   @override
   Widget build(BuildContext context) {
@@ -304,8 +313,14 @@ class _DynamicSectionRow extends StatelessWidget {
         // "推薦朋友" — the section now leads with a follow-toggle
         // pill, so framing it as "people you might want to follow"
         // reads truer than "who's been busy this week".
+        // Filter the viewer out — recommending yourself is silly.
+        final items = section
+            .asCollectors()
+            .where((c) => c.userId != skipUserId)
+            .toList(growable: false);
+        if (items.isEmpty) return const SizedBox.shrink();
         return _CollectorsRow(
-          items: section.asCollectors(),
+          items: items,
           title: '推薦朋友',
           icon: _iconFromName(section.icon),
         );

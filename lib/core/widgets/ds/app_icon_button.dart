@@ -68,7 +68,9 @@ class AppIconButton extends StatelessWidget {
     final fg = color ?? AppTheme.text;
     final bg = switch (variant) {
       AppIconButtonVariant.ghost => Colors.transparent,
-      AppIconButtonVariant.filled => AppTheme.surfaceAlt,
+      // surfaceRaised matches AppChip / AppButton.secondary so
+      // every "filled neutral surface" reads at one tone.
+      AppIconButtonVariant.filled => AppTheme.surfaceRaised,
       AppIconButtonVariant.glass => Colors.black.withValues(alpha: 0.38),
     };
 

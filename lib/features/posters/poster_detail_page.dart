@@ -182,7 +182,16 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
     //
     // Floating chrome:
     //   5. Close button (chevron down) in the top-left, fixed.
-    final heroH = screenH * 0.62;
+    // Hero takes 70% of screen so the poster reads as the dominant
+    // surface. Fuji card sits over the bottom of the hero (gradient
+    // is dark there anyway), and the Related card lives below — only
+    // its eyebrow title peeks above the fold so the user knows there's
+    // more to scroll without sacrificing poster visibility.
+    final heroH = screenH * 0.70;
+    // Where the Fuji card top lands. 60% of screen leaves room for
+    // the card itself + 24px gap + ~40px peek of "相關海報" title
+    // before the safe-area inset.
+    final fujiStart = screenH * 0.60;
 
     return GestureDetector(
       onVerticalDragUpdate: _onVerticalDragUpdate,
@@ -251,16 +260,16 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
 
                 // Layer 4: scrollable foreground.
                 //
-                // Spacer height = heroH - 220 leaves the bottom of the
-                // hero image visible behind the cards' top edge for
-                // the first scroll position, then both cards rise as
-                // the user scrolls.
+                // Spacer height = fujiStart so the Fuji card lands
+                // ~60% down screen (max poster visible above), with
+                // the Related card following — only its eyebrow
+                // title peeks above the fold.
                 Positioned.fill(
                   child: SingleChildScrollView(
                     physics: const ClampingScrollPhysics(),
                     child: Column(
                       children: [
-                        SizedBox(height: heroH - 220),
+                        SizedBox(height: fujiStart),
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 16),
                           child: _FujiDrawer(
