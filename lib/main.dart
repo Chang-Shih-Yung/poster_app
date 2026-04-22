@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
@@ -14,7 +15,33 @@ Future<void> main() async {
   await Supabase.initialize(
     url: Env.supabaseUrl,
     anonKey: Env.supabaseAnonKey,
+    authOptions: const FlutterAuthClientOptions(
+      authFlowType: AuthFlowType.pkce,
+    ),
   );
+
+  // Handle Google OAuth PKCE callback on web.
+  //
+  // Google returns the user to https://<app>/?code=<authorization_code>
+  // after they pick an account. Supabase-Flutter auto-detects
+  // hash-fragment auth (#access_token=...) but NOT query-param PKCE
+  // codes on web — you have to exchange explicitly. Without this the
+  // user lands back on the app with ?code=... in the URL, the
+  // SigninPage spins forever because no session ever materialises,
+  // and only a hard refresh "fixes" it (the code param gets dropped
+  // and Supabase loads nothing, leaving them signed out again).
+  if (kIsWeb) {
+    final uri = Uri.base;
+    final code = uri.queryParameters['code'];
+    if (code != null && code.isNotEmpty) {
+      try {
+        await Supabase.instance.client.auth.exchangeCodeForSession(code);
+      } catch (_) {
+        // Invalid / stale code — fall through; the signin page will
+        // prompt them again rather than silently spinning.
+      }
+    }
+  }
 
   if (Env.sentryDsn.isEmpty) {
     runApp(const ProviderScope(child: PosterApp()));
