@@ -177,7 +177,11 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
     //   - Bottom inset
     //
     // Floating: only the close button stays pinned top-left.
-    final heroH = screenH * 0.62;
+    // Hero takes 50% of screen — leaves enough room for the inline
+    // Fuji content + 24px gap + the 相關海報 eyebrow peek above the
+    // fold. Title overlapping the bottom of the poster a touch is
+    // intentional (gradient covers the bleed).
+    final heroH = screenH * 0.50;
 
     return GestureDetector(
       onVerticalDragUpdate: _onVerticalDragUpdate,
@@ -371,7 +375,10 @@ class _FujiInline extends ConsumerWidget {
               color: AppTheme.text,
               fontSize: 32,
               height: 1.05,
-              fontWeight: FontWeight.w700,
+              // 600 — Inter SemiBold renders cleanly for Latin and
+              // CJK glyphs (NotoSansTC fallback at w500 is closest
+              // visually); w700 was clumping CJK strokes together.
+              fontWeight: FontWeight.w600,
               letterSpacing: -0.8,
             ),
           ),
@@ -629,13 +636,12 @@ class _RelatedSection extends ConsumerWidget {
       data: (items) {
         if (items.isEmpty) return const SizedBox.shrink();
 
-        // v19 round 3: lighter card so it stands clearly off the
-        // page bg. surfaceAlt (#1F1F1F) is one notch lighter than
-        // bg (#121212) without being so bright it competes with the
-        // hero image — Spotify's "下方探索 sheet" tone.
+        // v19 round 4: card bg matches the pill family so the
+        // related sheet, AppChip, and AppButton.secondary all read
+        // at one tone — surfaceRaised (#2E2E2E).
         return AppCard(
           padding: const EdgeInsets.fromLTRB(0, 18, 0, 18),
-          background: AppTheme.surfaceAlt,
+          background: AppTheme.surfaceRaised,
           borderRadius: BorderRadius.circular(AppTheme.r5),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,

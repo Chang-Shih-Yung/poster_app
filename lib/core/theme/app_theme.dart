@@ -62,7 +62,7 @@ class AppTheme {
   static Color get surfaceAlt =>
       _day ? const Color(0xFFECEDEF) : const Color(0xFF1F1F1F);
   static Color get surfaceRaised =>
-      _day ? const Color(0xFFE4E5E8) : const Color(0xFF252525);
+      _day ? const Color(0xFFE4E5E8) : const Color(0xFF2E2E2E);
   // Legacy aliases — ink2/3 were the pre-v19 names; kept so existing
   // widget code keeps compiling during the design-system rollout.
   static Color get ink2 => surface;

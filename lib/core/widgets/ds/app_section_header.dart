@@ -43,9 +43,11 @@ class AppSectionHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final titleStyle = TextStyle(
       fontFamily: 'InterDisplay',
-              fontFamilyFallback: const ['NotoSansTC'],
+      fontFamilyFallback: const ['NotoSansTC'],
       fontSize: 22,
-      fontWeight: FontWeight.w700,
+      // w600 — see same rationale on poster_detail title. NotoSansTC
+      // fallback at w700 turned CJK glyphs into ink blobs.
+      fontWeight: FontWeight.w600,
       letterSpacing: -0.4,
       color: AppTheme.text,
     );

@@ -11,10 +11,12 @@ import '../../core/widgets/app_loader.dart';
 import '../../core/widgets/ds/ds.dart';
 import '../../data/models/app_user.dart';
 import '../../data/models/poster.dart';
+import '../../data/models/tag.dart';
 import '../../data/models/work.dart';
 import '../../data/providers/supabase_providers.dart';
 import '../../data/repositories/poster_repository.dart';
 import '../../data/repositories/search_repository.dart';
+import '../../data/repositories/tag_repository.dart';
 import '../profile/follow_pill.dart';
 
 /// /search — unified search across works, posters, users.
@@ -273,136 +275,268 @@ class _SearchLanding extends ConsumerWidget {
           ),
         ),
 
-        // Section eyebrow
-        SliverToBoxAdapter(
+        // ── 為你推薦 — horizontal scroll (Spotify search "made for you") ──
+        const SliverToBoxAdapter(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-            child: Text(
-              '為你推薦',
-              style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    color: AppTheme.textMute,
-                    letterSpacing: 1.6,
-                    fontWeight: FontWeight.w600,
-                  ),
-            ),
+            padding: EdgeInsets.fromLTRB(0, 16, 0, 12),
+            child: AppSectionHeader(title: '為你推薦'),
           ),
         ),
-
-        // ── Recommended posters (flat 2-col masonry) ──
         postersAsync.when(
-          loading: () => const SliverToBoxAdapter(
-            child: Padding(
-              padding: EdgeInsets.symmetric(vertical: 48),
-              child: Center(child: AppLoader()),
+          loading: () => SliverToBoxAdapter(
+            child: SizedBox(
+              height: 180,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                itemCount: 4,
+                separatorBuilder: (_, _) => const SizedBox(width: 12),
+                itemBuilder: (_, _) => SizedBox(
+                  width: 120,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: AppTheme.surface,
+                      borderRadius: BorderRadius.circular(AppTheme.r3),
+                    ),
+                  ),
+                ),
+              ),
             ),
           ),
           error: (e, _) => SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.all(32),
-              child: Center(
-                child: Text('載入失敗：$e',
-                    style: TextStyle(color: AppTheme.textMute)),
-              ),
+              padding: const EdgeInsets.all(20),
+              child: Text('載入失敗：$e',
+                  style: TextStyle(color: AppTheme.textMute)),
             ),
           ),
           data: (posters) {
-            if (posters.isEmpty) {
-              return SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.all(48),
-                  child: Center(
-                    child: Text('暫無推薦，輸入關鍵字搜尋海報、作品、使用者',
-                        style: TextStyle(color: AppTheme.textFaint)),
-                  ),
+            if (posters.isEmpty) return const SliverToBoxAdapter(child: SizedBox.shrink());
+            final items = posters.take(12).toList(growable: false);
+            return SliverToBoxAdapter(
+              child: SizedBox(
+                height: 180,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  itemCount: items.length,
+                  separatorBuilder: (_, _) => const SizedBox(width: 12),
+                  itemBuilder: (_, i) {
+                    final p = items[i];
+                    return AppPosterTile(
+                      imageUrl: p.thumbnailUrl ?? p.posterUrl,
+                      posterId: p.id,
+                      title: p.title,
+                      width: 120,
+                      height: 180,
+                    );
+                  },
                 ),
-              );
-            }
-            return SliverPadding(
-              padding: EdgeInsets.fromLTRB(12, 0, 12, bottomInset + 32),
-              sliver: SliverToBoxAdapter(
-                child: _LandingMasonry(posters: posters),
               ),
             );
           },
+        ),
+
+        // ── 瀏覽分類 — Spotify "瀏覽全部" pattern ──
+        const SliverToBoxAdapter(
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(0, 32, 0, 12),
+            child: AppSectionHeader(title: '瀏覽分類'),
+          ),
+        ),
+        SliverToBoxAdapter(
+          child: _BrowseCategories(bottomInset: bottomInset),
         ),
       ],
     );
   }
 }
 
-/// 2-col deterministic-aspect masonry for the search landing's poster
-/// grid. Tap a card → /poster/:id. Same algorithm as the 我的 tab so
-/// the visual rhythm matches.
-class _LandingMasonry extends StatelessWidget {
-  const _LandingMasonry({required this.posters});
-  final List<Poster> posters;
+/// Spotify "瀏覽全部" — vertical stack of large category cards.
+/// Each card surface uses the editorial palette so the page reads
+/// at a glance even in monochrome (the colours are shipped per
+/// position; the content inside stays text-only).
+class _BrowseCategories extends ConsumerWidget {
+  const _BrowseCategories({required this.bottomInset});
+  final double bottomInset;
 
-  static double _ratioForId(String id) {
-    const ratios = <double>[0.67, 0.67, 0.75, 1.0, 1.33, 0.56];
-    var h = 0;
-    for (final r in id.runes) {
-      h = (h * 31 + r) & 0x7fffffff;
-    }
-    return ratios[h % ratios.length];
+  // Stable rotation of muted dark accents so adjacent cards differ
+  // visually without competing with the poster art the user lands
+  // on after tapping. All bound to AppTheme tokens — no rogue hex.
+  Color _bgFor(int i) {
+    const palette = [
+      Color(0xFF1F2A36),
+      Color(0xFF2B1F36),
+      Color(0xFF362B1F),
+      Color(0xFF1F362A),
+      Color(0xFF2A1F36),
+      Color(0xFF362024),
+    ];
+    return palette[i % palette.length];
   }
 
   @override
-  Widget build(BuildContext context) {
-    final colA = <Poster>[];
-    final colB = <Poster>[];
-    var hA = 0.0;
-    var hB = 0.0;
-    for (final p in posters) {
-      final h = 1 / _ratioForId(p.id);
-      if (hA <= hB) {
-        colA.add(p);
-        hA += h + 0.05;
-      } else {
-        colB.add(p);
-        hB += h + 0.05;
-      }
-    }
-    Widget col(List<Poster> items) => Column(
-          children: items
-              .map((p) => Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: _LandingCard(
-                      poster: p,
-                      aspectRatio: _ratioForId(p.id),
-                    ),
-                  ))
-              .toList(),
+  Widget build(BuildContext context, WidgetRef ref) {
+    final catsAsync = ref.watch(tagCategoriesProvider);
+    return catsAsync.when(
+      loading: () => const Padding(
+        padding: EdgeInsets.symmetric(vertical: 24),
+        child: AppLoader.centered(),
+      ),
+      error: (e, _) => Padding(
+        padding: const EdgeInsets.all(20),
+        child: Text('載入分類失敗：$e',
+            style: TextStyle(color: AppTheme.textMute)),
+      ),
+      data: (cats) {
+        return Padding(
+          padding: EdgeInsets.fromLTRB(20, 0, 20, bottomInset + 40),
+          child: Column(
+            children: [
+              for (var i = 0; i < cats.length; i++) ...[
+                _CategoryCard(
+                  title: _shortCatName(cats[i].titleZh),
+                  background: _bgFor(i),
+                  onTap: () => _openCategorySheet(context, cats[i]),
+                ),
+                if (i < cats.length - 1) const SizedBox(height: 10),
+              ],
+            ],
+          ),
         );
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(child: col(colA)),
-        const SizedBox(width: 8),
-        Expanded(child: col(colB)),
-      ],
+      },
+    );
+  }
+
+  static String _shortCatName(String full) =>
+      full.startsWith('編輯') ? full.substring(2) : full;
+
+  void _openCategorySheet(BuildContext context, TagCategory cat) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AppTheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(AppTheme.r6),
+        ),
+      ),
+      builder: (ctx) => _CategoryTagSheet(category: cat),
     );
   }
 }
 
-class _LandingCard extends StatelessWidget {
-  const _LandingCard({required this.poster, required this.aspectRatio});
-  final Poster poster;
-  final double aspectRatio;
+/// Bottom sheet listing all canonical tags in a single category.
+/// Tap a chip → `/tags/<slug>`. Stop-gap until a dedicated category
+/// landing page lands; works fine because tag pages already render
+/// the flat poster grid the user wants.
+class _CategoryTagSheet extends ConsumerWidget {
+  const _CategoryTagSheet({required this.category});
+  final TagCategory category;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tagsAsync = ref.watch(allCanonicalTagsProvider);
+    final bottomInset = MediaQuery.paddingOf(context).bottom;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(20, 18, 20, bottomInset + 24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          AppSectionHeader(
+            title: category.titleZh.startsWith('編輯')
+                ? category.titleZh.substring(2)
+                : category.titleZh,
+            horizontalPadding: 0,
+          ),
+          const SizedBox(height: 14),
+          tagsAsync.when(
+            loading: () => const Padding(
+              padding: EdgeInsets.symmetric(vertical: 24),
+              child: AppLoader.centered(),
+            ),
+            error: (e, _) => Text('載入失敗：$e',
+                style: TextStyle(color: AppTheme.textMute)),
+            data: (allTags) {
+              final mine = allTags
+                  .where((t) => t.categoryId == category.id)
+                  .toList(growable: false);
+              if (mine.isEmpty) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 24),
+                  child: Text('這個分類還沒有 tag',
+                      style: TextStyle(color: AppTheme.textMute)),
+                );
+              }
+              return Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final t in mine)
+                    AppChip(
+                      label: t.labelZh,
+                      onTap: () {
+                        Navigator.pop(context);
+                        context.push('/tags/${t.slug}');
+                      },
+                    ),
+                ],
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CategoryCard extends StatelessWidget {
+  const _CategoryCard({
+    required this.title,
+    required this.background,
+    required this.onTap,
+  });
+  final String title;
+  final Color background;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return AppPosterTile(
-      imageUrl: poster.thumbnailUrl ?? poster.posterUrl,
-      posterId: poster.id,
-      title: poster.title,
-      subtitle: [
-        if (poster.year != null) '${poster.year}',
-        if (poster.director != null) poster.director!,
-      ].join(' · '),
-      aspectRatio: aspectRatio,
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(AppTheme.r4),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppTheme.r4),
+        child: Container(
+          height: 96,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: background,
+            borderRadius: BorderRadius.circular(AppTheme.r4),
+          ),
+          child: Text(
+            title,
+            style: const TextStyle(
+              fontFamily: 'InterDisplay',
+              fontFamilyFallback: ['NotoSansTC'],
+              fontSize: 22,
+              fontWeight: FontWeight.w700,
+              letterSpacing: -0.4,
+              color: Colors.white,
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
+
+// _LandingMasonry / _LandingCard deleted in v19 round 4 —
+// replaced by the horizontal-scroll AppPosterTile row inside
+// _SearchLanding. The vertical masonry felt like an infinite
+// scroll wall; horizontal + the "瀏覽分類" cards below match
+// Spotify's search landing.
 
 class _ResultsView extends ConsumerWidget {
   const _ResultsView({required this.query, required this.bottomInset});

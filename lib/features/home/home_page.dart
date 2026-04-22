@@ -298,14 +298,18 @@ class _DynamicSectionRow extends StatelessWidget {
   Widget build(BuildContext context) {
     switch (section.sourceType) {
       case 'trending_favorites':
+        // v19 round 4: cap at TOP 10 + override title. The DB
+        // section can return more, but the visual rank list reads
+        // as "top something" — anything past 10 is just clutter.
         final items = section
             .asTrending()
             .where((t) => t.poster.id != skipPosterId)
+            .take(10)
             .toList(growable: false);
         return _TrendingRow(
           items: items,
           favIds: favIds,
-          title: section.titleZh,
+          title: '本週 TOP 10',
           icon: _iconFromName(section.icon),
         );
       case 'active_collectors':
@@ -875,10 +879,7 @@ class _RankedCard extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            // v19: solid rank numeral. The hollow stroke version
-            // read as "wireframe debug placeholder" rather than a
-            // chart label. Solid faint-grey numbers feel like the
-            // Spotify "Top Songs in Your Country" ranking.
+            // Solid white rank numeral.
             SizedBox(
               width: 52,
               child: Text(
@@ -889,7 +890,7 @@ class _RankedCard extends StatelessWidget {
                   height: 0.9,
                   fontWeight: FontWeight.w800,
                   letterSpacing: -1,
-                  color: AppTheme.line3,
+                  color: AppTheme.text,
                 ),
               ),
             ),
