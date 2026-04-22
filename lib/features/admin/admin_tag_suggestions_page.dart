@@ -331,10 +331,21 @@ class _SuggestionCardState extends ConsumerState<_SuggestionCard> {
           const SizedBox(height: 14),
 
           // Actions.
-          Row(
+          //
+          // Wrap (not Row) so three buttons don't overflow on
+          // narrow screens — previously the rightmost "退回此建議"
+          // pill got clipped on anything below ~440pt.
+          //
+          // Buttons are disabled when `cat == null` — the suggestion
+          // points at a category that no longer exists in the DB, so
+          // 建立新分類 / 合併既有 can't run meaningfully. Admin has to
+          // pick a real category via the chip-dropdown above first.
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
             children: [
               FilledButton.icon(
-                onPressed: _busy ? null : _approve,
+                onPressed: (_busy || cat == null) ? null : _approve,
                 icon: const Icon(LucideIcons.check, size: 14),
                 label: const Text('建立新分類'),
                 style: FilledButton.styleFrom(
@@ -342,15 +353,13 @@ class _SuggestionCardState extends ConsumerState<_SuggestionCard> {
                       horizontal: 14, vertical: 10),
                 ),
               ),
-              const SizedBox(width: 8),
               OutlinedButton.icon(
-                onPressed: _busy ? null : _merge,
+                onPressed: (_busy || cat == null) ? null : _merge,
                 icon: const Icon(LucideIcons.gitMerge, size: 14),
                 label: const Text('合併到既有分類'),
               ),
-              const SizedBox(width: 8),
               OutlinedButton.icon(
-                onPressed: _busy ? null : _reject,
+                onPressed: (_busy || cat == null) ? null : _reject,
                 icon: const Icon(LucideIcons.x, size: 14),
                 label: const Text('退回此建議'),
               ),
