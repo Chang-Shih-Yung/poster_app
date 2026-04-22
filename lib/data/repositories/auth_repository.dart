@@ -30,7 +30,18 @@ class AuthRepository {
     );
   }
 
-  Future<void> signOut() => _client.auth.signOut();
+  /// Sign the current user out.
+  ///
+  /// Uses `SignOutScope.local` so the call clears the local session +
+  /// fires the auth-state stream immediately, without waiting on the
+  /// Supabase server to revoke the refresh token. The default `global`
+  /// scope round-trips to the server and hangs forever on slow /
+  /// firewalled networks — users saw the logout spinner never
+  /// resolve. Revoking the refresh token is nice-to-have, not a
+  /// security gate (the token is short-lived and bound to the
+  /// device); losing it to background cleanup is fine.
+  Future<void> signOut() =>
+      _client.auth.signOut(scope: SignOutScope.local);
 
   Future<AppUser?> fetchProfile(String userId) async {
     final row = await _client

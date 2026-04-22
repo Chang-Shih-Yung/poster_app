@@ -356,47 +356,54 @@ class _BackablePage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     ref.watch(themeModeProvider);
+    // Hide the floating back button during the mid-logout transient
+    // state where the signed-in sub-page (e.g. /profile) is briefly
+    // rebuilding with a null user before the redirect kicks in. The
+    // button would otherwise let the user pop back into a ghost of
+    // the signed-in surface they just left.
+    final signedIn = ref.watch(isSignedInProvider);
     final topInset = MediaQuery.paddingOf(context).top;
 
     return Scaffold(
-      
+
       body: Stack(
         children: [
           Positioned.fill(child: child),
-          // Floating back button.
-          Positioned(
-            top: topInset + 12,
-            left: 16,
-            child: Semantics(
-              label: '返回',
-              button: true,
-              child: Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  onTap: () {
-                    if (Navigator.of(context).canPop()) {
-                      Navigator.of(context).pop();
-                    } else {
-                      context.go('/');
-                    }
-                  },
-                  borderRadius: BorderRadius.circular(999),
-                  splashColor: Colors.white.withValues(alpha: 0.08),
-                  child: SizedBox(
-                    width: 44,
-                    height: 44,
-                    child: Center(
-                      child: Icon(
-                        LucideIcons.chevronLeft,
-                        size: 24,
-                        color: AppTheme.text,
+          if (signedIn)
+            // Floating back button.
+            Positioned(
+              top: topInset + 12,
+              left: 16,
+              child: Semantics(
+                label: '返回',
+                button: true,
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: () {
+                      if (Navigator.of(context).canPop()) {
+                        Navigator.of(context).pop();
+                      } else {
+                        context.go('/');
+                      }
+                    },
+                    borderRadius: BorderRadius.circular(999),
+                    splashColor: Colors.white.withValues(alpha: 0.08),
+                    child: SizedBox(
+                      width: 44,
+                      height: 44,
+                      child: Center(
+                        child: Icon(
+                          LucideIcons.chevronLeft,
+                          size: 24,
+                          color: AppTheme.text,
+                        ),
                       ),
                     ),
                   ),
                 ),
               ),
             ),
-          ),
         ],
       ),
     );
