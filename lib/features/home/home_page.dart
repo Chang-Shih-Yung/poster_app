@@ -875,7 +875,10 @@ class _RankedCard extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            // Hollow rank numeral — paint-stroked text.
+            // v19: solid rank numeral. The hollow stroke version
+            // read as "wireframe debug placeholder" rather than a
+            // chart label. Solid faint-grey numbers feel like the
+            // Spotify "Top Songs in Your Country" ranking.
             SizedBox(
               width: 52,
               child: Text(
@@ -886,10 +889,7 @@ class _RankedCard extends StatelessWidget {
                   height: 0.9,
                   fontWeight: FontWeight.w800,
                   letterSpacing: -1,
-                  foreground: Paint()
-                    ..style = PaintingStyle.stroke
-                    ..strokeWidth = 1.2
-                    ..color = AppTheme.line2,
+                  color: AppTheme.line3,
                 ),
               ),
             ),

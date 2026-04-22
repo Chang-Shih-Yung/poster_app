@@ -116,12 +116,19 @@ class _SearchPageState extends ConsumerState<SearchPage> {
           // does on its black scaffold.
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-            child: Container(
-              decoration: BoxDecoration(
-                color: const Color(0xFFFFFFFF),
-                borderRadius: BorderRadius.circular(AppTheme.rPill),
-              ),
-              child: TextField(
+            // ClipRRect — Container's borderRadius only paints the bg
+            // edge; the TextField inside still rendered as a square
+            // box, leaking past the rounded fill. ClipRRect actually
+            // CLIPS children to the pill shape so the input renders
+            // round at every rest/focus state.
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(AppTheme.rPill),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFFFFF),
+                  borderRadius: BorderRadius.circular(AppTheme.rPill),
+                ),
+                child: TextField(
                 controller: _controller,
                 focusNode: _focusNode,
                 onChanged: _onChanged,
@@ -159,6 +166,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                   focusedBorder: InputBorder.none,
                   contentPadding:
                       const EdgeInsets.symmetric(horizontal: 4, vertical: 14),
+                ),
                 ),
               ),
             ),

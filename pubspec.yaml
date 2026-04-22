@@ -100,6 +100,26 @@ flutter:
     # Weights: 400 (Regular) + 500 (Medium). Theme uses w400/w500/w600,
     # and w600 falls back to the nearest Medium — close enough visually,
     # saves 4.5MB over bundling a third weight.
+    # v19: Inter Display — open-source Spotify-Mix-style font.
+    # Used as the primary fontFamily; NotoSansTC is registered as
+    # fontFamilyFallback so CJK characters still render glyphs
+    # instead of tofu (Inter has no Han coverage).
+    - family: InterDisplay
+      fonts:
+        - asset: assets/fonts/InterDisplay-Regular.otf
+          weight: 400
+        - asset: assets/fonts/InterDisplay-Medium.otf
+          weight: 500
+        - asset: assets/fonts/InterDisplay-SemiBold.otf
+          weight: 600
+        - asset: assets/fonts/InterDisplay-Bold.otf
+          weight: 700
+        - asset: assets/fonts/InterDisplay-ExtraBold.otf
+          weight: 800
+
+    # CJK fallback. Subset (~4.4MB per weight) covers Basic Latin,
+    # Latin-1 supplement, CJK punctuation + symbols, common Han.
+    # Two weights — w600 falls back to nearest Medium.
     - family: NotoSansTC
       fonts:
         - asset: assets/fonts/NotoSansTC-Regular.otf

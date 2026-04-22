@@ -20,25 +20,17 @@
   <link rel="manifest" href="manifest.json">
 
   <!--
-    First-paint styling (v18). Matches the canonical `--ink` / day
-    `--ink` from ui_kits/poster/colors_and_type.css, with a
-    prefers-color-scheme guard so users on a light-mode OS don't see
-    a dark flash before Flutter renders the white day scaffold.
+    First-paint splash. v19: app is locked to dark mode, so the
+    splash is always #121212 (Spotify-aligned bg) regardless of OS
+    appearance preference. Old prefers-color-scheme: light branch
+    deleted — used to flash white for users on light-mode iOS.
   -->
   <style>
     :root {
-      --splash-bg: #07090D;
+      --splash-bg: #121212;
       --splash-fg: #FFFFFF;
       --splash-hair: rgba(255, 255, 255, 0.15);
       --splash-hair-hi: rgba(255, 255, 255, 0.55);
-    }
-    @media (prefers-color-scheme: light) {
-      :root {
-        --splash-bg: #FFFFFF;
-        --splash-fg: #111111;
-        --splash-hair: rgba(0, 0, 0, 0.12);
-        --splash-hair-hi: rgba(0, 0, 0, 0.55);
-      }
     }
     html, body {
       margin: 0;

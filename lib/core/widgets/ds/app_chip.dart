@@ -60,7 +60,8 @@ class AppChip extends StatelessWidget {
           Text(
             label,
             style: TextStyle(
-              fontFamily: 'NotoSansTC',
+              fontFamily: 'InterDisplay',
+              fontFamilyFallback: const ['NotoSansTC'],
               fontSize: font,
               fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
               color: fg,

@@ -42,27 +42,31 @@ class AppSectionHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final titleStyle = TextStyle(
-      fontFamily: 'NotoSansTC',
+      fontFamily: 'InterDisplay',
+              fontFamilyFallback: const ['NotoSansTC'],
       fontSize: 22,
       fontWeight: FontWeight.w700,
       letterSpacing: -0.4,
       color: AppTheme.text,
     );
     final eyebrowStyle = TextStyle(
-      fontFamily: 'NotoSansTC',
+      fontFamily: 'InterDisplay',
+              fontFamilyFallback: const ['NotoSansTC'],
       fontSize: 10,
       fontWeight: FontWeight.w600,
       letterSpacing: 1.6,
       color: AppTheme.textMute,
     );
     final subStyle = TextStyle(
-      fontFamily: 'NotoSansTC',
+      fontFamily: 'InterDisplay',
+              fontFamilyFallback: const ['NotoSansTC'],
       fontSize: 13,
       fontWeight: FontWeight.w400,
       color: AppTheme.textMute,
     );
     final trailingStyle = TextStyle(
-      fontFamily: 'NotoSansTC',
+      fontFamily: 'InterDisplay',
+              fontFamilyFallback: const ['NotoSansTC'],
       fontSize: 12,
       fontWeight: FontWeight.w600,
       color: AppTheme.textMute,

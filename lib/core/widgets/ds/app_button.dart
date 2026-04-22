@@ -132,7 +132,8 @@ class AppButton extends StatelessWidget {
 
     final (bg, fg, border) = _colors(enabled);
     final labelStyle = TextStyle(
-      fontFamily: 'NotoSansTC',
+      fontFamily: 'InterDisplay',
+              fontFamilyFallback: const ['NotoSansTC'],
       fontSize: size == AppButtonSize.small ? 13 : 14,
       fontWeight: FontWeight.w700,
       letterSpacing: 0.14,

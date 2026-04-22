@@ -65,7 +65,8 @@ class AppSettingsRow extends StatelessWidget {
               child: Text(
                 label,
                 style: TextStyle(
-                  fontFamily: 'NotoSansTC',
+                  fontFamily: 'InterDisplay',
+              fontFamilyFallback: const ['NotoSansTC'],
                   fontSize: 15,
                   fontWeight: FontWeight.w500,
                   color: fg,
@@ -78,7 +79,8 @@ class AppSettingsRow extends StatelessWidget {
               Text(
                 trailingText!,
                 style: TextStyle(
-                  fontFamily: 'NotoSansTC',
+                  fontFamily: 'InterDisplay',
+              fontFamilyFallback: const ['NotoSansTC'],
                   fontSize: 14,
                   fontWeight: FontWeight.w400,
                   color: AppTheme.textMute,

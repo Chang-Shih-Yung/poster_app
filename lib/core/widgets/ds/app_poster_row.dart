@@ -83,7 +83,8 @@ class AppPosterRow extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontFamily: 'NotoSansTC',
+                      fontFamily: 'InterDisplay',
+              fontFamilyFallback: const ['NotoSansTC'],
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
                       color: AppTheme.text,
@@ -97,7 +98,8 @@ class AppPosterRow extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        fontFamily: 'NotoSansTC',
+                        fontFamily: 'InterDisplay',
+              fontFamilyFallback: const ['NotoSansTC'],
                         fontSize: 12,
                         fontWeight: FontWeight.w400,
                         color: AppTheme.textMute,

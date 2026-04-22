@@ -113,7 +113,8 @@ class AppPosterTile extends StatelessWidget {
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                      fontFamily: 'NotoSansTC',
+                      fontFamily: 'InterDisplay',
+                      fontFamilyFallback: ['NotoSansTC'],
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
                       color: Colors.white,
@@ -131,7 +132,8 @@ class AppPosterTile extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontFamily: 'NotoSansTC',
+                      fontFamily: 'InterDisplay',
+              fontFamilyFallback: const ['NotoSansTC'],
                       fontSize: 10,
                       fontWeight: FontWeight.w400,
                       color: Colors.white.withValues(alpha: 0.75),

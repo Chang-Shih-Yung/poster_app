@@ -186,12 +186,16 @@ class AppTheme {
 
   static TextTheme _textTheme() {
     final base = ThemeData.dark().textTheme;
-    // NotoSansTC as primary — bundled local asset, no CDN fetch, no tofu.
-    // CanvasKit synthesizes FontWeight.w600 from the Medium (w500) we ship;
-    // close enough visually, saves ~4.5MB vs bundling a third weight.
+    // v19: Inter Display as primary (open-source, closest free font
+    // to Spotify's proprietary CircularSp / Spotify Mix). NotoSansTC
+    // as fontFamilyFallback so CJK glyphs (中文 / 日文 / 韓文) still
+    // render — Inter has zero Han coverage. Five weights bundled
+    // (400/500/600/700/800) so headlines + buttons + body each get
+    // their own weight rather than synthesizing.
     TextStyle style(TextStyle? s, {double? size, FontWeight? w, double? ls}) {
       return (s ?? const TextStyle()).copyWith(
-        fontFamily: 'NotoSansTC',
+        fontFamily: 'InterDisplay',
+        fontFamilyFallback: const ['NotoSansTC'],
         fontSize: size,
         fontWeight: w,
         letterSpacing: ls,

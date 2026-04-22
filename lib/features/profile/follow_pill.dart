@@ -115,8 +115,16 @@ class _FollowPillState extends ConsumerState<FollowPill> {
       await ref
           .read(followRepositoryProvider)
           .toggle(widget.targetUserId);
-      // Invalidate so stats refetch (counts update too).
+      // Invalidate so stats refetch — both sides:
+      //   · target's followers count
+      //   · viewer's own following count (drove the bug where the
+      //     viewer's profile said "追蹤中 0" right after they tapped
+      //     follow on a stranger's page)
       ref.invalidate(userRelationshipStatsProvider(widget.targetUserId));
+      final viewerId = ref.read(currentUserProvider)?.id;
+      if (viewerId != null) {
+        ref.invalidate(userRelationshipStatsProvider(viewerId));
+      }
       // Invalidate follow feed — it changes when the follow graph changes.
       // EPIC 14: home sections are now config-driven, refresh the combined
       // RPC so the follow-feed section re-evaluates with new follow graph.

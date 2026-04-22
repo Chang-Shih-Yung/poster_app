@@ -41,13 +41,13 @@ void main() {
   });
 
   testWidgets('Theme rebuild picks up flipped bg', (tester) async {
-    const _testKey = ValueKey('themeBox');
+    const themeKey = ValueKey('themeBox');
     AppTheme.setDayMode(false);
     Widget build() => MaterialApp(
           theme: AppTheme.dark(),
           home: Builder(builder: (ctx) {
             return ColoredBox(
-              key: _testKey,
+              key: themeKey,
               color: AppTheme.bg,
               child: const SizedBox.expand(),
             );
@@ -55,12 +55,12 @@ void main() {
         );
 
     await tester.pumpWidget(build());
-    final nightBox = tester.widget<ColoredBox>(find.byKey(_testKey));
+    final nightBox = tester.widget<ColoredBox>(find.byKey(themeKey));
     expect(nightBox.color, const Color(0xFF121212));
 
     AppTheme.setDayMode(true);
     await tester.pumpWidget(build());
-    final dayBox = tester.widget<ColoredBox>(find.byKey(_testKey));
+    final dayBox = tester.widget<ColoredBox>(find.byKey(themeKey));
     expect(dayBox.color, const Color(0xFFFFFFFF));
   });
 }

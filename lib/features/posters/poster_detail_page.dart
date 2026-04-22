@@ -162,36 +162,22 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
     final progress = (_dragY / 200).clamp(0.0, 1.0);
     final scale = 1.0 - progress * 0.06;
 
-    // v19 detail layout — the "天才" stack.
+    // v19 (round 3) detail layout — Spotify now-playing.
     //
-    // Background layers (don't scroll):
-    //   1. AppTheme.bg solid colour (so any gap between cards is
-    //      pure dark void).
-    //   2. Poster image pinned to the top, occupying ~62% of screen
-    //      height. Stays put while the foreground scrolls past it
-    //      (parallax — Spotify album-page pattern).
-    //   3. Gradient overlay on the image: top dim for chrome
-    //      legibility, bottom fade into AppTheme.bg so the image
-    //      blurs into the dark void below.
+    // Everything scrolls together (no parallax). Hero image at top,
+    // inline title/director/CTAs (no card chrome) directly below,
+    // then a slightly LIGHTER dark sheet for "相關海報" so the next
+    // section reads as a separate surface tone.
     //
-    // Foreground (scrolls):
-    //   4. SingleChildScrollView holding two floating cards (Fuji
-    //      info, Related posters) separated by a 24px gap so the
-    //      dark bg is visible between them as a "blur transition".
-    //      Top spacer reserves the parallax window.
+    // Layout:
+    //   - Image (heroH) — scrolls with content
+    //   - Inline Fuji content — text + actions on bg, no Glass card
+    //   - 24px gap (bg shows through)
+    //   - Related section (lighter card) — surfaceAlt fill
+    //   - Bottom inset
     //
-    // Floating chrome:
-    //   5. Close button (chevron down) in the top-left, fixed.
-    // Hero takes 70% of screen so the poster reads as the dominant
-    // surface. Fuji card sits over the bottom of the hero (gradient
-    // is dark there anyway), and the Related card lives below — only
-    // its eyebrow title peeks above the fold so the user knows there's
-    // more to scroll without sacrificing poster visibility.
-    final heroH = screenH * 0.70;
-    // Where the Fuji card top lands. 60% of screen leaves room for
-    // the card itself + 24px gap + ~40px peek of "相關海報" title
-    // before the safe-area inset.
-    final fujiStart = screenH * 0.60;
+    // Floating: only the close button stays pinned top-left.
+    final heroH = screenH * 0.62;
 
     return GestureDetector(
       onVerticalDragUpdate: _onVerticalDragUpdate,
@@ -208,89 +194,82 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
             child: Stack(
               fit: StackFit.expand,
               children: [
-                // Layer 1: solid bg so gaps between cards read as black.
+                // Page bg.
                 Positioned.fill(child: ColoredBox(color: AppTheme.bg)),
 
-                // Layer 2: poster image, pinned to the top, parallax.
-                Positioned(
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  height: heroH,
-                  child: Hero(
-                    tag: 'poster-${p.id}',
-                    child: CachedNetworkImage(
-                      imageUrl: p.posterUrl,
-                      fit: BoxFit.cover,
-                      placeholder: (_, _) =>
-                          ColoredBox(color: AppTheme.surfaceRaised),
-                      errorWidget: (_, _, _) => ColoredBox(
-                        color: AppTheme.surfaceRaised,
-                        child: Icon(LucideIcons.imageOff,
-                            color: AppTheme.textFaint, size: 40),
-                      ),
-                    ),
-                  ),
-                ),
-
-                // Layer 3: image overlay — top dim + fade-into-bg.
-                Positioned(
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  height: heroH,
-                  child: const IgnorePointer(
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [
-                            Color(0x73000000), // 0.45 top dim
-                            Color(0x00000000),
-                            Color(0x00000000),
-                            Color(0xFF121212), // AppTheme.bg at hem
+                // Scrollable content.
+                SingleChildScrollView(
+                  physics: const ClampingScrollPhysics(),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // Hero image with bottom fade into bg.
+                      SizedBox(
+                        height: heroH,
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            Hero(
+                              tag: 'poster-${p.id}',
+                              child: CachedNetworkImage(
+                                imageUrl: p.posterUrl,
+                                fit: BoxFit.cover,
+                                placeholder: (_, _) => ColoredBox(
+                                    color: AppTheme.surfaceRaised),
+                                errorWidget: (_, _, _) => ColoredBox(
+                                  color: AppTheme.surfaceRaised,
+                                  child: Icon(LucideIcons.imageOff,
+                                      color: AppTheme.textFaint, size: 40),
+                                ),
+                              ),
+                            ),
+                            const IgnorePointer(
+                              child: DecoratedBox(
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    begin: Alignment.topCenter,
+                                    end: Alignment.bottomCenter,
+                                    colors: [
+                                      Color(0x73000000), // 0.45 top dim
+                                      Color(0x00000000),
+                                      Color(0x00000000),
+                                      Color(0xFF121212), // bg at hem
+                                    ],
+                                    stops: [0.0, 0.18, 0.50, 1.0],
+                                  ),
+                                ),
+                              ),
+                            ),
                           ],
-                          stops: [0.0, 0.18, 0.55, 1.0],
                         ),
                       ),
-                    ),
+
+                      // Inline Fuji content — no card chrome,
+                      // just text + actions on the page bg.
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
+                        child: _FujiInline(
+                          poster: p,
+                          isFav: isFav,
+                          favIdsReady: favIdsReady,
+                          onToggleFav: toggleFav,
+                        ),
+                      ),
+
+                      const SizedBox(height: 24),
+
+                      // Related section as its own lighter card.
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: _RelatedSection(poster: p),
+                      ),
+
+                      SizedBox(height: bottomInset + 32),
+                    ],
                   ),
                 ),
 
-                // Layer 4: scrollable foreground.
-                //
-                // Spacer height = fujiStart so the Fuji card lands
-                // ~60% down screen (max poster visible above), with
-                // the Related card following — only its eyebrow
-                // title peeks above the fold.
-                Positioned.fill(
-                  child: SingleChildScrollView(
-                    physics: const ClampingScrollPhysics(),
-                    child: Column(
-                      children: [
-                        SizedBox(height: fujiStart),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          child: _FujiDrawer(
-                            poster: p,
-                            isFav: isFav,
-                            favIdsReady: favIdsReady,
-                            onToggleFav: toggleFav,
-                          ),
-                        ),
-                        const SizedBox(height: 24),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          child: _RelatedSection(poster: p),
-                        ),
-                        SizedBox(height: bottomInset + 32),
-                      ],
-                    ),
-                  ),
-                ),
-
-                // Layer 5: top close button, fixed.
+                // Top close button, fixed.
                 Positioned(
                   top: topInset + 12,
                   left: 16,
@@ -333,148 +312,129 @@ class _FujiDrawer extends StatefulWidget {
 }
 
 class _FujiDrawerState extends State<_FujiDrawer> {
-  bool _expanded = false;
-
   @override
   Widget build(BuildContext context) {
-    final p = widget.poster;
+    // v19 round 3: kept name for back-compat but the Glass card is
+    // gone. Real implementation lives in [_FujiInline] which renders
+    // directly on bg, no chrome — Spotify's now-playing pattern.
+    return _FujiInline(
+      poster: widget.poster,
+      isFav: widget.isFav,
+      favIdsReady: widget.favIdsReady,
+      onToggleFav: widget.onToggleFav,
+    );
+  }
+}
+
+/// Inline poster info. Sits on the page bg directly — no Glass, no
+/// border, no card chrome. Eyebrow + 32px title + director + stats
+/// + tags + CTAs.
+class _FujiInline extends ConsumerWidget {
+  const _FujiInline({
+    required this.poster,
+    required this.isFav,
+    required this.favIdsReady,
+    required this.onToggleFav,
+  });
+  final Poster poster;
+  final bool isFav;
+  final bool favIdsReady;
+  final Future<void> Function() onToggleFav;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final p = poster;
     final theme = Theme.of(context);
 
-    return AnimatedSize(
-      duration: AppTheme.motionMed,
-      curve: AppTheme.easeStandard,
-      alignment: Alignment.topCenter,
-      child: Glass(
-        blur: 30,
-        tint: 0.18,
-        borderRadius: BorderRadius.circular(24),
-        padding: const EdgeInsets.fromLTRB(20, 6, 20, 18),
-        // Drop the inset top highlight — Glass paints a 1px white
-        // line at the top edge to read as "specular highlight" but
-        // on the Fuji drawer it shows up as a stray hairline directly
-        // above the drag handle. Disable here.
-        highlight: false,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Eyebrow.
+        _Eyebrow(
+          parts: [
+            if (p.tags.isNotEmpty) p.tags.first.toUpperCase(),
+            if (p.year != null) '${p.year}',
+          ],
+        ),
+        const SizedBox(height: 6),
+        // Title — 32px editorial. Tap → work page if linked.
+        GestureDetector(
+          onTap: p.workId == null
+              ? null
+              : () => context.push('/work/${p.workId}'),
+          child: Text(
+            p.title,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.headlineLarge?.copyWith(
+              color: AppTheme.text,
+              fontSize: 32,
+              height: 1.05,
+              fontWeight: FontWeight.w700,
+              letterSpacing: -0.8,
+            ),
+          ),
+        ),
+        if (p.director != null && p.director!.isNotEmpty) ...[
+          const SizedBox(height: 4),
+          Text(
+            p.director!,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: AppTheme.textMute,
+            ),
+          ),
+        ],
+        const SizedBox(height: 16),
+        // Stats row + tags shown unconditionally — no more
+        // expand/collapse. Inline content has room to breathe now
+        // that there's no card constraining it.
+        _StatsRow(poster: p),
+        const SizedBox(height: 14),
+        _ExpandedInfo(poster: p),
+        const SizedBox(height: 18),
+        // CTAs.
+        Row(
           children: [
-            // Drag handle — tap to expand/collapse. App-style (no
-            // chevron indicator — just the pill). 16dp vertical hit
-            // area around the visible 4dp pill.
-            GestureDetector(
-              onTap: () => setState(() => _expanded = !_expanded),
-              behavior: HitTestBehavior.opaque,
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                alignment: Alignment.center,
-                child: Container(
-                  width: 36,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.35),
-                    borderRadius: BorderRadius.circular(99),
-                  ),
-                ),
+            Expanded(
+              child: _PrimaryCta(
+                isFav: isFav,
+                enabled: favIdsReady,
+                onTap: onToggleFav,
               ),
             ),
-            // Eyebrow: first tag · year (uppercase, letter-spaced).
-            _Eyebrow(
-              parts: [
-                if (p.tags.isNotEmpty) p.tags.first.toUpperCase(),
-                if (p.year != null) '${p.year}',
-              ],
+            const SizedBox(width: 8),
+            AppIconButton(
+              icon: LucideIcons.share2,
+              size: AppIconButtonSize.large,
+              variant: AppIconButtonVariant.filled,
+              onTap: () {
+                HapticFeedback.selectionClick();
+                Clipboard.setData(ClipboardData(text: p.posterUrl));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('連結已複製')),
+                );
+              },
+              semanticsLabel: '分享',
             ),
-            const SizedBox(height: 6),
-            // Title — 32px editorial.
-            GestureDetector(
-              onTap: p.workId == null
-                  ? null
-                  : () => context.push('/work/${p.workId}'),
-              child: Text(
-                p.title,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.headlineLarge?.copyWith(
-                  color: Colors.white,
-                  fontSize: 32,
-                  height: 1.05,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: -0.8,
-                ),
-              ),
-            ),
-            if (p.director != null && p.director!.isNotEmpty) ...[
-              const SizedBox(height: 4),
-              Text(
-                p.director!,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: Colors.white.withValues(alpha: 0.72),
-                ),
-              ),
-            ],
-            // Everything below title + director collapses together:
-            // stats row (年份/瀏覽/收藏), tags, work link. Collapsed
-            // state is just drag-handle + eyebrow + title + director
-            // + CTA row — a taller-than-a-snackbar but much smaller
-            // than expanded.
-            if (_expanded) ...[
-              const SizedBox(height: 14),
-              Container(
-                decoration: BoxDecoration(
-                  border: Border(
-                    top: BorderSide(
-                        color: Colors.white.withValues(alpha: 0.1)),
-                    bottom: BorderSide(
-                        color: Colors.white.withValues(alpha: 0.1)),
-                  ),
-                ),
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                child: _StatsRow(poster: p),
-              ),
-              _ExpandedInfo(poster: p),
-              const SizedBox(height: 14),
-            ] else
-              const SizedBox(height: 12),
-            // CTAs.
-            Row(
-              children: [
-                Expanded(
-                  child: _PrimaryCta(
-                    isFav: widget.isFav,
-                    enabled: widget.favIdsReady,
-                    onTap: widget.onToggleFav,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                GlassButton(
-                  icon: LucideIcons.share2,
-                  size: 46,
-                  onTap: () {
-                    HapticFeedback.selectionClick();
-                    Clipboard.setData(ClipboardData(text: p.posterUrl));
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('連結已複製')),
-                    );
-                  },
-                ),
-                const SizedBox(width: 8),
-                GlassButton(
-                  icon: LucideIcons.maximize,
-                  size: 46,
-                  onTap: () {
-                    HapticFeedback.selectionClick();
-                    showDialog<void>(
-                      context: context,
-                      barrierColor: Colors.black.withValues(alpha: 0.92),
-                      builder: (_) => _FullImageViewer(url: p.posterUrl),
-                    );
-                  },
-                ),
-              ],
+            const SizedBox(width: 8),
+            AppIconButton(
+              icon: LucideIcons.maximize,
+              size: AppIconButtonSize.large,
+              variant: AppIconButtonVariant.filled,
+              onTap: () {
+                HapticFeedback.selectionClick();
+                showDialog<void>(
+                  context: context,
+                  barrierColor: Colors.black.withValues(alpha: 0.92),
+                  builder: (_) => _FullImageViewer(url: p.posterUrl),
+                );
+              },
+              semanticsLabel: '放大',
             ),
           ],
         ),
-      ),
+      ],
     );
   }
 }
@@ -489,7 +449,7 @@ class _Eyebrow extends StatelessWidget {
     return Text(
       parts.join(' · '),
       style: Theme.of(context).textTheme.labelSmall?.copyWith(
-            color: Colors.white.withValues(alpha: 0.65),
+            color: AppTheme.textMute,
             letterSpacing: 2,
             fontWeight: FontWeight.w600,
           ),
@@ -538,7 +498,7 @@ class _Stat extends StatelessWidget {
         Text(
           label,
           style: theme.textTheme.labelSmall?.copyWith(
-            color: Colors.white.withValues(alpha: 0.5),
+            color: AppTheme.textFaint,
             letterSpacing: 1,
             fontWeight: FontWeight.w600,
           ),
@@ -548,7 +508,7 @@ class _Stat extends StatelessWidget {
           value,
           style: theme.textTheme.titleMedium?.copyWith(
             fontWeight: FontWeight.w600,
-            color: Colors.white,
+            color: AppTheme.text,
           ),
         ),
       ],
@@ -599,20 +559,18 @@ class _ExpandedInfo extends ConsumerWidget {
               child: Row(
                 children: [
                   Icon(LucideIcons.layers,
-                      size: 13,
-                      color: Colors.white.withValues(alpha: 0.55)),
+                      size: 13, color: AppTheme.textMute),
                   const SizedBox(width: 6),
                   Text(
                     '看這部作品的所有海報',
                     style: theme.textTheme.labelMedium?.copyWith(
-                      color: Colors.white.withValues(alpha: 0.65),
+                      color: AppTheme.textMute,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
                   const SizedBox(width: 4),
                   Icon(LucideIcons.chevronRight,
-                      size: 13,
-                      color: Colors.white.withValues(alpha: 0.55)),
+                      size: 13, color: AppTheme.textMute),
                 ],
               ),
             ),
@@ -671,13 +629,13 @@ class _RelatedSection extends ConsumerWidget {
       data: (items) {
         if (items.isEmpty) return const SizedBox.shrink();
 
-        // v19: floating card with rounded corners on ALL sides — sits
-        // over the dark gap that follows the Fuji card, with the
-        // poster image fading to bg behind it. No more bottom-flush
-        // section panel.
+        // v19 round 3: lighter card so it stands clearly off the
+        // page bg. surfaceAlt (#1F1F1F) is one notch lighter than
+        // bg (#121212) without being so bright it competes with the
+        // hero image — Spotify's "下方探索 sheet" tone.
         return AppCard(
           padding: const EdgeInsets.fromLTRB(0, 18, 0, 18),
-          background: AppTheme.surface,
+          background: AppTheme.surfaceAlt,
           borderRadius: BorderRadius.circular(AppTheme.r5),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
