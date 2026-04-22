@@ -31,6 +31,8 @@ class ProfileEditPage extends ConsumerStatefulWidget {
 class _ProfileEditPageState extends ConsumerState<ProfileEditPage> {
   final _nameCtrl = TextEditingController();
   final _bioCtrl = TextEditingController();
+  final _handleCtrl = TextEditingController();
+  String? _handleError;
   Gender? _gender;
   List<ProfileLink> _links = [];
   String? _avatarUrl;
@@ -43,6 +45,7 @@ class _ProfileEditPageState extends ConsumerState<ProfileEditPage> {
   void dispose() {
     _nameCtrl.dispose();
     _bioCtrl.dispose();
+    _handleCtrl.dispose();
     super.dispose();
   }
 
@@ -50,10 +53,24 @@ class _ProfileEditPageState extends ConsumerState<ProfileEditPage> {
     if (_initialised) return;
     _nameCtrl.text = p.displayName;
     _bioCtrl.text = p.bio ?? '';
+    _handleCtrl.text = p.handle ?? '';
     _gender = p.gender;
     _links = List.from(p.links);
     _avatarUrl = p.avatarUrl;
     _initialised = true;
+  }
+
+  /// Handle shape rule mirrors the DB CHECK: lowercase letter-leading,
+  /// alnum + underscore, 3-20 chars. Empty string is allowed (clears
+  /// the handle).
+  static final _handleRe = RegExp(r'^[a-z][a-z0-9_]{2,19}$');
+  String? _validateHandle(String raw) {
+    final h = raw.trim().toLowerCase();
+    if (h.isEmpty) return null; // clearing is fine
+    if (h.length < 3) return '至少 3 個字元';
+    if (h.length > 20) return '最多 20 個字元';
+    if (!_handleRe.hasMatch(h)) return '只能用小寫字母、數字、底線；首字必須是字母';
+    return null;
   }
 
   Future<void> _pickAvatar() async {
@@ -78,7 +95,16 @@ class _ProfileEditPageState extends ConsumerState<ProfileEditPage> {
 
   Future<void> _save(AppUser profile) async {
     if (_saving) return;
-    setState(() => _saving = true);
+    final handleRaw = _handleCtrl.text.trim().toLowerCase();
+    final handleErr = _validateHandle(handleRaw);
+    if (handleErr != null) {
+      setState(() => _handleError = handleErr);
+      return;
+    }
+    setState(() {
+      _handleError = null;
+      _saving = true;
+    });
     HapticFeedback.mediumImpact();
     final repo = ref.read(userRepositoryProvider);
     try {
@@ -97,6 +123,7 @@ class _ProfileEditPageState extends ConsumerState<ProfileEditPage> {
         gender: _gender,
         links: _links,
         avatarUrl: newAvatarUrl,
+        handle: handleRaw == (profile.handle ?? '') ? null : handleRaw,
       );
       // Single helper invalidates every provider that surfaces this user's
       // displayName / avatar / bio / gender / links across the app. See
@@ -107,7 +134,16 @@ class _ProfileEditPageState extends ConsumerState<ProfileEditPage> {
         context.pop();
       }
     } catch (e) {
-      _toast('儲存失敗：$e');
+      // Most likely cause: unique-constraint collision on handle.
+      // Postgres throws "duplicate key value violates unique
+      // constraint" — surface a friendlier copy.
+      final msg = e.toString().contains('duplicate key')
+          ? '這個 @handle 已被使用'
+          : '儲存失敗：$e';
+      if (msg.contains('@handle')) {
+        setState(() => _handleError = msg);
+      }
+      _toast(msg);
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -183,6 +219,46 @@ class _ProfileEditPageState extends ConsumerState<ProfileEditPage> {
                       decoration: _v13InputDeco('你想被叫什麼名字？'),
                     ),
                     const SizedBox(height: 16),
+                    _Label('@handle'),
+                    const SizedBox(height: 6),
+                    TextField(
+                      controller: _handleCtrl,
+                      maxLength: 20,
+                      inputFormatters: [
+                        // Force lowercase + restrict to alnum+_.
+                        FilteringTextInputFormatter.allow(
+                            RegExp(r'[a-zA-Z0-9_]')),
+                        TextInputFormatter.withFunction((old, next) =>
+                            TextEditingValue(
+                              text: next.text.toLowerCase(),
+                              selection: next.selection,
+                            )),
+                      ],
+                      onChanged: (v) {
+                        if (_handleError != null) {
+                          setState(() => _handleError = null);
+                        }
+                      },
+                      decoration: _v13InputDeco('henry1010921').copyWith(
+                        prefixText: '@',
+                        prefixStyle: TextStyle(
+                          fontFamily: 'InterDisplay',
+                          fontFamilyFallback: const ['NotoSansTC'],
+                          color: AppTheme.textMute,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        errorText: _handleError,
+                        helperText:
+                            '小寫字母 / 數字 / 底線，3-20 字元。留空使用 email 名稱。',
+                        helperStyle: TextStyle(
+                          fontFamily: 'InterDisplay',
+                          fontFamilyFallback: const ['NotoSansTC'],
+                          color: AppTheme.textFaint,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
                     _Label('簡介'),
                     const SizedBox(height: 6),
                     TextField(
@@ -231,7 +307,7 @@ InputDecoration _v13InputDeco(String hint) {
   return InputDecoration(
     hintText: hint,
     filled: true,
-    fillColor: const Color(0x0FFFFFFF), // 0.06
+    fillColor: AppTheme.fieldFillTranslucent,
     isDense: true,
     contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
     border: OutlineInputBorder(

@@ -42,6 +42,8 @@ class AppUser {
     // Profile editor fields (EPIC profile editor)
     this.gender,
     this.links = const [],
+    // v19: claimable @handle. Null until user sets one.
+    this.handle,
   });
 
   factory AppUser.fromRow(Map<String, dynamic> row) {
@@ -57,6 +59,7 @@ class AppUser {
       links: ((row['links'] as List?) ?? const [])
           .map((e) => ProfileLink.fromJson(e as Map<String, dynamic>))
           .toList(growable: false),
+      handle: row['handle'] as String?,
     );
   }
 
@@ -69,6 +72,16 @@ class AppUser {
   final String? bio;
   final Gender? gender;
   final List<ProfileLink> links;
+  final String? handle;
 
   bool get isAdmin => role == 'admin' || role == 'owner';
+
+  /// Display @ handle when claimed; otherwise fall back to the
+  /// e-mail prefix the caller passes in. Always lower-case so the
+  /// rendered @label matches whatever the user picked.
+  String resolvedHandle({required String emailFallback}) {
+    final h = handle?.trim();
+    if (h != null && h.isNotEmpty) return h.toLowerCase();
+    return emailFallback;
+  }
 }

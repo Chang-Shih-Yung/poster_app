@@ -130,6 +130,24 @@ class AppTheme {
       ? Colors.black.withValues(alpha: 0.18)
       : Colors.black.withValues(alpha: 0.55);
 
+  // ── Common alpha-blacks + inverted surfaces ─────────────────────
+  // Lifted out of feature widgets to centralise what "card shadow",
+  // "image overlay text shadow", "field fill", and "white pill" mean.
+  // New code MUST use these tokens instead of inline Color(0x...).
+  static const Color shadowMedium =
+      Color(0x4D000000); // 30% black — card lift
+  static const Color shadowDeep =
+      Color(0x88000000); // 53% black — text-on-image drop shadow
+  static const Color overlayDim =
+      Color(0xB3000000); // 70% black — gradient hem under text overlays
+  static const Color fieldFillTranslucent =
+      Color(0x0FFFFFFF); // 6% white — input field tint on dark bg
+
+  /// White pill primary CTA fill (Spotify pattern). The 0.95-ish
+  /// off-white reads as "press-able plate" without screaming pure
+  /// #FFFFFF on a #121212 page.
+  static const Color pillFill = Color(0xFFEEEEEE);
+
   // ── Semantic state colours ────────────────────────────────────────
   // The kit bans "green success / red error" strips, but it does
   // allow discrete semantic accents: an unread dot, a favorite

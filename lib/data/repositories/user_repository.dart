@@ -16,6 +16,7 @@ class PublicProfile {
     required this.displayName,
     this.avatarUrl,
     this.bio,
+    this.handle,
     this.submissionCount = 0,
     this.approvedPosterCount = 0,
   });
@@ -26,6 +27,7 @@ class PublicProfile {
       displayName: (row['display_name'] as String?) ?? '',
       avatarUrl: row['avatar_url'] as String?,
       bio: row['bio'] as String?,
+      handle: row['handle'] as String?,
       submissionCount: (row['submission_count'] as int?) ?? 0,
       approvedPosterCount:
           (row['approved_poster_count'] as int?) ?? 0,
@@ -36,6 +38,7 @@ class PublicProfile {
   final String displayName;
   final String? avatarUrl;
   final String? bio;
+  final String? handle;
   final int submissionCount;
   final int approvedPosterCount;
 }
@@ -68,6 +71,10 @@ class UserRepository {
 
   /// Update current user's profile fields. Pass only the fields you want
   /// to change; null = leave alone. Empty string = clear bio/etc.
+  /// For [handle] specifically: empty string = clear (set to null);
+  /// otherwise the DB CHECK constraint enforces shape (lowercase
+  /// letter-leading, alnum + underscore, 3-20 chars). On collision
+  /// the unique-index throws — caller surfaces the error to the UI.
   Future<void> updateOwnProfile({
     required String userId,
     bool? isPublic,
@@ -76,6 +83,7 @@ class UserRepository {
     String? avatarUrl,
     Gender? gender,
     List<ProfileLink>? links,
+    String? handle,
   }) async {
     final row = <String, dynamic>{};
     if (isPublic != null) row['is_public'] = isPublic;
@@ -85,6 +93,9 @@ class UserRepository {
     if (gender != null) row['gender'] = gender.value;
     if (links != null) {
       row['links'] = links.map((l) => l.toJson()).toList();
+    }
+    if (handle != null) {
+      row['handle'] = handle.isEmpty ? null : handle.toLowerCase();
     }
     if (row.isEmpty) return;
 

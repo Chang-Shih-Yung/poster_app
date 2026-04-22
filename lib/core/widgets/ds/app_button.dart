@@ -207,8 +207,8 @@ class AppButton extends StatelessWidget {
         // Spotify's white pill — inverted against dark bg.
         return (
           enabled
-              ? const Color(0xFFEEEEEE)
-              : const Color(0xFFEEEEEE).withValues(alpha: 0.35),
+              ? AppTheme.pillFill
+              : AppTheme.pillFill.withValues(alpha: 0.35),
           AppTheme.bg, // black-on-white
           null,
         );

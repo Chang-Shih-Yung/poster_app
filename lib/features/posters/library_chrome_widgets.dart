@@ -265,10 +265,10 @@ class _MeProfileRow extends StatelessWidget {
         ? fallbackEmail.split('@').first
         : fallbackEmail;
     final name = displayName.isNotEmpty ? displayName : emailPrefix;
-    // No dedicated `handle` column in the users table yet — synthesize
-    // from the email prefix. When the backend gains a handle field,
-    // swap this for profile?.handle.
-    final handle = '@$emailPrefix';
+    // v19: prefer the user's claimed handle; fall back to email prefix
+    // when they haven't set one. Display always lower-cased so the
+    // rendered string matches whatever the editor enforced.
+    final handle = '@${profile?.resolvedHandle(emailFallback: emailPrefix) ?? emailPrefix}';
     final bio = profile?.bio?.trim();
 
     return Row(

@@ -933,7 +933,7 @@ class _DiagonalStripePainter extends CustomPainter {
     canvas.translate(centre.dx, centre.dy);
     canvas.rotate(0.785398); // π/4
     final diag = (size.width + size.height); // covers rotated bbox
-    final paint = Paint()..color = const Color(0x0FFFFFFF); // 0.06
+    final paint = Paint()..color = AppTheme.fieldFillTranslucent;
     const band = 12.0;
     for (var x = -diag; x < diag; x += band * 2) {
       canvas.drawRect(Rect.fromLTWH(x, -diag, band, diag * 2), paint);

@@ -404,15 +404,18 @@ class _HeroCard extends StatelessWidget {
                   errorWidget: (_, _, _) =>
                       ColoredBox(color: AppTheme.surfaceRaised),
                 ),
+                // Hero gradient — fades into AppTheme.bg at the hem
+                // so the title overlay sits on solid dark. Stops are
+                // soft top dim → transparent middle → opaque bg.
                 const DecoratedBox(
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
                       colors: [
-                        Color(0x1A070911),
-                        Color(0x33070911),
-                        Color(0xF2070911),
+                        Color(0x1A121212),
+                        Color(0x33121212),
+                        Color(0xF2121212),
                       ],
                       stops: [0.0, 0.45, 1.0],
                     ),
