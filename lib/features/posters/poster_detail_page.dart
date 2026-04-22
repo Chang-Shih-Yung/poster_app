@@ -223,35 +223,18 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                             ),
                           ),
                         ),
-                        // Top floating glass buttons: close + fav.
+                        // Top floating glass button — close only.
+                        // v19: dropped the top-right heart. The Fuji
+                        // drawer already has a prominent 已收藏 /
+                        // 加入收藏 pill CTA; two affordances for the
+                        // same action on one screen is clutter.
                         Positioned(
                           top: topInset + 12,
                           left: 16,
-                          right: 16,
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              GlassButton(
-                                icon: LucideIcons.chevronDown,
-                                onTap: () => context.pop(),
-                                semanticsLabel: '關閉',
-                              ),
-                              GlassButton(
-                                // Stroke when un-fav, filled Material heart
-                                // when fav (Lucide is stroke-only).
-                                icon: isFav
-                                    ? Icons.favorite
-                                    : LucideIcons.heart,
-                                color: isFav
-                                    ? AppTheme.favoriteActive
-                                    : Colors.white,
-                                onTap: favIdsReady
-                                    ? toggleFav
-                                    : () {},
-                                semanticsLabel:
-                                    isFav ? '取消收藏' : '加入收藏',
-                              ),
-                            ],
+                          child: GlassButton(
+                            icon: LucideIcons.chevronDown,
+                            onTap: () => context.pop(),
+                            semanticsLabel: '關閉',
                           ),
                         ),
                         // Fuji drawer (bottom glass panel).
@@ -321,8 +304,8 @@ class _FujiDrawerState extends State<_FujiDrawer> {
       curve: AppTheme.easeStandard,
       alignment: Alignment.topCenter,
       child: Glass(
-        blur: 18,
-        tint: 0.42,
+        blur: 26,
+        tint: 0.28,
         borderRadius: BorderRadius.circular(24),
         padding: const EdgeInsets.fromLTRB(20, 6, 20, 18),
         // Drop the inset top highlight — Glass paints a 1px white
@@ -669,16 +652,18 @@ class _RelatedSection extends ConsumerWidget {
       data: (items) {
         if (items.isEmpty) return const SizedBox.shrink();
 
-        // Soften the peek seam — the hero image ends at a hard edge
-        // right where "相關海報" begins. A 24px top radius makes the
-        // section read as a softly-rising sheet below the hero, not
-        // a guillotine cut. Bottom corners stay square because the
-        // section is the tail of the scroll.
+        // Soften the peek seam. The hero bottom is a dark gradient,
+        // so using AppTheme.bg (same near-black in night mode)
+        // buried the rounded corners invisibly — the user saw a flat
+        // hairline where the card was supposed to lift. Switching to
+        // surfaceRaised makes the card one shade lighter than the
+        // gradient behind it, and the 28px top-only radius reads as
+        // a sheet gently rising out of the hero below.
         return Container(
           decoration: BoxDecoration(
-            color: AppTheme.bg,
+            color: AppTheme.surfaceRaised,
             borderRadius: const BorderRadius.vertical(
-              top: Radius.circular(24),
+              top: Radius.circular(28),
             ),
           ),
           padding: EdgeInsets.only(
