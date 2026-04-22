@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/app_loader.dart';
 import '../../core/widgets/shimmer_placeholder.dart';
 import '../../data/models/poster.dart';
 import '../../data/models/social.dart';
@@ -33,8 +34,7 @@ class PublicProfilePage extends ConsumerWidget {
     return Scaffold(
       
       body: profileAsync.when(
-        loading: () =>
-            const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+        loading: () => const AppLoader.centered(),
         error: (e, _) => _Err(message: '載入失敗：$e'),
         data: (p) => p == null
             ? const _Err(message: '這位使用者的個人檔案為私密或不存在')
@@ -135,9 +135,7 @@ class _ProfileBody extends ConsumerWidget {
           loading: () => const SliverToBoxAdapter(
             child: Padding(
               padding: EdgeInsets.all(40),
-              child: Center(
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
+              child: AppLoader.centered(),
             ),
           ),
           error: (e, _) =>

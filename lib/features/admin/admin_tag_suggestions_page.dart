@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/app_loader.dart';
 import '../../data/models/tag.dart';
 import '../../data/repositories/tag_repository.dart';
 import '../../data/repositories/tag_suggestion_repository.dart';
@@ -41,8 +42,7 @@ class AdminTagSuggestionsPage extends ConsumerWidget {
         ],
       ),
       body: async.when(
-        loading: () =>
-            const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+        loading: () => const AppLoader.centered(),
         error: (e, _) =>
             Center(child: Text('載入失敗：$e', style: TextStyle(color: AppTheme.textMute))),
         data: (items) {
@@ -652,8 +652,7 @@ class _MergePickerState extends ConsumerState<_MergePicker> {
             const SizedBox(height: 10),
             Flexible(
               child: tagsAsync.when(
-                loading: () =>
-                    const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                loading: () => const AppLoader.centered(),
                 error: (e, _) => Text('載入失敗：$e'),
                 data: (tags) {
                   final filtered = _query.isEmpty
@@ -1045,13 +1044,10 @@ class _TaxonomyOverviewDialog extends ConsumerWidget {
             const SizedBox(height: 12),
             Expanded(
               child: catsAsync.when(
-                loading: () =>
-                    const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                loading: () => const AppLoader.centered(),
                 error: (e, _) => Text('載入失敗：$e'),
                 data: (cats) => tagsAsync.when(
-                  loading: () => const Center(
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
+                  loading: () => const AppLoader.centered(),
                   error: (e, _) => Text('載入失敗：$e'),
                   data: (allTags) {
                     // Group tags by category

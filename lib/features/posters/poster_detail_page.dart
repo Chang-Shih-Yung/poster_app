@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/app_loader.dart';
 import '../../core/widgets/glass.dart';
 import '../../data/models/poster.dart';
 import '../../data/providers/supabase_providers.dart';
@@ -78,16 +79,7 @@ class PosterDetailPage extends ConsumerWidget {
 class _LoadingView extends StatelessWidget {
   const _LoadingView();
   @override
-  Widget build(BuildContext context) => Center(
-        child: SizedBox(
-          width: 22,
-          height: 22,
-          child: CircularProgressIndicator(
-            strokeWidth: 2,
-            color: AppTheme.textMute,
-          ),
-        ),
-      );
+  Widget build(BuildContext context) => const AppLoader.centered();
 }
 
 class _ErrorView extends StatelessWidget {

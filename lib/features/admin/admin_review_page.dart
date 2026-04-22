@@ -5,6 +5,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../core/constants/region_labels.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/app_loader.dart';
 import '../../data/models/submission.dart';
 import '../../data/models/work.dart';
 import '../../data/repositories/submission_repository.dart';
@@ -57,7 +58,7 @@ class AdminReviewPage extends ConsumerWidget {
         ],
       ),
       body: async.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const AppLoader.centered(),
         error: (e, _) => Center(child: Text('載入失敗：$e')),
         data: (items) {
           if (items.isEmpty) {
@@ -501,7 +502,7 @@ class _WorkMatchDialogState extends ConsumerState<_WorkMatchDialog> {
             if (_searching)
               const Padding(
                 padding: EdgeInsets.all(16),
-                child: CircularProgressIndicator(strokeWidth: 2),
+                child: AppLoader(),
               )
             else if (_results != null && _results!.isEmpty)
               Padding(

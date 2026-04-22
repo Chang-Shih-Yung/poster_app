@@ -8,6 +8,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../core/constants/enums.dart';
 import '../../core/constants/region_labels.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/app_loader.dart';
 import '../../data/models/submission.dart';
 import '../../data/repositories/submission_repository.dart';
 
@@ -37,7 +38,7 @@ class MySubmissionsPage extends ConsumerWidget {
           ),
           Expanded(
             child: async.when(
-              loading: () => const Center(child: CircularProgressIndicator()),
+              loading: () => const AppLoader.centered(),
               error: (e, _) => Center(child: Text('載入失敗：$e')),
               data: (items) {
                 if (items.isEmpty) {

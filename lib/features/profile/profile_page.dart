@@ -13,6 +13,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/theme_mode_notifier.dart';
+import '../../core/widgets/app_loader.dart';
 import '../../data/models/app_user.dart';
 import '../../data/providers/supabase_providers.dart';
 import '../../data/repositories/auth_repository.dart';
@@ -44,16 +45,7 @@ class ProfilePage extends ConsumerWidget {
 
     final profileAsync = ref.watch(currentProfileProvider);
     return profileAsync.when(
-      loading: () => Center(
-        child: SizedBox(
-          width: 22,
-          height: 22,
-          child: CircularProgressIndicator(
-            strokeWidth: 2,
-            color: AppTheme.textMute,
-          ),
-        ),
-      ),
+      loading: () => const AppLoader.centered(),
       error: (e, _) => Center(
         child: Text('載入失敗：$e',
             style: TextStyle(color: AppTheme.textMute)),

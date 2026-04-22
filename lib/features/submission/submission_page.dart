@@ -11,6 +11,7 @@ import '../../core/constants/enums.dart';
 import '../../core/constants/region_labels.dart';
 import '../../core/services/image_compressor.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/app_loader.dart';
 import '../../core/widgets/sticky_header.dart';
 import '../../data/models/work.dart';
 import '../../data/providers/supabase_providers.dart';
@@ -892,14 +893,7 @@ class _EmptyPicker extends StatelessWidget {
             painter: _DiagonalStripePainter(),
             child: Center(
               child: compressing
-                  ? SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: AppTheme.textMute,
-                      ),
-                    )
+                  ? const AppLoader()
                   : Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [

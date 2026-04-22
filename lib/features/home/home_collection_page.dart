@@ -7,6 +7,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/theme_mode_notifier.dart';
+import '../../core/widgets/app_loader.dart';
 import '../../core/widgets/shimmer_placeholder.dart';
 import '../../data/models/poster.dart';
 import '../../data/providers/supabase_providers.dart';
@@ -442,14 +443,7 @@ class _FollowingList extends ConsumerWidget {
     final async = ref.watch(provider);
     final bottomInset = MediaQuery.paddingOf(context).bottom;
     return async.when(
-      loading: () => Center(
-        child: SizedBox(
-          width: 22,
-          height: 22,
-          child: CircularProgressIndicator(
-              strokeWidth: 2, color: AppTheme.textMute),
-        ),
-      ),
+      loading: () => const AppLoader.centered(),
       error: (e, _) => _ErrorState(
         message: '載入失敗',
         detail: '$e',

@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../theme/app_theme.dart';
+import 'app_loader.dart';
 
 /// v13 sticky black header for sub-pages (Upload, Edit Profile).
 ///
@@ -150,11 +151,9 @@ class StickyHeader extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(horizontal: 14),
                   alignment: Alignment.center,
                   child: actionLoading
-                      ? SizedBox(
-                          width: 14,
-                          height: 14,
-                          child: CircularProgressIndicator(
-                              strokeWidth: 2, color: AppTheme.bg),
+                      ? AppLoader(
+                          size: AppLoaderSize.inline,
+                          color: AppTheme.bg,
                         )
                       : Text(
                           actionLabel!,

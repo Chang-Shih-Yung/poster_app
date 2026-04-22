@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/app_loader.dart';
 import '../../core/widgets/shimmer_placeholder.dart';
 import '../../data/models/poster.dart';
 import '../../data/repositories/tag_repository.dart';
@@ -25,8 +26,7 @@ class TagBrowsePage extends ConsumerWidget {
     return Scaffold(
       
       body: async.when(
-        loading: () =>
-            const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+        loading: () => const AppLoader.centered(),
         error: (e, _) => Center(
           child: Text('載入失敗：$e',
               style: TextStyle(color: AppTheme.textMute)),

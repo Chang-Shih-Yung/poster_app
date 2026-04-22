@@ -48,53 +48,52 @@ class _FollowPillState extends ConsumerState<FollowPill> {
     final label = amFollowing ? '追蹤中' : '追蹤';
     final icon = amFollowing ? LucideIcons.check : LucideIcons.plus;
 
+    // v19: drop the 12×12 in-button spinner. It was flicker-noise on
+    // slow networks (seizure-like swap between icon and tiny spinner
+    // on every toggle). Optimistic state already updates the
+    // icon+label instantly; a subtle alpha dim plus a disabled tap
+    // target is all the "pending" feedback this button needs.
     return Material(
       color: Colors.transparent,
       borderRadius: BorderRadius.circular(999),
       child: InkWell(
         onTap: _busy ? null : _toggle,
         borderRadius: BorderRadius.circular(999),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          padding: EdgeInsets.symmetric(
-            horizontal: widget.compact ? 12 : 18,
-            vertical: widget.compact ? 6 : 9,
-          ),
-          decoration: BoxDecoration(
-            color: amFollowing ? AppTheme.chipBgStrong : AppTheme.text,
-            border: Border.all(
-              color: amFollowing ? AppTheme.line2 : AppTheme.text,
+        child: AnimatedOpacity(
+          opacity: _busy ? 0.62 : 1.0,
+          duration: const Duration(milliseconds: 120),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            padding: EdgeInsets.symmetric(
+              horizontal: widget.compact ? 12 : 18,
+              vertical: widget.compact ? 6 : 9,
             ),
-            borderRadius: BorderRadius.circular(999),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (_busy)
-                SizedBox(
-                  width: 12,
-                  height: 12,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 1.5,
-                    color: amFollowing ? AppTheme.text : AppTheme.bg,
-                  ),
-                )
-              else
+            decoration: BoxDecoration(
+              color: amFollowing ? AppTheme.chipBgStrong : AppTheme.text,
+              border: Border.all(
+                color: amFollowing ? AppTheme.line2 : AppTheme.text,
+              ),
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
                 Icon(
                   icon,
                   size: widget.compact ? 12 : 14,
                   color: amFollowing ? AppTheme.text : AppTheme.bg,
                 ),
-              const SizedBox(width: 6),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: widget.compact ? 12 : 13,
-                  fontWeight: FontWeight.w600,
-                  color: amFollowing ? AppTheme.text : AppTheme.bg,
+                const SizedBox(width: 6),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: widget.compact ? 12 : 13,
+                    fontWeight: FontWeight.w600,
+                    color: amFollowing ? AppTheme.text : AppTheme.bg,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

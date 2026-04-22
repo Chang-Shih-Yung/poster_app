@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/app_loader.dart';
 import '../../data/models/tag.dart';
 import '../../data/repositories/tag_repository.dart';
 import '../../data/repositories/tag_suggestion_repository.dart';
@@ -45,7 +46,7 @@ class _TagPickerState extends ConsumerState<TagPicker> {
     return catsAsync.when(
       loading: () => const Padding(
         padding: EdgeInsets.all(16),
-        child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+        child: AppLoader.centered(),
       ),
       error: (e, _) => Padding(
         padding: const EdgeInsets.all(16),
@@ -199,7 +200,7 @@ class _CategorySectionState extends ConsumerState<_CategorySection> {
               child: tagsAsync.when(
                 loading: () => const Padding(
                   padding: EdgeInsets.all(20),
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                  child: AppLoader(),
                 ),
                 error: (e, _) => Text('載入失敗：$e',
                     style: TextStyle(color: AppTheme.textMute)),
@@ -480,11 +481,7 @@ class _SuggestDialogState extends ConsumerState<_SuggestDialog> {
         FilledButton(
           onPressed: _submitting ? null : _submit,
           child: _submitting
-              ? const SizedBox(
-                  width: 14,
-                  height: 14,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
+              ? const AppLoader(size: AppLoaderSize.inline)
               : const Text('送出建議'),
         ),
       ],

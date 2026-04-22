@@ -415,14 +415,7 @@ class _MediumGrid extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 24),
               child: Center(
-                child: SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: AppTheme.textMute,
-                  ),
-                ),
+                child: const AppLoader(),
               ),
             ),
         ],
@@ -609,12 +602,7 @@ class _SmallList extends StatelessWidget {
         if (i >= items.length) {
           return Padding(
             padding: const EdgeInsets.all(24),
-            child: Center(
-                child: SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                        strokeWidth: 2, color: AppTheme.textMute))),
+            child: const Center(child: AppLoader()),
           );
         }
         final poster = items[i];

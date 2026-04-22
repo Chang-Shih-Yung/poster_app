@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/app_loader.dart';
 import '../../core/widgets/shimmer_placeholder.dart';
 import '../../data/models/poster.dart';
 import '../../data/models/work.dart';
@@ -25,8 +26,7 @@ class WorkPage extends ConsumerWidget {
     return Scaffold(
       
       body: workAsync.when(
-        loading: () =>
-            const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+        loading: () => const AppLoader.centered(),
         error: (e, _) => _ErrorView(message: '載入失敗：$e'),
         data: (work) => work == null
             ? const _ErrorView(message: '找不到這部作品')
@@ -102,9 +102,7 @@ class _WorkBody extends StatelessWidget {
           loading: () => const SliverToBoxAdapter(
             child: Padding(
               padding: EdgeInsets.all(40),
-              child: Center(
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
+              child: AppLoader.centered(),
             ),
           ),
           error: (e, _) => SliverToBoxAdapter(

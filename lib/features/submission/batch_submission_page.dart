@@ -9,6 +9,7 @@ import '../../core/constants/enums.dart';
 import '../../core/constants/region_labels.dart';
 import '../../core/services/image_compressor.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/app_loader.dart';
 import '../../data/providers/supabase_providers.dart';
 import '../../data/repositories/submission_repository.dart';
 import 'tag_picker.dart';
@@ -351,10 +352,7 @@ class _BatchSubmissionPageState extends ConsumerState<BatchSubmissionPage> {
                           // Spinner matches the FilledButton foreground
                           // (AppTheme.bg) so it's visible against the
                           // inverted-pill fill in both day and night.
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: AppTheme.bg,
-                          ),
+                          child: AppLoader(color: AppTheme.bg),
                         )
                       : Text('送出 ${_cards.length} 張'),
                 ),
@@ -487,8 +485,7 @@ class _PosterCardEditor extends StatelessWidget {
                             Container(
                               color: Colors.black.withValues(alpha: 0.4),
                               alignment: Alignment.center,
-                              child: const CircularProgressIndicator(
-                                  strokeWidth: 2, color: Colors.white),
+                              child: const AppLoader(color: Colors.white),
                             ),
                         ],
                       ),

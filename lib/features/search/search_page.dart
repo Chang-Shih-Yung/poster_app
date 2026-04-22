@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/app_loader.dart';
 import '../../data/models/app_user.dart';
 import '../../data/models/poster.dart';
 import '../../data/models/work.dart';
@@ -203,7 +204,27 @@ class _SearchLanding extends ConsumerWidget {
         // ── Tag chip row ──
         SliverToBoxAdapter(
           child: tagsAsync.when(
-            loading: () => const SizedBox(height: 50),
+            // Skeleton: 5 muted placeholder chips so the row has shape
+            // before data arrives. A blank 50-high box read as "is
+            // something broken?" — this makes the pending state
+            // obvious without a spinner.
+            loading: () => SizedBox(
+              height: 50,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+                itemCount: 5,
+                separatorBuilder: (_, _) => const SizedBox(width: 6),
+                itemBuilder: (_, _) => Container(
+                  width: 72,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: AppTheme.surfaceRaised,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+              ),
+            ),
             error: (_, _) => const SizedBox.shrink(),
             data: (tags) {
               if (tags.isEmpty) return const SizedBox.shrink();
@@ -244,13 +265,7 @@ class _SearchLanding extends ConsumerWidget {
           loading: () => const SliverToBoxAdapter(
             child: Padding(
               padding: EdgeInsets.symmetric(vertical: 48),
-              child: Center(
-                child: SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
-              ),
+              child: Center(child: AppLoader()),
             ),
           ),
           error: (e, _) => SliverToBoxAdapter(
@@ -477,8 +492,7 @@ class _ResultsView extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(unifiedSearchProvider(query));
     return async.when(
-      loading: () =>
-          const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+      loading: () => const AppLoader.centered(),
       error: (e, _) => Center(
         child: Text('搜尋失敗：$e',
             style: TextStyle(color: AppTheme.textMute)),
