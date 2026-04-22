@@ -54,6 +54,9 @@ class _AvatarFallback extends StatelessWidget {
   }
 }
 
+/// v19: thin shim around AppIconButton — kept under the `_ChromeIconButton`
+/// name so the dozen call sites in library_page don't all need touching
+/// in the same commit. New code should import AppIconButton directly.
 class _ChromeIconButton extends StatelessWidget {
   const _ChromeIconButton({
     required this.icon,
@@ -66,20 +69,12 @@ class _ChromeIconButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Semantics(
-      label: semanticLabel,
-      button: true,
-      child: GestureDetector(
-        onTap: onTap,
-        behavior: HitTestBehavior.opaque,
-        child: SizedBox(
-          width: 44,
-          height: 44,
-          child: Center(
-            child: Icon(icon, size: 22, color: AppTheme.textMute),
-          ),
-        ),
-      ),
+    return AppIconButton(
+      icon: icon,
+      onTap: onTap,
+      size: AppIconButtonSize.large,
+      color: AppTheme.textMute,
+      semanticsLabel: semanticLabel,
     );
   }
 }
@@ -589,33 +584,10 @@ class _StatDivider extends StatelessWidget {
 class _EditPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      borderRadius: BorderRadius.circular(999),
-      child: InkWell(
-        onTap: () {
-          HapticFeedback.selectionClick();
-          context.push('/profile/edit');
-        },
-        borderRadius: BorderRadius.circular(999),
-        child: Container(
-          height: 34,
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(color: AppTheme.line2),
-          ),
-          alignment: Alignment.center,
-          child: Text(
-            '編輯檔案',
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 0,
-                ),
-          ),
-        ),
-      ),
+    return AppButton.outline(
+      label: '編輯檔案',
+      size: AppButtonSize.small,
+      onPressed: () => context.push('/profile/edit'),
     );
   }
 }
