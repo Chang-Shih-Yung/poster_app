@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart'; // TODO(v11): remove when Google logo is replaced
 
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/ds/ds.dart';
 import '../../data/repositories/auth_repository.dart';
 
 /// Signin page — v11 extreme minimal.
@@ -120,19 +120,19 @@ class _SigninPageState extends ConsumerState<SigninPage> {
                   ),
                 ),
                 const Spacer(flex: 4),
-                _WhitePill(
+                // v19: AppButton.primary replaces the inlined _WhitePill.
+                // Manual taps always show Google's picker — users land
+                // here via 切換帳號 or after a session expiry, and
+                // silently re-signing the cached account is the wrong
+                // default in both cases.
+                AppButton.primary(
                   label: '使用 Google 登入',
                   icon: PhosphorIconsRegular.googleLogo,
-                  onTap: () {
-                    HapticFeedback.selectionClick();
-                    // Manual taps always show Google's picker — users
-                    // land here via 切換帳號 or after a session expiry,
-                    // and silently re-signing the cached account is
-                    // the wrong default in both cases.
-                    ref
-                        .read(authRepositoryProvider)
-                        .signInWithGoogle(forceAccountPicker: true);
-                  },
+                  size: AppButtonSize.large,
+                  fullWidth: true,
+                  onPressed: () => ref
+                      .read(authRepositoryProvider)
+                      .signInWithGoogle(forceAccountPicker: true),
                 ),
                 const SizedBox(height: 12),
                 Text(
@@ -152,51 +152,3 @@ class _SigninPageState extends ConsumerState<SigninPage> {
   }
 }
 
-/// Inverted pill button — fill is the ink colour of the current mode
-/// (white in night, near-black in day) with the label/icon inverted
-/// to match (`AppTheme.bg`). Named "white" for historical reasons
-/// (night-only origin); the fill is theme-adaptive.
-class _WhitePill extends StatelessWidget {
-  const _WhitePill({
-    required this.label,
-    required this.icon,
-    required this.onTap,
-  });
-  final String label;
-  final IconData icon;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    // `fg` is always the contrast of `AppTheme.text`. Matches the kit's
-    // `.btn--solid { background: var(--text); color: var(--ink); }`.
-    final fg = AppTheme.bg;
-    return Material(
-      color: AppTheme.text,
-      borderRadius: BorderRadius.circular(999),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(999),
-        child: SizedBox(
-          width: double.infinity,
-          height: 52,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, size: 18, color: fg),
-              const SizedBox(width: 10),
-              Text(
-                label,
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      color: fg,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0.2,
-                    ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}

@@ -8,6 +8,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/app_loader.dart';
+import '../../core/widgets/ds/ds.dart';
 import '../../data/models/app_user.dart';
 import '../../data/providers/supabase_providers.dart';
 import '../../data/repositories/auth_repository.dart';
@@ -59,55 +60,60 @@ class _SignedInView extends ConsumerWidget {
     // row (粉絲 / 追蹤中 / 已通過) and the home drawer's 收藏 entry.
     // Keeping them here felt duplicative once those wiring up.
     return ListView(
-      padding: EdgeInsets.fromLTRB(20, topInset + 56, 20, 120),
+      padding: EdgeInsets.only(top: topInset + 56, bottom: 120),
       children: [
-        _IdentityCard(email: email, profile: profile),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: _IdentityCard(email: email, profile: profile),
+        ),
         if (profile?.isAdmin == true) ...[
           const SizedBox(height: 28),
           _SectionLabel(label: '管理'),
-          const SizedBox(height: 10),
-          _CardRow(
+          const SizedBox(height: 4),
+          AppSettingsRow(
             icon: LucideIcons.shieldCheck,
             label: 'Admin 審核',
             onTap: () => context.push('/admin'),
           ),
-          const SizedBox(height: 8),
-          _CardRow(
+          AppSettingsRow(
             icon: LucideIcons.tag,
             label: '分類建議審核',
             onTap: () => context.push('/admin/tag-suggestions'),
           ),
         ],
-        // v19: 外觀 section removed. App is locked to dark mode —
-        // the theme_mode_notifier code stays put for future re-enable
-        // (e.g. if we ship a white editorial mode later) but users
-        // can no longer switch. Spotify-style: one aesthetic, no
-        // settings dial.
         const SizedBox(height: 20),
         _SectionLabel(label: '個人檔案設定'),
-        const SizedBox(height: 10),
-        // 編輯個人檔案 row removed — the inline 編輯 pill on the
-        // identity card at the top already does the same thing, and
-        // having both felt like duplication on a thin settings page.
-        _PrivacyToggle(profile: profile),
-        const SizedBox(height: 28),
-        // 切換帳號 (accent text) — Supabase keeps only one session per
-        // client, so functionally this is the same as signing out and
-        // signing back in. We surface it separately because users
-        // coming from IG/Threads expect the affordance; it keeps the
-        // sign-in screen's Google button primed for a different
-        // account without the mental overhead of "did I really just
-        // log out for good?".
-        _TextActionRow(
-          label: '切換帳號',
-          color: AppTheme.accent2,
-          onTap: () => _signOutAndGo(context, ref, switchAccount: true),
-        ),
         const SizedBox(height: 4),
-        _TextActionRow(
-          label: '登出',
-          color: AppTheme.danger,
-          onTap: () => _signOutAndGo(context, ref, switchAccount: false),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: _PrivacyToggle(profile: profile),
+        ),
+        const SizedBox(height: 28),
+        // Two text-link actions. Monochrome design: 切換帳號 is neutral
+        // white text, 登出 is destructive red. Same AppButton.text
+        // variant, distinguished by the `destructive` flag.
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: AppButton.text(
+              label: '切換帳號',
+              onPressed: () =>
+                  _signOutAndGo(context, ref, switchAccount: true),
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: AppButton.text(
+              label: '登出',
+              destructive: true,
+              onPressed: () =>
+                  _signOutAndGo(context, ref, switchAccount: false),
+            ),
+          ),
         ),
       ],
     );
@@ -155,41 +161,6 @@ class _SignedInView extends ConsumerWidget {
     // of this cleanup is enough.
     await ref.read(authRepositoryProvider).signOut();
     router.go('/signin');
-  }
-}
-
-/// Borderless text-link row — used for 登出 / 切換帳號. No icon, no
-/// card chrome; just a coloured label that fills the row so it reads
-/// as a commitment (vs an ordinary settings list item).
-class _TextActionRow extends StatelessWidget {
-  const _TextActionRow({
-    required this.label,
-    required this.color,
-    required this.onTap,
-  });
-  final String label;
-  final Color color;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        child: Container(
-          height: 48,
-          alignment: Alignment.center,
-          child: Text(
-            label,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: color,
-                ),
-          ),
-        ),
-      ),
-    );
   }
 }
 
@@ -318,61 +289,18 @@ class _SectionLabel extends StatelessWidget {
   final String label;
   @override
   Widget build(BuildContext context) {
+    // Aligned to the 20px gutter used by AppSettingsRow / other body
+    // content, so the eyebrow sits flush with the rows below it.
     return Padding(
-      padding: const EdgeInsets.only(left: 6),
+      padding: const EdgeInsets.only(left: 20),
       child: Text(
         label,
-        style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: AppTheme.textMute,
-              letterSpacing: 1.6,
-              fontWeight: FontWeight.w600,
-            ),
-      ),
-    );
-  }
-}
-
-class _CardRow extends StatelessWidget {
-  const _CardRow({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Material(
-      color: AppTheme.surfaceRaised,
-      borderRadius: BorderRadius.circular(18),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(18),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-          decoration: BoxDecoration(
-            border: Border.all(color: AppTheme.line1),
-            borderRadius: BorderRadius.circular(18),
-          ),
-          child: Row(
-            children: [
-              Icon(icon, size: 20, color: AppTheme.text),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Text(
-                  label,
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
-              Icon(LucideIcons.chevronRight,
-                  size: 16, color: AppTheme.textFaint),
-            ],
-          ),
+        style: TextStyle(
+          fontFamily: 'NotoSansTC',
+          fontSize: 10,
+          color: AppTheme.textMute,
+          letterSpacing: 1.6,
+          fontWeight: FontWeight.w600,
         ),
       ),
     );
