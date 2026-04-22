@@ -154,7 +154,19 @@ class _SignedInView extends ConsumerWidget {
       return;
     }
 
-    router.go('/signin');
+    // Logout — order matters.
+    //
+    // Tempting version (BROKEN): `router.go('/signin')` first, then
+    // await signOut. At the moment router.go fires, signedIn is still
+    // true, so the redirect sees `signedIn && onSignin && !isSwitchFlow`
+    // and bounces us to '/'. The user lands on the home shell with a
+    // null user staring at a ghost profile.
+    //
+    // Correct order: signOut → invalidate caches → navigate. By the
+    // time router.go fires, signedIn is false, so the redirect happily
+    // keeps us on /signin. ProfilePage's transient rebuild with a null
+    // user renders AppLoader (see the `user == null` fallback above) —
+    // not the scary "請先登入" copy — so the flash is a clean spinner.
     await ref.read(authRepositoryProvider).signOut();
     ref.invalidate(currentProfileProvider);
     ref.invalidate(favoritesProvider);
@@ -164,6 +176,7 @@ class _SignedInView extends ConsumerWidget {
     ref.invalidate(myTagSuggestionsProvider);
     ref.invalidate(publicProfileProvider);
     ref.invalidate(userRelationshipStatsProvider);
+    router.go('/signin');
   }
 }
 
