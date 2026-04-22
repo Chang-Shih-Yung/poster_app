@@ -4,13 +4,15 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/theme_mode_notifier.dart';
+import '../../core/widgets/app_loader.dart';
+import '../../data/repositories/notifications_repository.dart';
 
-/// v18 notifications centre — **UI shell only, no backend yet**.
+/// v19 notifications centre — wired to the real backend.
 ///
-/// This ships the visual pattern (tabbed list, today / this week / earlier
-/// groups, unread dots) so the heart icon in the bottom nav goes somewhere
-/// real. When we add a `notifications` table + RPC we just swap the
-/// hardcoded [_demoItems] for a real provider.
+/// Backend: notifications table + DB triggers on follows / favorites
+/// / submission status change automatically insert rows. RPCs:
+///   list_notifications · unread_notifications_count
+///   mark_notifications_read
 class NotificationsPage extends ConsumerStatefulWidget {
   const NotificationsPage({super.key});
   @override
@@ -22,14 +24,11 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
 
   @override
   Widget build(BuildContext context) {
-    // Watch theme mode so this shell tab rebuilds on day/night flip
-    // (otherwise the const widget stays cached in the IndexedStack).
     ref.watch(themeModeProvider);
     final topInset = MediaQuery.paddingOf(context).top;
     final bottomInset = MediaQuery.paddingOf(context).bottom;
-    // Rendered inside the shell — no back chrome, the bottom nav stays
-    // visible. Content just needs enough bottom padding to clear the
-    // floating pill tab bar (≈80dp above the safe-area inset).
+    final async = ref.watch(notificationsListProvider);
+
     return Column(
       children: [
         SizedBox(height: topInset + 16),
@@ -48,55 +47,87 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
         ),
         _TabRow(tab: _tab, onChange: (t) => setState(() => _tab = t)),
         Expanded(
-          child: _demoItems.isEmpty
-              ? const _EmptyView()
-              : ListView(
-                  padding: EdgeInsets.only(
-                      top: 8, bottom: bottomInset + 120),
+          child: async.when(
+            loading: () => const AppLoader.centered(),
+            error: (e, _) => Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Text(
+                  '載入失敗：$e',
+                  style: TextStyle(color: AppTheme.textMute),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ),
+            data: (items) {
+              final filtered =
+                  items.where((e) => _matchesTab(e, _tab)).toList(growable: false);
+              if (filtered.isEmpty) return const _EmptyView();
+              final groups = _groupByRecency(filtered);
+              return RefreshIndicator(
+                onRefresh: () async {
+                  ref.invalidate(notificationsListProvider);
+                  ref.invalidate(unreadNotificationsCountProvider);
+                  await ref.read(notificationsListProvider.future);
+                },
+                child: ListView(
+                  padding:
+                      EdgeInsets.only(top: 8, bottom: bottomInset + 120),
                   children: [
-                    _GroupHeader(label: '今天'),
-                    ..._demoItems
-                        .where((e) => e.group == _Group.today)
-                        .where(_tabFilter)
-                        .map((e) => _NotifTile(item: e)),
-                    _GroupHeader(label: '本週'),
-                    ..._demoItems
-                        .where((e) => e.group == _Group.week)
-                        .where(_tabFilter)
-                        .map((e) => _NotifTile(item: e)),
-                    _GroupHeader(label: '更早'),
-                    ..._demoItems
-                        .where((e) => e.group == _Group.earlier)
-                        .where(_tabFilter)
-                        .map((e) => _NotifTile(item: e)),
+                    for (final entry in groups.entries) ...[
+                      _GroupHeader(label: entry.key),
+                      ...entry.value.map((n) => _NotifTile(item: n)),
+                    ],
                   ],
                 ),
+              );
+            },
+          ),
         ),
       ],
     );
   }
 
-  bool _tabFilter(_NotifItem e) {
-    switch (_tab) {
+  bool _matchesTab(NotificationItem item, _NotifTab tab) {
+    switch (tab) {
       case _NotifTab.all:
         return true;
       case _NotifTab.social:
-        return e.type == _NotifType.favorite ||
-            e.type == _NotifType.follow ||
-            e.type == _NotifType.comment;
+        return item.kind == NotificationKind.follow ||
+            item.kind == NotificationKind.favorite;
       case _NotifTab.system:
-        return e.type == _NotifType.approved || e.type == _NotifType.rejected;
+        return item.kind == NotificationKind.submissionApproved ||
+            item.kind == NotificationKind.submissionRejected;
     }
+  }
+
+  /// Bucket the list into 今天 / 本週 / 更早 by createdAt.
+  Map<String, List<NotificationItem>> _groupByRecency(
+      List<NotificationItem> items) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final weekStart = today.subtract(const Duration(days: 7));
+    final out = <String, List<NotificationItem>>{
+      '今天': [],
+      '本週': [],
+      '更早': [],
+    };
+    for (final n in items) {
+      if (n.createdAt.isAfter(today)) {
+        out['今天']!.add(n);
+      } else if (n.createdAt.isAfter(weekStart)) {
+        out['本週']!.add(n);
+      } else {
+        out['更早']!.add(n);
+      }
+    }
+    out.removeWhere((_, v) => v.isEmpty);
+    return out;
   }
 }
 
-// ───────────────────────────────────────────────────────────────────────
-
 enum _NotifTab { all, social, system }
 
-/// v18 capsule filter — scrollable pill row, not an underlined tab bar.
-/// Matches how IG / X filter notifications. Active pill fills white on
-/// ink, inactive pills are outlined ghosts.
 class _TabRow extends StatelessWidget {
   const _TabRow({required this.tab, required this.onChange});
   final _NotifTab tab;
@@ -166,42 +197,53 @@ class _GroupHeader extends StatelessWidget {
 
 class _NotifTile extends StatelessWidget {
   const _NotifTile({required this.item});
-  final _NotifItem item;
+  final NotificationItem item;
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final (icon, tint) = switch (item.kind) {
+      NotificationKind.favorite => (Icons.favorite, AppTheme.favoriteActive),
+      NotificationKind.follow => (LucideIcons.userPlus, AppTheme.text),
+      NotificationKind.submissionApproved =>
+        (LucideIcons.check, AppTheme.success),
+      NotificationKind.submissionRejected =>
+        (LucideIcons.x, AppTheme.textMute),
+    };
+    final lead = switch (item.kind) {
+      NotificationKind.favorite => '有人收藏了',
+      NotificationKind.follow => '有人開始追蹤你',
+      NotificationKind.submissionApproved => '投稿已核准',
+      NotificationKind.submissionRejected => '投稿被退回',
+    };
+    final detail = (item.payload['title'] as String?)?.trim();
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _ActorAvatar(item: item),
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: AppTheme.surfaceRaised,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, size: 18, color: tint),
+          ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text.rich(
-                  TextSpan(
-                    children: [
-                      TextSpan(
-                        text: item.actor,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      TextSpan(
-                        text: '  ${item.action}',
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: AppTheme.textMute,
-                        ),
-                      ),
-                    ],
-                  ),
+                Text(
+                  detail == null || detail.isEmpty
+                      ? lead
+                      : '$lead「$detail」',
+                  style: theme.textTheme.bodyMedium,
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  item.when,
+                  _relative(item.createdAt),
                   style: theme.textTheme.labelSmall?.copyWith(
                     color: AppTheme.textFaint,
                   ),
@@ -209,7 +251,7 @@ class _NotifTile extends StatelessWidget {
               ],
             ),
           ),
-          if (item.unread) ...[
+          if (item.isUnread) ...[
             const SizedBox(width: 10),
             Container(
               width: 8,
@@ -225,36 +267,14 @@ class _NotifTile extends StatelessWidget {
       ),
     );
   }
-}
 
-class _ActorAvatar extends StatelessWidget {
-  const _ActorAvatar({required this.item});
-  final _NotifItem item;
-  @override
-  Widget build(BuildContext context) {
-    final icon = switch (item.type) {
-      _NotifType.favorite => Icons.favorite,
-      _NotifType.follow => LucideIcons.userPlus,
-      _NotifType.comment => LucideIcons.messageCircle,
-      _NotifType.approved => LucideIcons.check,
-      _NotifType.rejected => LucideIcons.x,
-    };
-    final tint = switch (item.type) {
-      _NotifType.favorite => AppTheme.unreadDot,
-      _NotifType.follow => AppTheme.accent1,
-      _NotifType.comment => AppTheme.success,
-      _NotifType.approved => AppTheme.success,
-      _NotifType.rejected => AppTheme.textMute,
-    };
-    return Container(
-      width: 40,
-      height: 40,
-      decoration: BoxDecoration(
-        color: AppTheme.chipBgStrong,
-        shape: BoxShape.circle,
-      ),
-      child: Icon(icon, size: 18, color: tint),
-    );
+  String _relative(DateTime t) {
+    final d = DateTime.now().difference(t);
+    if (d.inMinutes < 1) return '剛剛';
+    if (d.inHours < 1) return '${d.inMinutes} 分鐘前';
+    if (d.inDays < 1) return '${d.inHours} 小時前';
+    if (d.inDays < 7) return '${d.inDays} 天前';
+    return '${t.year}/${t.month.toString().padLeft(2, '0')}/${t.day.toString().padLeft(2, '0')}';
   }
 }
 
@@ -268,10 +288,9 @@ class _EmptyView extends StatelessWidget {
         children: [
           Icon(LucideIcons.bellOff, size: 36, color: AppTheme.textFaint),
           const SizedBox(height: 12),
-          Text('還沒有通知',
-              style: Theme.of(context).textTheme.titleMedium),
+          Text('還沒有通知', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 6),
-          Text('有人收藏你的海報時會出現在這裡',
+          Text('有人追蹤你或收藏你的海報時會出現在這裡',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: AppTheme.textMute,
                   )),
@@ -280,31 +299,3 @@ class _EmptyView extends StatelessWidget {
     );
   }
 }
-
-// ───────────────────────────────────────────────────────────────────────
-// Placeholder data until backend lands.
-// ───────────────────────────────────────────────────────────────────────
-
-enum _NotifType { favorite, follow, comment, approved, rejected }
-
-enum _Group { today, week, earlier }
-
-class _NotifItem {
-  const _NotifItem({
-    required this.actor,
-    required this.action,
-    required this.when,
-    required this.type,
-    required this.group,
-    // ignore: unused_element_parameter
-    this.unread = false,
-  });
-  final String actor;
-  final String action;
-  final String when;
-  final _NotifType type;
-  final _Group group;
-  final bool unread;
-}
-
-const _demoItems = <_NotifItem>[];

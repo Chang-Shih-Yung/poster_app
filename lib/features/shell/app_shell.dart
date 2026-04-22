@@ -10,6 +10,7 @@ import '../../core/theme/theme_mode_notifier.dart';
 import '../../core/widgets/glass.dart';
 import '../../data/models/app_user.dart';
 import '../../data/repositories/auth_repository.dart';
+import '../../data/repositories/notifications_repository.dart';
 import '../home/home_drawer.dart';
 
 /// Shared tab index for the bottom nav.
@@ -97,6 +98,11 @@ class _GlassPillTabBar extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final profile = ref.watch(currentProfileProvider).asData?.value;
+    // v19: real unread count from the new notifications table.
+    // 0 → no dot. > 0 → red dot. Hide while viewing the tab so it
+    // doesn't feel naggy after the user clearly engaged.
+    final unread =
+        ref.watch(unreadNotificationsCountProvider).asData?.value ?? 0;
     return Glass(
       // Denser glass for the floating dock — darker + blurrier so the
       // pill reads as a physical object over any bright background
@@ -143,8 +149,25 @@ class _GlassPillTabBar extends ConsumerWidget {
             iconActive: Icons.favorite,
             label: '通知',
             active: currentIndex == 2,
-            badgeDot: currentIndex != 2, // hide dot while actively viewing
-            onTap: () => _switchTab(context, 2),
+            // v19: real unread → red dot. 0 unread = no dot. Hide
+            // while the tab is open (the user is reading right now,
+            // re-nagging would be hostile).
+            badgeDot: unread > 0 && currentIndex != 2,
+            onTap: () {
+              _switchTab(context, 2);
+              // Mark unread items read shortly after entering — the
+              // page provider will surface the new state on next
+              // build / pull-to-refresh.
+              Future.microtask(() async {
+                final repo = ref.read(notificationsRepositoryProvider);
+                final list = await repo.list(unreadOnly: true);
+                if (list.isNotEmpty) {
+                  await repo.markRead(list.map((e) => e.id).toList());
+                  ref.invalidate(unreadNotificationsCountProvider);
+                  ref.invalidate(notificationsListProvider);
+                }
+              });
+            },
           ),
           const SizedBox(width: 2),
           _AvatarTab(

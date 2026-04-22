@@ -102,6 +102,16 @@ class UserRepository {
     await _client.from('users').update(row).eq('id', userId);
   }
 
+  /// Report another user's avatar as inappropriate. Calls the
+  /// `report_avatar` RPC; the DB enforces "one report per (reporter,
+  /// target)" via UNIQUE — re-tapping is a no-op.
+  Future<void> reportAvatar(String targetUserId, {String? reason}) async {
+    await _client.rpc('report_avatar', params: {
+      'p_target_user_id': targetUserId,
+      'p_reason': reason,
+    });
+  }
+
   /// Upload an avatar image to the avatars bucket. Returns the public URL.
   /// Old avatar (if any) is left in place — Supabase storage doesn't auto-
   /// clean. We pick a new path each upload (uuid suffix) to bust caches.

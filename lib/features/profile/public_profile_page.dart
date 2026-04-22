@@ -1,5 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
@@ -113,6 +114,19 @@ class _ProfileBody extends ConsumerWidget {
                       ),
                     ),
                     FollowPill(targetUserId: profile.id),
+                    const SizedBox(width: 4),
+                    // v19: report-avatar entry. Tap → ActionSheet
+                    // with "檢舉頭像" + cancel. Free hybrid moderation
+                    // — three reports auto-flag the avatar to admin
+                    // queue (see avatar_moderation migration).
+                    AppIconButton(
+                      icon: LucideIcons.ellipsis,
+                      size: AppIconButtonSize.small,
+                      color: AppTheme.textMute,
+                      semanticsLabel: '更多',
+                      onTap: () => _openReportSheet(
+                          context, ref, profile.id, profile.displayName),
+                    ),
                   ],
                 ),
                 // Stats row — 4 numbers: followers, following, approved, submissions.
@@ -182,6 +196,77 @@ class _ProfileBody extends ConsumerWidget {
       ],
     );
   }
+}
+
+/// Open the "..." options sheet for a public profile. Right now only
+/// "檢舉頭像" — extend with mute / block when those land.
+Future<void> _openReportSheet(
+  BuildContext context,
+  WidgetRef ref,
+  String targetUserId,
+  String targetName,
+) async {
+  HapticFeedback.selectionClick();
+  await showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: AppTheme.surface,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(AppTheme.r6)),
+    ),
+    builder: (sheetCtx) {
+      return SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 36,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 14),
+                decoration: BoxDecoration(
+                  color: AppTheme.line2,
+                  borderRadius: BorderRadius.circular(99),
+                ),
+              ),
+              ListTile(
+                leading: Icon(LucideIcons.flag,
+                    color: AppTheme.favoriteActive, size: 20),
+                title: Text(
+                  '檢舉頭像',
+                  style: TextStyle(
+                    color: AppTheme.favoriteActive,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                onTap: () async {
+                  Navigator.of(sheetCtx).pop();
+                  try {
+                    await ref
+                        .read(userRepositoryProvider)
+                        .reportAvatar(targetUserId);
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                            content: Text('已檢舉「$targetName」的頭像')),
+                      );
+                    }
+                  } catch (e) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('檢舉失敗：$e')),
+                      );
+                    }
+                  }
+                },
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
 }
 
 class _Avatar extends StatelessWidget {
