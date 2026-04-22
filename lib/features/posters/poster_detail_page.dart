@@ -669,8 +669,18 @@ class _RelatedSection extends ConsumerWidget {
       data: (items) {
         if (items.isEmpty) return const SizedBox.shrink();
 
+        // Soften the peek seam — the hero image ends at a hard edge
+        // right where "相關海報" begins. A 24px top radius makes the
+        // section read as a softly-rising sheet below the hero, not
+        // a guillotine cut. Bottom corners stay square because the
+        // section is the tail of the scroll.
         return Container(
-          color: AppTheme.bg,
+          decoration: BoxDecoration(
+            color: AppTheme.bg,
+            borderRadius: const BorderRadius.vertical(
+              top: Radius.circular(24),
+            ),
+          ),
           padding: EdgeInsets.only(
             top: 28,
             bottom: bottomInset + 32,

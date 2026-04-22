@@ -17,11 +17,6 @@ import '../../core/widgets/app_loader.dart';
 import '../../data/models/app_user.dart';
 import '../../data/providers/supabase_providers.dart';
 import '../../data/repositories/auth_repository.dart';
-import '../../data/repositories/favorite_repository.dart';
-import '../../data/repositories/follow_repository.dart';
-import '../../data/repositories/social_repository.dart';
-import '../../data/repositories/submission_repository.dart';
-import '../../data/repositories/tag_suggestion_repository.dart';
 import '../../data/repositories/user_repository.dart';
 
 /// Profile page — v11 simplified.
@@ -154,28 +149,16 @@ class _SignedInView extends ConsumerWidget {
       return;
     }
 
-    // Logout — order matters.
-    //
-    // Tempting version (BROKEN): `router.go('/signin')` first, then
-    // await signOut. At the moment router.go fires, signedIn is still
-    // true, so the redirect sees `signedIn && onSignin && !isSwitchFlow`
-    // and bounces us to '/'. The user lands on the home shell with a
-    // null user staring at a ghost profile.
-    //
-    // Correct order: signOut → invalidate caches → navigate. By the
-    // time router.go fires, signedIn is false, so the redirect happily
-    // keeps us on /signin. ProfilePage's transient rebuild with a null
-    // user renders AppLoader (see the `user == null` fallback above) —
-    // not the scary "請先登入" copy — so the flash is a clean spinner.
+    // Logout — await signOut, then navigate. Cache invalidation is
+    // NOT duplicated here; _AuthListenable (in app_router) watches
+    // the auth stream and invalidates every user-scoped provider
+    // whenever the user id changes. Doing it here AND there was
+    // causing a race when both fired against family providers
+    // (publicProfileProvider / userRelationshipStatsProvider) with
+    // active watchers mid-rebuild — visible as an uncaught error in
+    // the console even though logout ultimately worked. One owner
+    // of this cleanup is enough.
     await ref.read(authRepositoryProvider).signOut();
-    ref.invalidate(currentProfileProvider);
-    ref.invalidate(favoritesProvider);
-    ref.invalidate(favoriteIdsProvider);
-    ref.invalidate(mySubmissionsV2Provider);
-    ref.invalidate(homeSectionsV2Provider);
-    ref.invalidate(myTagSuggestionsProvider);
-    ref.invalidate(publicProfileProvider);
-    ref.invalidate(userRelationshipStatsProvider);
     router.go('/signin');
   }
 }
