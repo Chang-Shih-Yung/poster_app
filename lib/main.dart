@@ -7,7 +7,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/env.dart';
 import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
-import 'core/theme/theme_mode_notifier.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -72,17 +71,11 @@ class PosterApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(routerProvider);
-    // Watching the preference + platform brightness triggers a
-    // rebuild (and fresh AppTheme.dark()) whenever either changes —
-    // user picks 白天, OS goes into dark mode at sunset, etc.
-    final pref = ref.watch(themeModeProvider);
-    final osBrightness = MediaQuery.platformBrightnessOf(context);
-    final effectiveDay = switch (pref) {
-      AppThemeMode.day => true,
-      AppThemeMode.night => false,
-      AppThemeMode.system => osBrightness == Brightness.light,
-    };
-    AppTheme.setDayMode(effectiveDay);
+    // v19: app is locked to dark mode. The theme_mode_notifier and
+    // day-mode palette stay intact so we can flip this back on in
+    // one line if we ever ship a white editorial mode, but while
+    // there's only one aesthetic we don't want the toggle to exist.
+    AppTheme.setDayMode(false);
     final theme = AppTheme.dark();
     return MaterialApp.router(
       title: 'Poster App',

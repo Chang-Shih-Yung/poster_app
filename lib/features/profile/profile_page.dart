@@ -1,10 +1,5 @@
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:flutter/cupertino.dart'
-    show
-        CupertinoActionSheet,
-        CupertinoActionSheetAction,
-        CupertinoSwitch,
-        showCupertinoModalPopup;
+import 'package:flutter/cupertino.dart' show CupertinoSwitch;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -12,7 +7,6 @@ import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../core/theme/app_theme.dart';
-import '../../core/theme/theme_mode_notifier.dart';
 import '../../core/widgets/app_loader.dart';
 import '../../data/models/app_user.dart';
 import '../../data/providers/supabase_providers.dart';
@@ -84,10 +78,11 @@ class _SignedInView extends ConsumerWidget {
             onTap: () => context.push('/admin/tag-suggestions'),
           ),
         ],
-        const SizedBox(height: 20),
-        _SectionLabel(label: '外觀'),
-        const SizedBox(height: 10),
-        const _ThemeModeRow(),
+        // v19: 外觀 section removed. App is locked to dark mode —
+        // the theme_mode_notifier code stays put for future re-enable
+        // (e.g. if we ship a white editorial mode later) but users
+        // can no longer switch. Spotify-style: one aesthetic, no
+        // settings dial.
         const SizedBox(height: 20),
         _SectionLabel(label: '個人檔案設定'),
         const SizedBox(height: 10),
@@ -381,100 +376,6 @@ class _CardRow extends StatelessWidget {
         ),
       ),
     );
-  }
-}
-
-/// Theme row — tap the row to open a CupertinoActionSheet with
-/// 白天 / 夜晚 / 系統預設. Replaces the segmented pill (which looked
-/// like a browser form control). Matches the iOS Settings pattern.
-class _ThemeModeRow extends ConsumerWidget {
-  const _ThemeModeRow();
-
-  String _labelFor(AppThemeMode m) => switch (m) {
-        AppThemeMode.day => '白天',
-        AppThemeMode.night => '夜晚',
-        AppThemeMode.system => '系統預設',
-      };
-
-  IconData _iconFor(AppThemeMode m) => switch (m) {
-        AppThemeMode.day => LucideIcons.sun,
-        AppThemeMode.night => LucideIcons.moon,
-        AppThemeMode.system => LucideIcons.sunMoon,
-      };
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final mode = ref.watch(themeModeProvider);
-    return Material(
-      color: AppTheme.surfaceRaised,
-      borderRadius: BorderRadius.circular(18),
-      child: InkWell(
-        onTap: () => _openSheet(context, ref),
-        borderRadius: BorderRadius.circular(18),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-          decoration: BoxDecoration(
-            border: Border.all(color: AppTheme.line1),
-            borderRadius: BorderRadius.circular(18),
-          ),
-          child: Row(
-            children: [
-              Icon(_iconFor(mode), size: 20, color: AppTheme.text),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Text(
-                  '主題',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w500,
-                      ),
-                ),
-              ),
-              Text(
-                _labelFor(mode),
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: AppTheme.textMute,
-                    ),
-              ),
-              const SizedBox(width: 6),
-              Icon(LucideIcons.chevronRight,
-                  size: 16, color: AppTheme.textFaint),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _openSheet(BuildContext context, WidgetRef ref) async {
-    HapticFeedback.selectionClick();
-    // NotoSansTC override — Cupertino widgets default to SF Pro and
-    // tofu CJK on first paint without this.
-    const font = TextStyle(fontFamily: 'NotoSansTC');
-    final current = ref.read(themeModeProvider);
-    final picked = await showCupertinoModalPopup<AppThemeMode>(
-      context: context,
-      builder: (ctx) => DefaultTextStyle.merge(
-        style: font,
-        child: CupertinoActionSheet(
-          title: const Text('主題', style: font),
-          actions: [
-            for (final m in AppThemeMode.values)
-              CupertinoActionSheetAction(
-                onPressed: () => Navigator.of(ctx).pop(m),
-                isDefaultAction: m == current,
-                child: Text(_labelFor(m), style: font),
-              ),
-          ],
-          cancelButton: CupertinoActionSheetAction(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('取消', style: font),
-          ),
-        ),
-      ),
-    );
-    if (picked != null) {
-      await ref.read(themeModeProvider.notifier).setMode(picked);
-    }
   }
 }
 
