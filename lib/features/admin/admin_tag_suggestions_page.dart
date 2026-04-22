@@ -5,6 +5,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/app_loader.dart';
+import '../../core/widgets/ds/ds.dart';
 import '../../data/models/tag.dart';
 import '../../data/repositories/tag_repository.dart';
 import '../../data/repositories/tag_suggestion_repository.dart';
@@ -344,24 +345,23 @@ class _SuggestionCardState extends ConsumerState<_SuggestionCard> {
             spacing: 8,
             runSpacing: 8,
             children: [
-              FilledButton.icon(
+              AppButton.primary(
+                label: '建立新分類',
+                icon: LucideIcons.check,
+                size: AppButtonSize.small,
                 onPressed: (_busy || cat == null) ? null : _approve,
-                icon: const Icon(LucideIcons.check, size: 14),
-                label: const Text('建立新分類'),
-                style: FilledButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 14, vertical: 10),
-                ),
               ),
-              OutlinedButton.icon(
+              AppButton.outline(
+                label: '合併到既有分類',
+                icon: LucideIcons.gitMerge,
+                size: AppButtonSize.small,
                 onPressed: (_busy || cat == null) ? null : _merge,
-                icon: const Icon(LucideIcons.gitMerge, size: 14),
-                label: const Text('合併到既有分類'),
               ),
-              OutlinedButton.icon(
+              AppButton.outline(
+                label: '退回此建議',
+                icon: LucideIcons.x,
+                size: AppButtonSize.small,
                 onPressed: (_busy || cat == null) ? null : _reject,
-                icon: const Icon(LucideIcons.x, size: 14),
-                label: const Text('退回此建議'),
               ),
             ],
           ),

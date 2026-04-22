@@ -11,6 +11,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/theme_mode_notifier.dart';
 import '../../core/widgets/app_loader.dart';
+import '../../core/widgets/ds/ds.dart';
 import '../../data/models/app_user.dart';
 import '../../data/models/poster.dart';
 import '../../data/providers/supabase_providers.dart';

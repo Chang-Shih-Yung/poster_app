@@ -7,6 +7,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/app_loader.dart';
+import '../../core/widgets/ds/ds.dart';
 import '../../core/widgets/glass.dart';
 import '../../data/models/poster.dart';
 import '../../data/providers/supabase_providers.dart';
@@ -535,8 +536,9 @@ class _ExpandedInfo extends ConsumerWidget {
               spacing: 6,
               runSpacing: 6,
               children: canonical
-                  .map((t) => _TappableTagChip(
-                        label: t.labelZh,
+                  .map((t) => AppChip(
+                        label: '# ${t.labelZh}',
+                        size: AppChipSize.small,
                         onTap: () => context.push('/tags/${t.slug}'),
                       ))
                   .toList(growable: false),
@@ -546,7 +548,8 @@ class _ExpandedInfo extends ConsumerWidget {
               spacing: 6,
               runSpacing: 6,
               children: poster.tags
-                  .map((t) => _MiniChip(label: t))
+                  .map((t) =>
+                      AppChip(label: t, size: AppChipSize.small))
                   .toList(growable: false),
             ),
           if (poster.workId != null) ...[
@@ -592,44 +595,22 @@ class _PrimaryCta extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bg = isFav
-        ? Colors.white.withValues(alpha: 0.14)
-        : Colors.white;
-    final fg = isFav ? Colors.white : Colors.black;
-    return Material(
-      color: bg,
-      borderRadius: BorderRadius.circular(999),
-      child: InkWell(
-        onTap: enabled ? () => onTap() : null,
-        borderRadius: BorderRadius.circular(999),
-        child: Container(
-          height: 46,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(999),
-            border: isFav ? Border.all(color: AppTheme.line2) : null,
-          ),
-          alignment: Alignment.center,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                isFav ? Icons.favorite : LucideIcons.heart,
-                size: 16,
-                color: fg,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                isFav ? '已收藏' : '加入收藏',
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      color: fg,
-                      fontWeight: FontWeight.w600,
-                    ),
-              ),
-            ],
-          ),
-        ),
-      ),
+    // v19: inverted state picks variant, not bespoke colours.
+    //   · un-favorited → AppButton.primary (white pill, 加入收藏)
+    //   · favorited    → AppButton.outline  (ghost-ish, 已收藏)
+    if (isFav) {
+      return AppButton.outline(
+        label: '已收藏',
+        icon: Icons.favorite,
+        fullWidth: true,
+        onPressed: enabled ? () => onTap() : null,
+      );
+    }
+    return AppButton.primary(
+      label: '加入收藏',
+      icon: LucideIcons.heart,
+      fullWidth: true,
+      onPressed: enabled ? () => onTap() : null,
     );
   }
 }
@@ -692,8 +673,18 @@ class _RelatedSection extends ConsumerWidget {
                   padding: const EdgeInsets.symmetric(horizontal: 24),
                   itemCount: items.length,
                   separatorBuilder: (_, _) => const SizedBox(width: 12),
-                  itemBuilder: (context, i) =>
-                      _RelatedCard(poster: items[i]),
+                  itemBuilder: (context, i) {
+                    final p = items[i];
+                    return AppPosterTile(
+                      imageUrl: p.thumbnailUrl ?? p.posterUrl,
+                      posterId: p.id,
+                      title: p.title,
+                      width: 130,
+                      height: 200,
+                      onTap: () =>
+                          context.pushReplacement('/poster/${p.id}'),
+                    );
+                  },
                 ),
               ),
             ],
@@ -704,135 +695,8 @@ class _RelatedSection extends ConsumerWidget {
   }
 }
 
-class _RelatedCard extends StatelessWidget {
-  const _RelatedCard({required this.poster});
-  final Poster poster;
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(14),
-      child: Material(
-        color: AppTheme.surfaceRaised,
-        child: InkWell(
-          onTap: () => context.pushReplacement('/poster/${poster.id}'),
-          child: SizedBox(
-            width: 130,
-            height: 200,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                CachedNetworkImage(
-                  imageUrl: poster.thumbnailUrl ?? poster.posterUrl,
-                  fit: BoxFit.cover,
-                  placeholder: (_, _) =>
-                      ColoredBox(color: AppTheme.surfaceRaised),
-                  errorWidget: (_, _, _) =>
-                      ColoredBox(color: AppTheme.surfaceRaised),
-                ),
-                // Bottom gradient for title.
-                const Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  height: 80,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          Color(0x00000000),
-                          Color(0xBB000000),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-                Positioned(
-                  left: 10,
-                  right: 10,
-                  bottom: 10,
-                  child: Text(
-                    poster.title,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
-                          height: 1.3,
-                        ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ── Shared small widgets ──
-
-class _MiniChip extends StatelessWidget {
-  const _MiniChip({required this.label});
-  final String label;
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
-      ),
-      child: Text(
-        label,
-        style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: Colors.white,
-              letterSpacing: 0.6,
-              fontWeight: FontWeight.w500,
-            ),
-      ),
-    );
-  }
-}
-
-/// Tappable tag chip — navigates to /tags/:slug.
-class _TappableTagChip extends StatelessWidget {
-  const _TappableTagChip({required this.label, required this.onTap});
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      borderRadius: BorderRadius.circular(999),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(999),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.08),
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
-          ),
-          child: Text(
-            '# $label',
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: Colors.white,
-                  letterSpacing: 0.4,
-                  fontWeight: FontWeight.w500,
-                ),
-          ),
-        ),
-      ),
-    );
-  }
-}
+// _RelatedCard / _MiniChip / _TappableTagChip removed in v19 —
+// replaced by AppPosterTile and AppChip from the design system.
 
 class _FullImageViewer extends StatelessWidget {
   const _FullImageViewer({required this.url});

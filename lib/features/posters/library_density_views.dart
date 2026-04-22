@@ -424,9 +424,9 @@ class _MediumGrid extends StatelessWidget {
   }
 }
 
-/// v13 masonry card — overlay style: title + year/director sit on top
-/// of the image with a soft bottom gradient. Long-press toggles favorite
-/// (haptic + toast handled by the handler).
+/// v19 masonry card — delegates to the shared [AppPosterTile] so
+/// every masonry grid in the app (me tab, tag browse, work page,
+/// public profile) renders with one contract.
 class _MasonryCard extends StatelessWidget {
   const _MasonryCard({
     required this.poster,
@@ -446,120 +446,18 @@ class _MasonryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return GestureDetector(
-      onTap: () => context.push('/poster/${poster.id}'),
+    return AppPosterTile(
+      imageUrl: poster.thumbnailUrl ?? poster.posterUrl,
+      posterId: poster.id,
+      title: poster.title,
+      subtitle: [
+        if (poster.year != null) '${poster.year}',
+        if (poster.director != null) poster.director!,
+      ].join(' · '),
+      aspectRatio: aspectRatio,
+      favorited: isFavorited,
+      showFavIndicator: showFav,
       onLongPress: onToggleFavorite,
-      child: Hero(
-        tag: 'poster-${poster.id}',
-        child: AspectRatio(
-          aspectRatio: aspectRatio,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(14),
-            child: Container(
-              decoration: BoxDecoration(
-                color: AppTheme.ink3,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: AppTheme.line1),
-              ),
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  CachedNetworkImage(
-                    imageUrl: poster.thumbnailUrl ?? poster.posterUrl,
-                    fit: BoxFit.cover,
-                    placeholder: (_, _) =>
-                        ColoredBox(color: AppTheme.surfaceRaised),
-                    errorWidget: (_, _, _) =>
-                        ColoredBox(color: AppTheme.surfaceRaised),
-                  ),
-                  // Bottom gradient to lift title.
-                  const Positioned.fill(
-                    child: IgnorePointer(
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.bottomCenter,
-                            end: Alignment.topCenter,
-                            colors: [
-                              Color(0xBF000000),
-                              Color(0x00000000),
-                            ],
-                            stops: [0, 0.45],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  // Title + meta — overlay bottom-left.
-                  Positioned(
-                    left: 10,
-                    right: 10,
-                    bottom: 10,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          poster.title,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.titleSmall?.copyWith(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w600,
-                            height: 1.2,
-                            letterSpacing: -0.2,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          [
-                            if (poster.year != null) '${poster.year}',
-                            if (poster.director != null) poster.director!,
-                          ].join(' · '),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: Colors.white.withValues(alpha: 0.75),
-                            fontSize: 10,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  // Favorite indicator — shown when showFav=true
-                  // (投稿 tab) AND the poster is actually favorited.
-                  // Single filled heart icon on a soft pill so it reads
-                  // on any poster background without the gradient/SVG
-                  // circus of the old v18 _FancyHeart.
-                  if (showFav && isFavorited)
-                    Positioned(
-                      top: 8,
-                      right: 8,
-                      child: Container(
-                        width: 26,
-                        height: 26,
-                        decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.38),
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.18),
-                            width: 0.5,
-                          ),
-                        ),
-                        child: Icon(
-                          Icons.favorite,
-                          size: 14,
-                          color: AppTheme.favoriteActive,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
     );
   }
 }
@@ -628,84 +526,22 @@ class _SmallTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: () => context.push('/poster/${poster.id}'),
+    return AppPosterRow(
+      imageUrl: poster.thumbnailUrl ?? poster.posterUrl,
+      posterId: poster.id,
+      title: poster.title,
+      subtitle: [
+        if (poster.year != null) '${poster.year}',
+        if (poster.director != null) poster.director!,
+      ].join(' · '),
       onLongPress: onToggleFavorite,
-      borderRadius: BorderRadius.circular(8),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        child: SizedBox(
-          height: 56,
-          child: Row(
-            children: [
-              // 56x56 square thumb with r8.
-              ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: SizedBox(
-                  width: 56,
-                  height: 56,
-                  child: CachedNetworkImage(
-                    imageUrl: poster.thumbnailUrl ?? poster.posterUrl,
-                    fit: BoxFit.cover,
-                    placeholder: (_, _) =>
-                        ColoredBox(color: AppTheme.surfaceRaised),
-                    errorWidget: (_, _, _) =>
-                        ColoredBox(color: AppTheme.surfaceRaised),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(poster.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context)
-                            .textTheme
-                            .titleSmall
-                            ?.copyWith(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w600,
-                            )),
-                    const SizedBox(height: 3),
-                    Text(
-                      [
-                        if (poster.year != null) '${poster.year}',
-                        if (poster.director != null) poster.director!,
-                      ].join(' · '),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: AppTheme.textMute,
-                          ),
-                    ),
-                  ],
-                ),
-              ),
-              // Heart icon — right side.
-              GestureDetector(
-                onTap: onToggleFavorite,
-                behavior: HitTestBehavior.opaque,
-                child: SizedBox(
-                  width: 40,
-                  height: 56,
-                  child: Center(
-                    child: Icon(
-                      LucideIcons.heart,
-                      size: 16,
-                      color: isFavorited
-                          ? AppTheme.favoriteActive
-                          : AppTheme.textFaint,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
+      trailing: AppIconButton(
+        icon: isFavorited ? Icons.favorite : LucideIcons.heart,
+        size: AppIconButtonSize.small,
+        color:
+            isFavorited ? AppTheme.favoriteActive : AppTheme.textFaint,
+        onTap: onToggleFavorite,
+        semanticsLabel: isFavorited ? '取消收藏' : '加入收藏',
       ),
     );
   }
