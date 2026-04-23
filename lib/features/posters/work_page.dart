@@ -25,9 +25,9 @@ class WorkPage extends ConsumerWidget {
       
       body: workAsync.when(
         loading: () => const AppLoader.centered(),
-        error: (e, _) => _ErrorView(message: '載入失敗：$e'),
+        error: (e, _) => AppEmptyState(title: '載入失敗：$e'),
         data: (work) => work == null
-            ? const _ErrorView(message: '找不到這部作品')
+            ? const AppEmptyState(title: '找不到這部作品')
             : _WorkBody(work: work, postersAsync: postersAsync),
       ),
     );
@@ -43,7 +43,6 @@ class _WorkBody extends StatelessWidget {
   Widget build(BuildContext context) {
     final topInset = MediaQuery.paddingOf(context).top;
     final bottomInset = MediaQuery.paddingOf(context).bottom;
-    final theme = Theme.of(context);
 
     return CustomScrollView(
       slivers: [
@@ -54,31 +53,12 @@ class _WorkBody extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  '作品',
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: AppTheme.textFaint,
-                    letterSpacing: 2.4,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
+                const AppText.label('作品', tone: AppTextTone.faint),
                 const SizedBox(height: 8),
-                Text(
-                  work.displayTitle,
-                  style: theme.textTheme.headlineMedium?.copyWith(
-                    height: 1.1,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
+                AppText.headline(work.displayTitle),
                 if (work.titleEn != null && work.titleEn != work.titleZh) ...[
                   const SizedBox(height: 4),
-                  Text(
-                    work.titleEn!,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      color: AppTheme.textMute,
-                      fontStyle: FontStyle.italic,
-                    ),
-                  ),
+                  AppText.title(work.titleEn!, tone: AppTextTone.muted),
                 ],
                 const SizedBox(height: 14),
                 Row(
@@ -104,7 +84,7 @@ class _WorkBody extends StatelessWidget {
             ),
           ),
           error: (e, _) => SliverToBoxAdapter(
-            child: _ErrorView(message: '海報載入失敗：$e'),
+            child: AppEmptyState(title: '海報載入失敗：$e'),
           ),
           data: (posters) {
             if (posters.isEmpty) {
@@ -177,32 +157,12 @@ class _MetaPill extends StatelessWidget {
         color: AppTheme.chipBg,
         borderRadius: BorderRadius.circular(999),
       ),
-      child: Text(
+      child: AppText.small(
         label,
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: AppTheme.textMute,
-              fontWeight: FontWeight.w500,
-            ),
+        tone: AppTextTone.muted,
+        weight: FontWeight.w500,
       ),
     );
   }
 }
 
-class _ErrorView extends StatelessWidget {
-  const _ErrorView({required this.message});
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Text(
-          message,
-          style: TextStyle(color: AppTheme.textMute),
-          textAlign: TextAlign.center,
-        ),
-      ),
-    );
-  }
-}

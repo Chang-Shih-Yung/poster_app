@@ -84,7 +84,9 @@ class _ProfileEditPageState extends ConsumerState<ProfileEditPage> {
     final raw = await file.readAsBytes();
     final compressed = ImageCompressor.compress(raw);
     if (compressed == null) {
-      _toast('圖片格式無法辨識');
+      if (!mounted) return;
+      AppToast.show(context, '圖片格式無法辨識',
+          kind: AppToastKind.destructive);
       return;
     }
     setState(() {
@@ -130,7 +132,7 @@ class _ProfileEditPageState extends ConsumerState<ProfileEditPage> {
       // user_repository.dart → invalidateUserSurfaces for the rationale.
       invalidateUserSurfaces(ref, profile.id);
       if (mounted) {
-        _toast('已儲存');
+        AppToast.show(context, '已儲存', kind: AppToastKind.success);
         context.pop();
       }
     } catch (e) {
@@ -143,38 +145,28 @@ class _ProfileEditPageState extends ConsumerState<ProfileEditPage> {
       if (msg.contains('@handle')) {
         setState(() => _handleError = msg);
       }
-      _toast(msg);
+      if (mounted) {
+        AppToast.show(context, msg, kind: AppToastKind.destructive);
+      }
     } finally {
       if (mounted) setState(() => _saving = false);
     }
-  }
-
-  void _toast(String msg) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
   @override
   Widget build(BuildContext context) {
     final topInset = MediaQuery.paddingOf(context).top;
     final bottomInset = MediaQuery.paddingOf(context).bottom;
-    final theme = Theme.of(context);
     final profileAsync = ref.watch(currentProfileProvider);
 
     return Scaffold(
       
       body: profileAsync.when(
         loading: () => const AppLoader.centered(),
-        error: (e, _) => Center(
-          child: Text('載入失敗：$e',
-              style: TextStyle(color: AppTheme.textMute)),
-        ),
+        error: (e, _) => AppEmptyState(title: '載入失敗：$e'),
         data: (profile) {
           if (profile == null) {
-            return Center(
-              child: Text('請先登入',
-                  style: TextStyle(color: AppTheme.textMute)),
-            );
+            return const AppEmptyState(title: '請先登入');
           }
           _hydrateFrom(profile);
 
@@ -199,12 +191,10 @@ class _ProfileEditPageState extends ConsumerState<ProfileEditPage> {
                           const SizedBox(height: 10),
                           GestureDetector(
                             onTap: _pickAvatar,
-                            child: Text(
+                            child: const AppText.small(
                               '更換相片',
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: AppTheme.textMute,
-                                fontSize: 12,
-                              ),
+                              tone: AppTextTone.muted,
+                              size: 12,
                             ),
                           ),
                         ],
@@ -213,19 +203,24 @@ class _ProfileEditPageState extends ConsumerState<ProfileEditPage> {
                     const SizedBox(height: 24),
                     _Label('暱稱'),
                     const SizedBox(height: 6),
-                    TextField(
+                    AppField(
                       controller: _nameCtrl,
+                      hint: '你想被叫什麼名字？',
                       maxLength: 30,
-                      decoration: _v13InputDeco('你想被叫什麼名字？'),
                     ),
                     const SizedBox(height: 16),
                     _Label('@handle'),
                     const SizedBox(height: 6),
-                    TextField(
+                    AppField(
                       controller: _handleCtrl,
+                      hint: 'henry1010921',
+                      prefixText: '@',
                       maxLength: 20,
+                      error: _handleError,
+                      helper: _handleError == null
+                          ? '小寫字母 / 數字 / 底線，3-20 字元。留空使用 email 名稱。'
+                          : null,
                       inputFormatters: [
-                        // Force lowercase + restrict to alnum+_.
                         FilteringTextInputFormatter.allow(
                             RegExp(r'[a-zA-Z0-9_]')),
                         TextInputFormatter.withFunction((old, next) =>
@@ -239,33 +234,15 @@ class _ProfileEditPageState extends ConsumerState<ProfileEditPage> {
                           setState(() => _handleError = null);
                         }
                       },
-                      decoration: _v13InputDeco('henry1010921').copyWith(
-                        prefixText: '@',
-                        prefixStyle: TextStyle(
-                          fontFamily: 'InterDisplay',
-                          fontFamilyFallback: const ['NotoSansTC'],
-                          color: AppTheme.textMute,
-                          fontWeight: FontWeight.w500,
-                        ),
-                        errorText: _handleError,
-                        helperText:
-                            '小寫字母 / 數字 / 底線，3-20 字元。留空使用 email 名稱。',
-                        helperStyle: TextStyle(
-                          fontFamily: 'InterDisplay',
-                          fontFamilyFallback: const ['NotoSansTC'],
-                          color: AppTheme.textFaint,
-                          fontSize: 11,
-                        ),
-                      ),
                     ),
                     const SizedBox(height: 16),
                     _Label('簡介'),
                     const SizedBox(height: 6),
-                    TextField(
+                    AppField(
                       controller: _bioCtrl,
+                      hint: '介紹一下你自己、你收藏的風格…',
                       maxLength: 200,
                       maxLines: 4,
-                      decoration: _v13InputDeco('介紹一下你自己、你收藏的風格…'),
                     ),
                     const SizedBox(height: 16),
                     _Label('性別（選填）'),
@@ -299,43 +276,12 @@ class _ProfileEditPageState extends ConsumerState<ProfileEditPage> {
   }
 }
 
-/// v13 input decoration — exact prototype spec:
-///   bg = rgba(255,255,255,0.06), border 1px line1, radius 12px,
-///   12px padding, no counter (we hide maxLength counter manually
-///   if it causes vertical drift, which it doesn't in current spec).
-InputDecoration _v13InputDeco(String hint) {
-  return InputDecoration(
-    hintText: hint,
-    filled: true,
-    fillColor: AppTheme.fieldFillTranslucent,
-    isDense: true,
-    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-    border: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(12),
-      borderSide: BorderSide(color: AppTheme.line1),
-    ),
-    enabledBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(12),
-      borderSide: BorderSide(color: AppTheme.line1),
-    ),
-    focusedBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(12),
-      borderSide: BorderSide(color: AppTheme.line2, width: 1),
-    ),
-  );
-}
-
 class _Label extends StatelessWidget {
   const _Label(this.text);
   final String text;
   @override
   Widget build(BuildContext context) {
-    return Text(text,
-        style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: AppTheme.textMute,
-              letterSpacing: 1.4,
-              fontWeight: FontWeight.w600,
-            ));
+    return AppText.label(text, tone: AppTextTone.muted);
   }
 }
 
@@ -437,12 +383,10 @@ class _GenderChip extends StatelessWidget {
             ),
             borderRadius: BorderRadius.circular(999),
           ),
-          child: Text(
+          child: AppText.body(
             label,
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: selected ? AppTheme.bg : AppTheme.text,
-                  fontWeight: FontWeight.w500,
-                ),
+            color: selected ? AppTheme.bg : AppTheme.text,
+            weight: FontWeight.w500,
           ),
         ),
       ),
@@ -539,9 +483,9 @@ class _LinkRowState extends State<_LinkRow> {
       children: [
         SizedBox(
           width: 90,
-          child: TextField(
+          child: AppField(
             controller: _labelCtrl,
-            decoration: _v13InputDeco('IG / 網站'),
+            hint: 'IG / 網站',
             onChanged: (v) => widget.onChanged(
               ProfileLink(label: v, url: _urlCtrl.text),
             ),
@@ -549,9 +493,9 @@ class _LinkRowState extends State<_LinkRow> {
         ),
         const SizedBox(width: 8),
         Expanded(
-          child: TextField(
+          child: AppField(
             controller: _urlCtrl,
-            decoration: _v13InputDeco('https://...'),
+            hint: 'https://...',
             keyboardType: TextInputType.url,
             onChanged: (v) => widget.onChanged(
               ProfileLink(label: _labelCtrl.text, url: v),

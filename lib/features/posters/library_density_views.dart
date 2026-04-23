@@ -217,12 +217,9 @@ class _FullBleedFeedState extends State<_FullBleedFeed>
                           ),
                       ],
                     )
-                  : Text(
+                  : AppText.small(
                       '${heroIndex + 1} / ${items.length}',
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                            color: Colors.white.withValues(alpha: 0.6),
-                            letterSpacing: 1.2,
-                          ),
+                      color: Colors.white.withValues(alpha: 0.6),
                     ),
             ],
           ),
@@ -236,7 +233,6 @@ class _FullBleedFeedState extends State<_FullBleedFeed>
     final heroIndex = widget.heroIndex;
     if (items.isEmpty) return const SizedBox.shrink();
     final poster = items[heroIndex.clamp(0, items.length - 1)];
-    final theme = Theme.of(context);
     return AnimatedSwitcher(
       duration: AppTheme.motionFast,
       child: Column(
@@ -246,47 +242,34 @@ class _FullBleedFeedState extends State<_FullBleedFeed>
         children: [
           // Eyebrow: first tag.
           if (poster.tags.isNotEmpty) ...[
-            Text(
+            AppText.label(
               poster.tags.first.toUpperCase(),
-              style: theme.textTheme.labelMedium?.copyWith(
-                color: Colors.white.withValues(alpha: 0.55),
-                letterSpacing: 2.4,
-                fontWeight: FontWeight.w500,
-              ),
+              color: Colors.white.withValues(alpha: 0.55),
+              weight: FontWeight.w500,
             ),
             const SizedBox(height: 10),
           ],
           // Title.
-          Text(
+          AppText.headline(
             poster.title,
+            color: Colors.white,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.displaySmall?.copyWith(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w600,
-                  height: 1.1,
-                ),
           ),
           // Year.
           if (poster.year != null) ...[
             const SizedBox(height: 6),
-            Text(
+            AppText.title(
               '${poster.year}',
-              style: theme.textTheme.headlineLarge?.copyWith(
-                color: Colors.white.withValues(alpha: 0.85),
-                fontWeight: FontWeight.w600,
-                letterSpacing: 1.0,
-              ),
+              color: Colors.white.withValues(alpha: 0.85),
             ),
           ],
           // Director.
           if (poster.director != null) ...[
             const SizedBox(height: 4),
-            Text(
+            AppText.body(
               poster.director!,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: Colors.white.withValues(alpha: 0.5),
-              ),
+              color: Colors.white.withValues(alpha: 0.5),
             ),
           ],
         ],

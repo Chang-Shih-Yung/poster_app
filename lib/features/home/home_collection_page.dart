@@ -111,12 +111,7 @@ class HomeCollectionPage extends ConsumerWidget {
                         size: 24, color: AppTheme.text),
                   ),
                 ),
-                Text(
-                  _title,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                ),
+                AppText.title(_title),
                 const Spacer(),
                 const SizedBox(width: 44),
               ],
@@ -221,20 +216,14 @@ class _GridSkeleton extends StatelessWidget {
         childAspectRatio: 2 / 3,
       ),
       itemCount: 6,
-      itemBuilder: (_, _) => Container(
-        decoration: BoxDecoration(
-          color: AppTheme.surfaceRaised,
-          borderRadius: BorderRadius.circular(12),
-        ),
-      ),
+      itemBuilder: (_, _) => const AppSkeleton(radius: 12),
     );
   }
 }
 
-/// Shared empty state for home collection pages. Icon + title + hint
-/// + optional primary CTA. Matches the kit voice
-/// (`存下你的第一張`, `寄出投稿` — active verbs, no generic
-/// "you have no items").
+/// Shared empty state for home collection pages. Thin adapter over
+/// AppEmptyState so collection pages can keep their ctaTab/ctaRoute
+/// plumbing intact while the visual chrome ships from the DS.
 class _EmptyState extends ConsumerWidget {
   const _EmptyState({
     required this.icon,
@@ -248,95 +237,33 @@ class _EmptyState extends ConsumerWidget {
   final String title;
   final String hint;
   final String? ctaLabel;
-
-  /// If set, the CTA pops this page and switches the shell to this
-  /// tab index. Used for "go back to explore" style actions.
   final int? ctaTab;
-
-  /// If set, the CTA pushes this route. Used when the action lives
-  /// on a dedicated sub-page (e.g. /upload).
   final String? ctaRoute;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 36, color: AppTheme.textFaint),
-            const SizedBox(height: 12),
-            Text(
-              title,
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              hint,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppTheme.textMute,
-                  ),
-            ),
-            if (ctaLabel != null) ...[
-              const SizedBox(height: 18),
-              _EmptyCtaPill(
-                label: ctaLabel!,
-                onTap: () {
-                  HapticFeedback.selectionClick();
-                  if (ctaRoute != null) {
-                    context.push(ctaRoute!);
-                  } else if (ctaTab != null) {
-                    // Pop back to the shell, then switch tabs.
-                    ref.read(shellTabProvider.notifier).setIndex(ctaTab!);
-                    Navigator.of(context).maybePop();
-                  }
-                },
-              ),
-            ],
-          ],
-        ),
-      ),
+    return AppEmptyState(
+      icon: icon,
+      title: title,
+      subtitle: hint,
+      actionLabel: ctaLabel,
+      onAction: ctaLabel == null
+          ? null
+          : () {
+              HapticFeedback.selectionClick();
+              if (ctaRoute != null) {
+                context.push(ctaRoute!);
+              } else if (ctaTab != null) {
+                ref.read(shellTabProvider.notifier).setIndex(ctaTab!);
+                Navigator.of(context).maybePop();
+              }
+            },
     );
   }
 }
 
-class _EmptyCtaPill extends StatelessWidget {
-  const _EmptyCtaPill({required this.label, required this.onTap});
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: AppTheme.text,
-      borderRadius: BorderRadius.circular(999),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(999),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 10),
-          alignment: Alignment.center,
-          child: Text(
-            label,
-            style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  color: AppTheme.bg,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 13,
-                  letterSpacing: 0,
-                ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Retry-able error state. Presents a short reason + action over the
-/// raw exception, so users don't stare at an SDK stacktrace.
+/// Retry-able error state. Thin adapter over AppEmptyState so the
+/// "短原因 + 重試" pattern stays consistent with the rest of the app.
 class _ErrorState extends StatelessWidget {
   const _ErrorState({
     required this.message,
@@ -349,35 +276,12 @@ class _ErrorState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(LucideIcons.cloudOff, size: 32, color: AppTheme.textFaint),
-            const SizedBox(height: 12),
-            Text(
-              message,
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              detail,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppTheme.textFaint,
-                  ),
-            ),
-            const SizedBox(height: 18),
-            _EmptyCtaPill(label: '重試', onTap: onRetry),
-          ],
-        ),
-      ),
+    return AppEmptyState(
+      icon: LucideIcons.cloudOff,
+      title: message,
+      subtitle: detail,
+      actionLabel: '重試',
+      onAction: onRetry,
     );
   }
 }
@@ -419,9 +323,9 @@ class _FollowingList extends ConsumerWidget {
         return ListView.separated(
           padding: EdgeInsets.fromLTRB(0, 4, 0, bottomInset + 40),
           itemCount: users.length,
-          separatorBuilder: (_, _) => Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Container(height: 1, color: AppTheme.line1),
+          separatorBuilder: (_, _) => const AppDivider(
+            thickness: 1,
+            margin: EdgeInsets.symmetric(horizontal: 20),
           ),
           itemBuilder: (_, i) => _UserRow(profile: users[i]),
         );
@@ -468,23 +372,18 @@ class _UserRow extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
+                  AppText.bodyBold(
                     profile.displayName.isEmpty
                         ? '無名使用者'
                         : profile.displayName,
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
                   ),
                   if (profile.bio?.isNotEmpty == true) ...[
                     const SizedBox(height: 2),
-                    Text(
+                    AppText.caption(
                       profile.bio!,
+                      tone: AppTextTone.muted,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: AppTheme.textMute,
-                          ),
                     ),
                   ],
                 ],
@@ -502,10 +401,7 @@ class _UserRow extends StatelessWidget {
     return Container(
       color: AppTheme.chipBgStrong,
       alignment: Alignment.center,
-      child: Text(letter,
-          style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.w700,
-              )),
+      child: AppText.bodyBold(letter, weight: FontWeight.w700),
     );
   }
 }

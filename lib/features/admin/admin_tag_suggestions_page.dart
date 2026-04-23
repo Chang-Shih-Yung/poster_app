@@ -86,7 +86,6 @@ class _IntroCardState extends State<_IntroCard> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -103,14 +102,8 @@ class _IntroCardState extends State<_IntroCard> {
               children: [
                 Icon(LucideIcons.lightbulb, size: 16, color: AppTheme.textMute),
                 const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    '怎麼決定按哪個按鈕？',
-                    style: theme.textTheme.labelMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: AppTheme.text,
-                    ),
-                  ),
+                const Expanded(
+                  child: AppText.bodyBold('怎麼決定按哪個按鈕？'),
                 ),
                 Icon(
                   _expanded
@@ -160,7 +153,6 @@ class _IntroLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -169,7 +161,10 @@ class _IntroLine extends StatelessWidget {
         Expanded(
           child: RichText(
             text: TextSpan(
-              style: theme.textTheme.bodySmall?.copyWith(
+              style: TextStyle(
+                fontFamily: 'InterDisplay',
+                fontFamilyFallback: const ['NotoSansTC'],
+                fontSize: 13,
                 color: AppTheme.textMute,
                 height: 1.45,
               ),
@@ -228,7 +223,6 @@ class _SuggestionCardState extends ConsumerState<_SuggestionCard> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final s = widget.suggestion;
     final cat = _category;
 
@@ -256,25 +250,19 @@ class _SuggestionCardState extends ConsumerState<_SuggestionCard> {
                 onTap: _busy ? null : _changeCategory,
               ),
               const Spacer(),
-              Text(
-                _relativeTime(s.createdAt),
-                style: theme.textTheme.labelSmall
-                    ?.copyWith(color: AppTheme.textFaint),
-              ),
+              AppText.small(_relativeTime(s.createdAt),
+                  tone: AppTextTone.faint),
             ],
           ),
           const SizedBox(height: 10),
           // Labels.
-          Text(s.suggestedLabelZh,
-              style: theme.textTheme.titleMedium
-                  ?.copyWith(fontWeight: FontWeight.w600)),
+          AppText.title(s.suggestedLabelZh),
           if (s.suggestedLabelEn != null &&
               s.suggestedLabelEn != s.suggestedLabelZh)
             Padding(
               padding: const EdgeInsets.only(top: 2),
-              child: Text(s.suggestedLabelEn!,
-                  style: theme.textTheme.bodySmall
-                      ?.copyWith(color: AppTheme.textMute)),
+              child: AppText.caption(s.suggestedLabelEn!,
+                  tone: AppTextTone.muted),
             ),
           if (s.reason != null && s.reason!.isNotEmpty) ...[
             const SizedBox(height: 8),
@@ -284,19 +272,14 @@ class _SuggestionCardState extends ConsumerState<_SuggestionCard> {
                 color: AppTheme.bg,
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: Text(
-                s.reason!,
-                style: theme.textTheme.bodySmall
-                    ?.copyWith(color: AppTheme.textMute),
-              ),
+              child: AppText.caption(s.reason!, tone: AppTextTone.muted),
             ),
           ],
           if (s.linkedSubmissionId != null) ...[
             const SizedBox(height: 8),
-            Text(
+            AppText.small(
               '來自 submission: ${s.linkedSubmissionId!.substring(0, 8)}…',
-              style: theme.textTheme.labelSmall
-                  ?.copyWith(color: AppTheme.textFaint),
+              tone: AppTextTone.faint,
             ),
           ],
 
@@ -313,12 +296,15 @@ class _SuggestionCardState extends ConsumerState<_SuggestionCard> {
                       suggestionId: s.id,
                       targetTagId: tagId,
                     );
-                if (!mounted) return;
-                _toast('已合併到「$labelZh」');
+                if (!context.mounted) return;
+                AppToast.show(context, '已合併到「$labelZh」',
+                    kind: AppToastKind.success);
                 ref.invalidate(pendingTagSuggestionsProvider);
                 ref.invalidate(tagCategoriesProvider);
               } catch (e) {
-                _toast('合併失敗：$e');
+                if (!context.mounted) return;
+                AppToast.show(context, '合併失敗：$e',
+                    kind: AppToastKind.destructive);
               } finally {
                 if (mounted) setState(() => _busy = false);
               }
@@ -387,11 +373,12 @@ class _SuggestionCardState extends ConsumerState<_SuggestionCard> {
           .read(tagSuggestionRepositoryProvider)
           .approve(widget.suggestion.id);
       if (!mounted) return;
-      _toast('已加入官方分類庫');
+      AppToast.show(context, '已加入官方分類庫', kind: AppToastKind.success);
       ref.invalidate(pendingTagSuggestionsProvider);
       ref.invalidate(tagCategoriesProvider);
     } catch (e) {
-      _toast('批准失敗：$e');
+      AppToast.show(context, '批准失敗：$e',
+          kind: AppToastKind.destructive);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -418,12 +405,11 @@ class _SuggestionCardState extends ConsumerState<_SuggestionCard> {
                   const SizedBox(width: 8),
                   if (c.descriptionZh != null)
                     Flexible(
-                      child: Text(
+                      child: AppText.small(
                         c.descriptionZh!,
+                        tone: AppTextTone.faint,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.labelSmall
-                            ?.copyWith(color: AppTheme.textFaint),
                       ),
                     ),
                 ],
@@ -483,10 +469,12 @@ class _SuggestionCardState extends ConsumerState<_SuggestionCard> {
             note: note.isEmpty ? null : note,
           );
       if (!mounted) return;
-      _toast('已退回');
+      AppToast.show(context, '已退回', kind: AppToastKind.success);
       ref.invalidate(pendingTagSuggestionsProvider);
     } catch (e) {
-      _toast('退回失敗：$e');
+      if (!mounted) return;
+      AppToast.show(context, '退回失敗：$e',
+          kind: AppToastKind.destructive);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -495,7 +483,8 @@ class _SuggestionCardState extends ConsumerState<_SuggestionCard> {
   Future<void> _merge() async {
     final cat = _category;
     if (cat == null) {
-      _toast('找不到對應的 category');
+      AppToast.show(context, '找不到對應的 category',
+          kind: AppToastKind.destructive);
       return;
     }
     final target = await showDialog<Tag>(
@@ -514,19 +503,17 @@ class _SuggestionCardState extends ConsumerState<_SuggestionCard> {
             targetTagId: target.id,
           );
       if (!mounted) return;
-      _toast('已合併到「${target.labelZh}」並加為別名');
+      AppToast.show(context, '已合併到「${target.labelZh}」並加為別名',
+          kind: AppToastKind.success);
       ref.invalidate(pendingTagSuggestionsProvider);
       ref.invalidate(tagCategoriesProvider);
     } catch (e) {
-      _toast('合併失敗：$e');
+      if (!mounted) return;
+      AppToast.show(context, '合併失敗：$e',
+          kind: AppToastKind.destructive);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
-  }
-
-  void _toast(String msg) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 }
 
@@ -559,7 +546,6 @@ class _MergePickerState extends ConsumerState<_MergePicker> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     // System recommendations: cross-category similarity matches.
     final suggestionsAsync = ref.watch(similarTagsProvider(
       SimilarTagsQuery(
@@ -604,11 +590,10 @@ class _MergePickerState extends ConsumerState<_MergePicker> {
                         Icon(LucideIcons.info,
                             size: 13, color: AppTheme.textFaint),
                         const SizedBox(width: 6),
-                        Expanded(
-                          child: Text(
+                        const Expanded(
+                          child: AppText.small(
                             '系統在全站分類中找不到相似的既有分類，請自行搜尋挑選。',
-                            style: theme.textTheme.labelSmall
-                                ?.copyWith(color: AppTheme.textFaint),
+                            tone: AppTextTone.faint,
                           ),
                         ),
                       ],
@@ -619,12 +604,10 @@ class _MergePickerState extends ConsumerState<_MergePicker> {
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
+                    AppText.small(
                       '系統推薦（最相近的 ${top.length} 個）',
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: Colors.amber,
-                        fontWeight: FontWeight.w600,
-                      ),
+                      color: Colors.amber,
+                      weight: FontWeight.w600,
                     ),
                     const SizedBox(height: 6),
                     for (final m in top)
@@ -712,12 +695,10 @@ class _MergePickerState extends ConsumerState<_MergePicker> {
                                   color: AppTheme.chipBg,
                                   borderRadius: BorderRadius.circular(4),
                                 ),
-                                child: Text(
+                                child: AppText.small(
                                   catName,
-                                  style: theme.textTheme.labelSmall?.copyWith(
-                                    color: AppTheme.textMute,
-                                    fontSize: 10,
-                                  ),
+                                  tone: AppTextTone.muted,
+                                  size: 10,
                                 ),
                               ),
                             ],
@@ -766,7 +747,6 @@ class _SimilarityHint extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
     // Admin review: cross-category search so legacy-mis-categorised
     // suggestions (e.g. 院線 filed under 編輯精選 but matches 院線首刷
     // under 版本) still surface.
@@ -807,12 +787,10 @@ class _SimilarityHint extends ConsumerWidget {
                   Icon(LucideIcons.triangleAlert,
                       size: 13, color: Colors.amber),
                   const SizedBox(width: 6),
-                  Text(
+                  AppText.small(
                     '看起來這個分類可能已經存在：',
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: Colors.amber,
-                      fontWeight: FontWeight.w600,
-                    ),
+                    color: Colors.amber,
+                    weight: FontWeight.w600,
                   ),
                 ],
               ),
@@ -847,7 +825,6 @@ class _MatchRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     // Colour the similarity badge by strength.
     final pct = match.similarityPercent;
     final Color badge;
@@ -871,20 +848,10 @@ class _MatchRow extends StatelessWidget {
                 runSpacing: 2,
                 crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  Text(
-                    match.labelZh,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: AppTheme.text,
-                    ),
-                  ),
+                  AppText.bodyBold(match.labelZh),
                   if (match.labelEn.isNotEmpty &&
                       match.labelEn != match.labelZh)
-                    Text(
-                      match.labelEn,
-                      style: theme.textTheme.labelSmall
-                          ?.copyWith(color: AppTheme.textMute),
-                    ),
+                    AppText.small(match.labelEn, tone: AppTextTone.muted),
                   Container(
                     padding: const EdgeInsets.symmetric(
                         horizontal: 5, vertical: 1),
@@ -892,20 +859,18 @@ class _MatchRow extends StatelessWidget {
                       color: badge.withValues(alpha: 0.18),
                       borderRadius: BorderRadius.circular(4),
                     ),
-                    child: Text(
+                    child: AppText.small(
                       '相似度 $pct%',
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: badge,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 10,
-                      ),
+                      color: badge,
+                      weight: FontWeight.w600,
+                      size: 10,
                     ),
                   ),
                   if (match.posterCount > 0)
-                    Text(
+                    AppText.small(
                       '${match.posterCount} 張',
-                      style: theme.textTheme.labelSmall?.copyWith(
-                          color: AppTheme.textFaint, fontSize: 10),
+                      tone: AppTextTone.faint,
+                      size: 10,
                     ),
                 ],
               ),
@@ -913,12 +878,10 @@ class _MatchRow extends StatelessWidget {
               if (match.categoryTitleZh != null)
                 Padding(
                   padding: const EdgeInsets.only(top: 2),
-                  child: Text(
+                  child: AppText.small(
                     '在「${match.categoryTitleZh}」分類下',
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: AppTheme.textFaint,
-                      fontSize: 10,
-                    ),
+                    tone: AppTextTone.faint,
+                    size: 10,
                   ),
                 ),
             ],
@@ -944,7 +907,6 @@ class _RecommendedMatchTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final pct = match.similarityPercent;
     return Material(
       color: Colors.transparent,
@@ -968,12 +930,7 @@ class _RecommendedMatchTile extends StatelessWidget {
                   children: [
                     Row(
                       children: [
-                        Text(
-                          match.labelZh,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
+                        AppText.bodyBold(match.labelZh),
                         const SizedBox(width: 6),
                         Container(
                           padding: const EdgeInsets.symmetric(
@@ -982,22 +939,19 @@ class _RecommendedMatchTile extends StatelessWidget {
                             color: Colors.amber.withValues(alpha: 0.18),
                             borderRadius: BorderRadius.circular(4),
                           ),
-                          child: Text(
+                          child: AppText.small(
                             '$pct%',
-                            style: theme.textTheme.labelSmall?.copyWith(
-                              color: Colors.amber,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 10,
-                            ),
+                            color: Colors.amber,
+                            weight: FontWeight.w600,
+                            size: 10,
                           ),
                         ),
                       ],
                     ),
                     if (match.categoryTitleZh != null)
-                      Text(
+                      AppText.small(
                         '在「${match.categoryTitleZh}」分類 · ${match.posterCount} 張',
-                        style: theme.textTheme.labelSmall
-                            ?.copyWith(color: AppTheme.textFaint),
+                        tone: AppTextTone.faint,
                       ),
                   ],
                 ),

@@ -18,7 +18,6 @@ class TagBrowsePage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final topInset = MediaQuery.paddingOf(context).top;
     final bottomInset = MediaQuery.paddingOf(context).bottom;
-    final theme = Theme.of(context);
     final async = ref.watch(browseByTagProvider(slug));
 
     return Scaffold(
@@ -45,34 +44,16 @@ class TagBrowsePage extends ConsumerWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        '#',
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          color: AppTheme.textFaint,
-                          letterSpacing: 2.4,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
+                      const AppText.label('#', tone: AppTextTone.faint),
                       const SizedBox(height: 4),
-                      Text(
-                        tag.labelZh,
-                        style: theme.textTheme.headlineMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
+                      AppText.headline(tag.labelZh),
                       if (tag.labelEn != tag.labelZh)
-                        Text(
-                          tag.labelEn,
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            color: AppTheme.textMute,
-                            fontStyle: FontStyle.italic,
-                          ),
-                        ),
+                        AppText.title(tag.labelEn,
+                            tone: AppTextTone.muted),
                       const SizedBox(height: 10),
-                      Text(
+                      AppText.caption(
                         '${result.posters.length} 張海報',
-                        style: theme.textTheme.bodySmall
-                            ?.copyWith(color: AppTheme.textFaint),
+                        tone: AppTextTone.faint,
                       ),
                     ],
                   ),

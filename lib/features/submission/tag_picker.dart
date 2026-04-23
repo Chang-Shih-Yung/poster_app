@@ -111,7 +111,6 @@ class _CategorySectionState extends ConsumerState<_CategorySection> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final tagsAsync = ref.watch(tagsByCategoryProvider(widget.category.id));
 
     // Auto-expand if any tags already selected (user is actively editing).
@@ -141,12 +140,7 @@ class _CategorySectionState extends ConsumerState<_CategorySection> {
                       children: [
                         Row(
                           children: [
-                            Text(
-                              widget.category.titleZh,
-                              style: theme.textTheme.titleSmall?.copyWith(
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
+                            AppText.bodyBold(widget.category.titleZh),
                             if (widget.category.isRequired) ...[
                               const SizedBox(width: 4),
                               Text('*',
@@ -161,11 +155,9 @@ class _CategorySectionState extends ConsumerState<_CategorySection> {
                                   color: AppTheme.chipBgStrong,
                                   borderRadius: BorderRadius.circular(999),
                                 ),
-                                child: Text(
+                                child: AppText.small(
                                   '${widget.selectedIds.length}',
-                                  style: theme.textTheme.labelSmall?.copyWith(
-                                    fontWeight: FontWeight.w600,
-                                  ),
+                                  weight: FontWeight.w600,
                                 ),
                               ),
                             ],
@@ -173,12 +165,11 @@ class _CategorySectionState extends ConsumerState<_CategorySection> {
                         ),
                         if (widget.category.descriptionZh != null) ...[
                           const SizedBox(height: 2),
-                          Text(
+                          AppText.small(
                             widget.category.descriptionZh!,
+                            tone: AppTextTone.faint,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.labelSmall
-                                ?.copyWith(color: AppTheme.textFaint),
                           ),
                         ],
                       ],
@@ -232,11 +223,8 @@ class _CategorySectionState extends ConsumerState<_CategorySection> {
                       ),
                       if (visible.isEmpty) ...[
                         const SizedBox(height: 12),
-                        Text(
-                          '此類別尚無 tag。',
-                          style: theme.textTheme.bodySmall
-                              ?.copyWith(color: AppTheme.textFaint),
-                        ),
+                        const AppText.caption('此類別尚無 tag。',
+                            tone: AppTextTone.faint),
                       ],
                       if (widget.category.allowsSuggestion) ...[
                         const SizedBox(height: 12),
@@ -266,7 +254,6 @@ class _TagChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Material(
       color: Colors.transparent,
       borderRadius: BorderRadius.circular(999),
@@ -292,20 +279,16 @@ class _TagChip extends StatelessWidget {
                     color: selected ? AppTheme.bg : AppTheme.textFaint),
                 const SizedBox(width: 4),
               ],
-              Text(
+              AppText.body(
                 tag.labelZh,
-                style: theme.textTheme.labelMedium?.copyWith(
-                  color: selected ? AppTheme.bg : AppTheme.text,
-                  fontWeight: FontWeight.w500,
-                ),
+                color: selected ? AppTheme.bg : AppTheme.text,
+                weight: FontWeight.w500,
               ),
               if (tag.posterCount > 0 && !selected) ...[
                 const SizedBox(width: 5),
-                Text(
+                AppText.small(
                   '${tag.posterCount}',
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: AppTheme.textFaint,
-                  ),
+                  tone: AppTextTone.faint,
                 ),
               ],
             ],
@@ -330,12 +313,9 @@ class _SuggestLink extends ConsumerWidget {
         children: [
           Icon(LucideIcons.plus, size: 12, color: AppTheme.textMute),
           const SizedBox(width: 4),
-          Text(
+          AppText.small(
             '找不到適合的？建議新增「${category.titleZh}」分類',
-            style: Theme.of(context)
-                .textTheme
-                .labelSmall
-                ?.copyWith(color: AppTheme.textMute),
+            tone: AppTextTone.muted,
           ),
         ],
       ),
@@ -392,7 +372,6 @@ class _SuggestDialogState extends ConsumerState<_SuggestDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final similarAsync = _currentQuery.isEmpty
         ? null
         : ref.watch(similarTagsProvider(
@@ -436,12 +415,10 @@ class _SuggestDialogState extends ConsumerState<_SuggestDialog> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
+                    AppText.small(
                       '你是不是想用這個？',
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: Colors.amber,
-                        fontWeight: FontWeight.w600,
-                      ),
+                      color: Colors.amber,
+                      weight: FontWeight.w600,
                     ),
                     const SizedBox(height: 6),
                     Wrap(
@@ -565,11 +542,9 @@ class _UseExistingChip extends StatelessWidget {
               Icon(LucideIcons.check,
                   size: 12, color: Colors.amber),
               const SizedBox(width: 5),
-              Text(
+              AppText.body(
                 match.labelZh,
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      fontWeight: FontWeight.w500,
-                    ),
+                weight: FontWeight.w500,
               ),
             ],
           ),

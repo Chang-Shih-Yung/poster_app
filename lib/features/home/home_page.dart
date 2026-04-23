@@ -385,7 +385,6 @@ class _HeroCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 6, 16, 4),
       child: GestureDetector(
@@ -453,41 +452,27 @@ class _HeroCard extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       if (poster.tags.isNotEmpty)
-                        Text(
+                        AppText.label(
                           poster.tags.first.toUpperCase(),
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            color: Colors.white.withValues(alpha: 0.7),
-                            letterSpacing: 2,
-                            fontWeight: FontWeight.w500,
-                          ),
+                          color: Colors.white.withValues(alpha: 0.7),
+                          weight: FontWeight.w500,
                         ),
                       const SizedBox(height: 4),
-                      Text(
+                      AppText.headline(
                         poster.title,
+                        color: Colors.white,
+                        weight: FontWeight.w700,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.headlineSmall?.copyWith(
-                          // Kit `.display` spec (ui_kits/poster): 32 / w700
-                          // / ls -0.8 — was 26/ls -0.6 which read softer
-                          // than the prototype. Bumped to match. maxLines
-                          // was 1 which clipped long CJK titles.
-                          color: Colors.white,
-                          fontSize: 32,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: -0.8,
-                          height: 1.02,
-                        ),
                       ),
                       if (poster.year != null || poster.director != null) ...[
                         const SizedBox(height: 4),
-                        Text(
+                        AppText.caption(
                           [
                             if (poster.year != null) '${poster.year}',
                             if (poster.director != null) poster.director!,
                           ].join(' · '),
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: Colors.white.withValues(alpha: 0.7),
-                          ),
+                          color: Colors.white.withValues(alpha: 0.7),
                         ),
                       ],
                     ],
@@ -564,16 +549,9 @@ class _SectionSkeleton extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Container(
-              width: 80,
-              height: 16,
-              decoration: BoxDecoration(
-                color: AppTheme.surfaceRaised,
-                borderRadius: BorderRadius.circular(4),
-              ),
-            ),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 20),
+            child: AppSkeleton(width: 80, height: 16, radius: 4),
           ),
           const SizedBox(height: 12),
           SizedBox(
@@ -583,13 +561,7 @@ class _SectionSkeleton extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 20),
               itemCount: 4,
               separatorBuilder: (_, _) => const SizedBox(width: 12),
-              itemBuilder: (_, _) => Container(
-                width: 140,
-                decoration: BoxDecoration(
-                  color: AppTheme.surfaceRaised,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
+              itemBuilder: (_, _) => const AppSkeleton(width: 140),
             ),
           ),
         ],
@@ -609,8 +581,6 @@ class _FeedCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return GestureDetector(
       onTap: () => context.push('/poster/${poster.id}'),
       child: SizedBox(
@@ -660,24 +630,18 @@ class _FeedCard extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
+                        AppText.bodyBold(
                           poster.title,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.labelMedium?.copyWith(
-                            fontWeight: FontWeight.w600,
-                            color: AppTheme.text,
-                          ),
                         ),
                         if (poster.director != null) ...[
                           const SizedBox(height: 1),
-                          Text(
+                          AppText.small(
                             poster.director!,
+                            tone: AppTextTone.faint,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.labelSmall?.copyWith(
-                              color: AppTheme.textFaint,
-                            ),
                           ),
                         ],
                       ],
@@ -741,9 +705,12 @@ class _Avatar extends StatelessWidget {
       alignment: Alignment.center,
       child: Text(
         letter,
-        style: Theme.of(context).textTheme.labelLarge?.copyWith(
-              fontWeight: FontWeight.w600,
-            ),
+        style: const TextStyle(
+          fontFamily: 'InterDisplay',
+          fontFamilyFallback: ['NotoSansTC'],
+          fontSize: 14,
+          fontWeight: FontWeight.w600,
+        ),
       ),
     );
   }
@@ -806,10 +773,12 @@ class _UploaderBadge extends StatelessWidget {
       alignment: Alignment.center,
       child: Text(
         letter,
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              fontWeight: FontWeight.w600,
-              fontSize: 10,
-            ),
+        style: const TextStyle(
+          fontFamily: 'InterDisplay',
+          fontFamilyFallback: ['NotoSansTC'],
+          fontSize: 10,
+          fontWeight: FontWeight.w600,
+        ),
       ),
     );
   }
@@ -873,7 +842,6 @@ class _RankedCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final p = item.poster;
     return GestureDetector(
       onTap: () => context.push('/poster/${p.id}'),
@@ -921,36 +889,24 @@ class _RankedCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(
+                  AppText.bodyBold(
                     p.title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: -0.2,
-                    ),
                   ),
                   const SizedBox(height: 2),
-                  Text(
+                  AppText.small(
                     [
                       if (p.year != null) '${p.year}',
                       if (p.director != null) p.director!,
                     ].join(' · '),
+                    tone: AppTextTone.muted,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: AppTheme.textMute,
-                      letterSpacing: 0,
-                    ),
                   ),
                   const SizedBox(height: 6),
-                  Text(
-                    '♥ ${item.recentFavCount}',
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: AppTheme.textFaint,
-                      letterSpacing: 0,
-                    ),
-                  ),
+                  AppText.small('♥ ${item.recentFavCount}',
+                      tone: AppTextTone.faint),
                 ],
               ),
             ),
@@ -1010,7 +966,6 @@ class _CollectorCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final name = collector.displayName.isEmpty ? '無名使用者' : collector.displayName;
     final letter = name.characters.first.toUpperCase();
     return GestureDetector(
@@ -1059,15 +1014,11 @@ class _CollectorCard extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 8),
-            Text(
+            AppText.small(
               name,
+              weight: FontWeight.w600,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.labelMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-                fontSize: 11,
-                letterSpacing: 0,
-              ),
             ),
             const SizedBox(height: 6),
             // v18: activity count replaced by a direct follow toggle.
@@ -1084,11 +1035,7 @@ class _CollectorCard extends StatelessWidget {
     return Container(
       color: AppTheme.chipBgStrong,
       alignment: Alignment.center,
-      child: Text(letter,
-          style: Theme.of(context)
-              .textTheme
-              .titleSmall
-              ?.copyWith(fontWeight: FontWeight.w600)),
+      child: AppText.bodyBold(letter),
     );
   }
 }

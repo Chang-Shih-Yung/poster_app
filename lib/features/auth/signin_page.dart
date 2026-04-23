@@ -49,7 +49,6 @@ class _SigninPageState extends ConsumerState<SigninPage> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final bottomInset = MediaQuery.paddingOf(context).bottom;
 
     return Scaffold(
@@ -103,22 +102,18 @@ class _SigninPageState extends ConsumerState<SigninPage> {
                 // Brand — wide letter-spacing per v13 spec.
                 Text(
                   'POSTER.',
-                  style: theme.textTheme.titleLarge?.copyWith(
+                  style: TextStyle(
+                    fontFamily: 'InterDisplay',
+                    fontFamilyFallback: const ['NotoSansTC'],
                     fontSize: 26,
                     fontWeight: FontWeight.w700,
                     letterSpacing: 6,
-                    // Day mode inverts the scaffold to white — the brand
-                    // must flip to near-black to stay readable.
                     color: AppTheme.text,
                   ),
                 ),
                 const SizedBox(height: 14),
-                Text(
-                  '探索電影海報的世界',
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: AppTheme.textMute,
-                  ),
-                ),
+                const AppText.body('探索電影海報的世界',
+                    tone: AppTextTone.muted),
                 const Spacer(flex: 4),
                 // v19: AppButton.primary replaces the inlined _WhitePill.
                 // Manual taps always show Google's picker — users land
@@ -135,14 +130,7 @@ class _SigninPageState extends ConsumerState<SigninPage> {
                       .signInWithGoogle(forceAccountPicker: true),
                 ),
                 const SizedBox(height: 12),
-                Text(
-                  '繼續即同意條款',
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: AppTheme.textFaint,
-                    letterSpacing: 0.5,
-                    fontSize: 11,
-                  ),
-                ),
+                const AppText.small('繼續即同意條款', tone: AppTextTone.faint),
               ],
             ),
           ),

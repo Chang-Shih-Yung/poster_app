@@ -174,7 +174,6 @@ class _IdentityCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final displayName = profile?.displayName.trim() ?? '';
     final name = displayName.isNotEmpty ? displayName : email.split('@').first;
     final avatar = profile?.avatarUrl;
@@ -212,13 +211,9 @@ class _IdentityCard extends StatelessWidget {
                 Row(
                   children: [
                     Flexible(
-                      child: Text(
+                      child: AppText.bodyBold(
                         name,
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontSize: 17,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: -0.2,
-                        ),
+                        size: 17,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -230,12 +225,9 @@ class _IdentityCard extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 4),
-                Text(
+                AppText.caption(
                   bio?.isNotEmpty == true ? bio! : email,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: AppTheme.textMute,
-                    height: 1.4,
-                  ),
+                  tone: AppTextTone.muted,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -259,12 +251,7 @@ class _AvatarFallback extends StatelessWidget {
     return Container(
       color: AppTheme.chipBgStrong,
       alignment: Alignment.center,
-      child: Text(
-        letter,
-        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.w600,
-            ),
-      ),
+      child: AppText.title(letter),
     );
   }
 }
@@ -306,7 +293,6 @@ class _PrivacyToggleState extends ConsumerState<_PrivacyToggle> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final isPublic = _optimistic ?? widget.profile?.isPublic ?? true;
 
     return Container(
@@ -328,17 +314,11 @@ class _PrivacyToggleState extends ConsumerState<_PrivacyToggle> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  '公開個人檔案',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
+                const AppText.body('公開個人檔案', weight: FontWeight.w500),
                 const SizedBox(height: 2),
-                Text(
+                AppText.caption(
                   isPublic ? '其他使用者可以看到你的收藏與投稿' : '只有你自己看得到',
-                  style: theme.textTheme.bodySmall
-                      ?.copyWith(color: AppTheme.textMute),
+                  tone: AppTextTone.muted,
                 ),
               ],
             ),

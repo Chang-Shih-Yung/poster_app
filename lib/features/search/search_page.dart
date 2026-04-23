@@ -73,7 +73,6 @@ class _SearchPageState extends ConsumerState<SearchPage> {
   Widget build(BuildContext context) {
     final topInset = MediaQuery.paddingOf(context).top;
     final bottomInset = MediaQuery.paddingOf(context).bottom;
-    final theme = Theme.of(context);
 
     return Scaffold(
       
@@ -103,12 +102,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                   ),
                 ),
                 const SizedBox(width: 4),
-                Text(
-                  '搜尋',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                ),
+                const AppText.title('搜尋'),
               ],
             ),
           ),
@@ -602,21 +596,13 @@ class _SectionHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.only(left: 4, top: 8, bottom: 8),
       child: Row(
         children: [
           Icon(icon, size: 14, color: AppTheme.textFaint),
           const SizedBox(width: 6),
-          Text(
-            '$label · $count',
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: AppTheme.textFaint,
-              letterSpacing: 1.6,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
+          AppText.label('$label · $count', tone: AppTextTone.faint),
         ],
       ),
     );
@@ -629,7 +615,6 @@ class _WorkTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -654,18 +639,15 @@ class _WorkTile extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(work.displayTitle,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.titleSmall),
-                    Text(
+                    AppText.bodyBold(work.displayTitle,
+                        maxLines: 1, overflow: TextOverflow.ellipsis),
+                    AppText.caption(
                       [
                         if (work.movieReleaseYear != null)
                           '${work.movieReleaseYear}',
                         '${work.posterCount} 張海報',
                       ].join(' · '),
-                      style: theme.textTheme.bodySmall
-                          ?.copyWith(color: AppTheme.textMute),
+                      tone: AppTextTone.muted,
                     ),
                   ],
                 ),
@@ -686,7 +668,6 @@ class _PosterTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -719,17 +700,14 @@ class _PosterTile extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(poster.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.titleSmall),
-                    Text(
+                    AppText.bodyBold(poster.title,
+                        maxLines: 1, overflow: TextOverflow.ellipsis),
+                    AppText.caption(
                       [
                         if (poster.posterName != null) poster.posterName!,
                         if (poster.year != null) '${poster.year}',
                       ].join(' · '),
-                      style: theme.textTheme.bodySmall
-                          ?.copyWith(color: AppTheme.textMute),
+                      tone: AppTextTone.muted,
                     ),
                   ],
                 ),
@@ -750,7 +728,6 @@ class _UserTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -779,19 +756,17 @@ class _UserTile extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
+                    AppText.bodyBold(
                         user.displayName.isEmpty
                             ? '無名使用者'
                             : user.displayName,
                         maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.titleSmall),
+                        overflow: TextOverflow.ellipsis),
                     if (user.bio != null && user.bio!.isNotEmpty)
-                      Text(user.bio!,
+                      AppText.caption(user.bio!,
+                          tone: AppTextTone.muted,
                           maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.bodySmall
-                              ?.copyWith(color: AppTheme.textMute)),
+                          overflow: TextOverflow.ellipsis),
                   ],
                 ),
               ),
@@ -818,10 +793,11 @@ class _UserAvatarFallback extends StatelessWidget {
       color: AppTheme.chipBgStrong,
       alignment: Alignment.center,
       child: Text(letter,
-          style: Theme.of(context)
-              .textTheme
-              .labelLarge
-              ?.copyWith(fontWeight: FontWeight.w600)),
+          style: const TextStyle(
+            fontFamily: 'InterDisplay',
+            fontFamilyFallback: ['NotoSansTC'],
+            fontWeight: FontWeight.w600,
+          )),
     );
   }
 }

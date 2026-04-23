@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/ds/ds.dart';
 import '../shell/app_shell.dart';
 
 /// IG-style side drawer for the home (探索) tab.
@@ -44,13 +45,8 @@ class HomeDrawer extends ConsumerWidget {
               // drawers dismiss by swipe-back or tapping the barrier).
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
-                child: Text(
-                  '動態消息',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: -0.4,
-                      ),
-                ),
+                child: const AppText.title('動態消息',
+                    weight: FontWeight.w700),
               ),
 
               const SizedBox(height: 4),
@@ -137,12 +133,9 @@ class _DrawerRow extends StatelessWidget {
             Icon(icon, size: 20, color: AppTheme.text),
             const SizedBox(width: 14),
             Expanded(
-              child: Text(
+              child: AppText.body(
                 label,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w500,
-                      fontSize: 15,
-                    ),
+                weight: FontWeight.w500,
               ),
             ),
             Icon(LucideIcons.chevronRight, size: 16, color: AppTheme.textFaint),

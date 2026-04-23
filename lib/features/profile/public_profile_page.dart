@@ -34,9 +34,9 @@ class PublicProfilePage extends ConsumerWidget {
       
       body: profileAsync.when(
         loading: () => const AppLoader.centered(),
-        error: (e, _) => _Err(message: '載入失敗：$e'),
+        error: (e, _) => AppEmptyState(title: '載入失敗：$e'),
         data: (p) => p == null
-            ? const _Err(message: '這位使用者的個人檔案為私密或不存在')
+            ? const AppEmptyState(title: '這位使用者的個人檔案為私密或不存在')
             : _ProfileBody(profile: p, postersAsync: postersAsync),
       ),
     );
@@ -52,7 +52,6 @@ class _ProfileBody extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final topInset = MediaQuery.paddingOf(context).top;
     final bottomInset = MediaQuery.paddingOf(context).bottom;
-    final theme = Theme.of(context);
     final statsAsync = ref.watch(userRelationshipStatsProvider(profile.id));
     final stats = statsAsync.asData?.value;
 
@@ -85,13 +84,10 @@ class _ProfileBody extends ConsumerWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
+                          AppText.title(
                             profile.displayName.isEmpty
                                 ? '無名使用者'
                                 : profile.displayName,
-                            style: theme.textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.w600,
-                            ),
                           ),
                           if (stats?.isFollowingMe == true) ...[
                             const SizedBox(height: 4),
@@ -121,21 +117,11 @@ class _ProfileBody extends ConsumerWidget {
                 _StatsRow(profile: profile, stats: stats),
                 if (profile.bio != null && profile.bio!.isNotEmpty) ...[
                   const SizedBox(height: 16),
-                  Text(
-                    profile.bio!,
-                    style: theme.textTheme.bodyMedium
-                        ?.copyWith(color: AppTheme.textMute),
-                  ),
+                  AppText.body(profile.bio!, tone: AppTextTone.muted),
                 ],
                 const SizedBox(height: 24),
-                Text(
-                  '這位使用者上傳的海報',
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: AppTheme.textFaint,
-                    letterSpacing: 2.4,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
+                const AppText.label('這位使用者上傳的海報',
+                    tone: AppTextTone.faint),
               ],
             ),
           ),
@@ -149,7 +135,7 @@ class _ProfileBody extends ConsumerWidget {
             ),
           ),
           error: (e, _) =>
-              SliverToBoxAdapter(child: _Err(message: '海報載入失敗：$e')),
+              SliverToBoxAdapter(child: AppEmptyState(title: '海報載入失敗：$e')),
           data: (posters) {
             if (posters.isEmpty) {
               return SliverToBoxAdapter(
@@ -237,25 +223,6 @@ class _PosterCell extends StatelessWidget {
   }
 }
 
-class _Err extends StatelessWidget {
-  const _Err({required this.message});
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Text(
-          message,
-          style: TextStyle(color: AppTheme.textMute),
-          textAlign: TextAlign.center,
-        ),
-      ),
-    );
-  }
-}
-
 /// Stats row: follower · following · approved · submissions.
 /// Renders even before stats load — shows approved/submissions from profile.
 class _StatsRow extends StatelessWidget {
@@ -265,16 +232,11 @@ class _StatsRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     Widget stat(String n, String label) => Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(n,
-                style: theme.textTheme.titleMedium
-                    ?.copyWith(fontWeight: FontWeight.w600)),
-            Text(label,
-                style: theme.textTheme.labelSmall
-                    ?.copyWith(color: AppTheme.textFaint)),
+            AppText.title(n),
+            AppText.small(label, tone: AppTextTone.faint),
           ],
         );
 

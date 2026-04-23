@@ -244,7 +244,8 @@ class _SubmissionPageState extends ConsumerState<SubmissionPage> {
         duplicates: duplicates,
       );
     } else if (added.isNotEmpty) {
-      _toast(added.length == 1 ? '已加入 1 張' : '已加入 ${added.length} 張');
+      AppToast.show(context,
+          added.length == 1 ? '已加入 1 張' : '已加入 ${added.length} 張');
     }
   }
 
@@ -284,25 +285,16 @@ class _SubmissionPageState extends ConsumerState<SubmissionPage> {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('$label（${names.length} 張）',
-              style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    color: AppTheme.textMute,
-                    fontWeight: FontWeight.w600,
-                  )),
+          AppText.bodyBold('$label（${names.length} 張）',
+              tone: AppTextTone.muted),
           const SizedBox(height: 4),
           ...names.map((n) => Padding(
                 padding: const EdgeInsets.only(left: 4, top: 2),
-                child: Text('· $n',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: AppTheme.text,
-                        )),
+                child: AppText.caption('· $n', tone: AppTextTone.primary),
               )),
           if (hint != null) ...[
             const SizedBox(height: 6),
-            Text(hint,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: AppTheme.textFaint,
-                    )),
+            AppText.caption(hint, tone: AppTextTone.faint),
           ],
         ],
       );
@@ -313,11 +305,8 @@ class _SubmissionPageState extends ConsumerState<SubmissionPage> {
       barrierColor: Colors.black.withValues(alpha: 0.6),
       builder: (ctx) => AlertDialog(
         backgroundColor: AppTheme.surfaceRaised,
-        title: Text(
+        title: AppText.title(
           added > 0 ? '已加入 $added 張，部分跳過' : '全部跳過',
-          style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
         ),
         content: SingleChildScrollView(
           child: Column(
@@ -430,15 +419,16 @@ class _SubmissionPageState extends ConsumerState<SubmissionPage> {
   Future<void> _showPreview() async {
     final user = ref.read(currentUserProvider);
     if (user == null) {
-      _toast('請先登入');
+      AppToast.show(context, '請先登入');
       return;
     }
     if (_images.isEmpty) {
-      _toast(_compressing ? '圖片壓縮中，請稍候' : '請先選一張海報圖片');
+      AppToast.show(context,
+          _compressing ? '圖片壓縮中，請稍候' : '請先選一張海報圖片');
       return;
     }
     if (!_aiDeclaration) {
-      _toast('請先勾選「此海報非 AI 生成」的聲明');
+      AppToast.show(context, '請先勾選「此海報非 AI 生成」的聲明');
       return;
     }
     if (!_formKey.currentState!.validate()) return;
@@ -492,13 +482,16 @@ class _SubmissionPageState extends ConsumerState<SubmissionPage> {
     if (!mounted) return;
     setState(() => _submitting = false);
     if (ok > 0 && errors.isEmpty) {
-      _toast('已送出 $ok 張審核，感謝投稿！');
+      AppToast.show(context, '已送出 $ok 張審核，感謝投稿！',
+          kind: AppToastKind.success);
       _resetForm();
     } else if (ok > 0) {
-      _toast('送出 $ok 張成功 / ${errors.length} 張失敗');
+      AppToast.show(context, '送出 $ok 張成功 / ${errors.length} 張失敗',
+          kind: AppToastKind.destructive);
       setState(() => _images.removeRange(0, ok));
     } else {
-      _toast('全部失敗：${errors.first}');
+      AppToast.show(context, '全部失敗：${errors.first}',
+          kind: AppToastKind.destructive);
     }
   }
 
@@ -529,17 +522,6 @@ class _SubmissionPageState extends ConsumerState<SubmissionPage> {
     ]) {
       c.clear();
     }
-  }
-
-  void _toast(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(msg),
-        backgroundColor: AppTheme.surfaceRaised,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-    );
   }
 
   // ── Build ──────────────────────────────────────────────────────────────────
@@ -639,12 +621,9 @@ class _SubmissionPageState extends ConsumerState<SubmissionPage> {
             // affordance is unmissable.
             if (_images.isNotEmpty) ...[
               const SizedBox(height: 6),
-              Text(
+              AppText.small(
                 '點縮圖切換預覽，按 ＋ 加更多張（共用同一筆作品資料）',
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: AppTheme.textFaint,
-                      fontSize: 11,
-                    ),
+                tone: AppTextTone.faint,
               ),
             ],
 
@@ -727,12 +706,7 @@ class _SubmissionPageState extends ConsumerState<SubmissionPage> {
                     color: AppTheme.textMute,
                   ),
                   const SizedBox(width: 6),
-                  Text(
-                    '進階資訊',
-                    style: theme.textTheme.labelMedium?.copyWith(
-                      color: AppTheme.textMute,
-                    ),
-                  ),
+                  AppText.bodyBold('進階資訊', tone: AppTextTone.muted),
                 ],
               ),
             ),
@@ -860,13 +834,7 @@ class _SectionLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Text(
-      label,
-      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-            color: AppTheme.textFaint,
-            letterSpacing: 0.5,
-          ),
-    );
+    return AppText.label(label, tone: AppTextTone.faint);
   }
 }
 
@@ -901,12 +869,9 @@ class _EmptyPicker extends StatelessWidget {
                         Icon(LucideIcons.camera,
                             size: 32, color: AppTheme.textMute),
                         const SizedBox(height: 10),
-                        Text(
+                        AppText.caption(
                           '點擊選擇圖片 · 支援多張',
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                color: AppTheme.textMute,
-                                fontSize: 13,
-                              ),
+                          tone: AppTextTone.muted,
                         ),
                       ],
                     ),
@@ -989,29 +954,34 @@ class _DarkField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 10, 14, 4),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
+          // Kept as a tight 12/600 label (not AppText.label which is
+          // 11/600 letter-spaced) — this row-style inside _FormGroup
+          // is a distinct primitive from standalone AppField.
           Text(
             label,
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: AppTheme.textMute,
+            style: const TextStyle(
+              fontFamily: 'InterDisplay',
+              fontFamilyFallback: ['NotoSansTC'],
               fontSize: 12,
-              letterSpacing: 0,
               fontWeight: FontWeight.w600,
-            ),
+              letterSpacing: 0,
+            ).copyWith(color: AppTheme.textMute),
           ),
           TextFormField(
             controller: controller,
             keyboardType: keyboardType,
             validator: validator,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: AppTheme.text,
+            style: TextStyle(
+              fontFamily: 'InterDisplay',
+              fontFamilyFallback: const ['NotoSansTC'],
               fontSize: 15,
+              color: AppTheme.text,
             ),
             decoration: InputDecoration(
               hintText: hint,
@@ -1050,15 +1020,7 @@ class _SwitchRow extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(14, 8, 6, 8),
       child: Row(
         children: [
-          Expanded(
-            child: Text(
-              label,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: AppTheme.text,
-                    fontSize: 15,
-                  ),
-            ),
-          ),
+          Expanded(child: AppText.body(label)),
           CupertinoSwitch(
             value: value,
             activeTrackColor: AppTheme.accent2,
@@ -1126,7 +1088,6 @@ class _DarkDropdown<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final displayText = value == null ? '未指定' : labelOf(value as T);
     return Material(
       color: AppTheme.surfaceRaised,
@@ -1143,24 +1104,23 @@ class _DarkDropdown<T> extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    // Match _DarkField's in-group label weight/size (12/600).
                     Text(
                       label,
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: AppTheme.textMute,
+                      style: TextStyle(
+                        fontFamily: 'InterDisplay',
+                        fontFamilyFallback: const ['NotoSansTC'],
                         fontSize: 12,
-                        letterSpacing: 0,
                         fontWeight: FontWeight.w600,
+                        color: AppTheme.textMute,
                       ),
                     ),
                     const SizedBox(height: 4),
-                    Text(
+                    AppText.body(
                       displayText,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: value == null
-                            ? AppTheme.textFaint
-                            : AppTheme.text,
-                        fontSize: 15,
-                      ),
+                      tone: value == null
+                          ? AppTextTone.faint
+                          : AppTextTone.primary,
                     ),
                   ],
                 ),
@@ -1295,22 +1255,25 @@ class _WorkTitleAutocompleteState extends State<_WorkTitleAutocomplete> {
             children: [
               Text(
                 '作品中文名 *',
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: AppTheme.textMute,
-                      fontSize: 12,
-                      letterSpacing: 0,
-                      fontWeight: FontWeight.w600,
-                    ),
+                style: TextStyle(
+                  fontFamily: 'InterDisplay',
+                  fontFamilyFallback: const ['NotoSansTC'],
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: AppTheme.textMute,
+                ),
               ),
               TextFormField(
                 controller: widget.controller,
                 validator: (v) =>
                     (v == null || v.trim().isEmpty) ? '必填' : null,
                 onChanged: _onChanged,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: AppTheme.text,
-                      fontSize: 15,
-                    ),
+                style: TextStyle(
+                  fontFamily: 'InterDisplay',
+                  fontFamilyFallback: const ['NotoSansTC'],
+                  fontSize: 15,
+                  color: AppTheme.text,
+                ),
                 decoration: InputDecoration(
                   hintText: '輸入 2 字以上自動建議',
                   hintStyle:
@@ -1350,18 +1313,12 @@ class _WorkTitleAutocompleteState extends State<_WorkTitleAutocomplete> {
                     child: Row(
                       children: [
                         Expanded(
-                          child: Text(
+                          child: AppText.body(
                             '${w.displayTitle}${w.movieReleaseYear != null ? " (${w.movieReleaseYear})" : ""}',
-                            style: Theme.of(context).textTheme.bodyMedium,
                           ),
                         ),
-                        Text(
-                          '${w.posterCount} 張',
-                          style: Theme.of(context)
-                              .textTheme
-                              .labelSmall
-                              ?.copyWith(color: AppTheme.textFaint),
-                        ),
+                        AppText.small('${w.posterCount} 張',
+                            tone: AppTextTone.faint),
                       ],
                     ),
                   ),
@@ -1394,7 +1351,6 @@ class _ConfirmSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final bottomInset = MediaQuery.paddingOf(context).bottom;
 
     return Container(
@@ -1422,19 +1378,13 @@ class _ConfirmSheet extends StatelessWidget {
             ),
             const SizedBox(height: 16),
 
-            Text(
+            AppText.title(
               extraCount > 0 ? '確認投稿 ${extraCount + 1} 張' : '確認投稿',
-              style: theme.textTheme.titleMedium
-                  ?.copyWith(fontWeight: FontWeight.w600),
             ),
             if (extraCount > 0) ...[
               const SizedBox(height: 4),
-              Text(
-                '將為每張海報建立一筆投稿，共用下方的作品資料',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: AppTheme.textMute,
-                ),
-              ),
+              AppText.caption('將為每張海報建立一筆投稿，共用下方的作品資料',
+                  tone: AppTextTone.muted),
             ],
             const SizedBox(height: 16),
 
@@ -1535,17 +1485,9 @@ class _SummaryRow extends StatelessWidget {
         children: [
           SizedBox(
             width: 80,
-            child: Text(
-              label,
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(color: AppTheme.textMute),
-            ),
+            child: AppText.caption(label, tone: AppTextTone.muted),
           ),
-          Expanded(
-            child: Text(value, style: Theme.of(context).textTheme.bodyMedium),
-          ),
+          Expanded(child: AppText.body(value)),
         ],
       ),
     );
@@ -1574,18 +1516,10 @@ class _WorkKindSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          '這張海報是關於什麼？*',
-          style: theme.textTheme.labelMedium?.copyWith(
-            color: AppTheme.textMute,
-            letterSpacing: 1.6,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
+        AppText.label('這張海報是關於什麼？*', tone: AppTextTone.muted),
         const SizedBox(height: 8),
         Wrap(
           spacing: 6,
@@ -1651,12 +1585,10 @@ class _KindChip extends StatelessWidget {
                 color: selected ? AppTheme.bg : AppTheme.text,
               ),
               const SizedBox(width: 6),
-              Text(
+              AppText.body(
                 option.label,
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      color: selected ? AppTheme.bg : AppTheme.text,
-                      fontWeight: FontWeight.w500,
-                    ),
+                color: selected ? AppTheme.bg : AppTheme.text,
+                weight: FontWeight.w500,
               ),
             ],
           ),
@@ -1677,7 +1609,6 @@ class _AiDeclarationRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return InkWell(
       onTap: () => onChanged(!checked),
       borderRadius: BorderRadius.circular(12),
@@ -1711,22 +1642,16 @@ class _AiDeclarationRow extends StatelessWidget {
                   : null,
             ),
             const SizedBox(width: 12),
-            Expanded(
+            const Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    '我確認此海報「非 AI 生成」*',
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
+                  AppText.bodyBold('我確認此海報「非 AI 生成」*'),
+                  SizedBox(height: 4),
+                  AppText.caption(
                     'POSTER. 禁止收錄 AI 生成海報。違者將永久停權。'
                     '送出即代表你同意此條款。',
-                    style: theme.textTheme.bodySmall
-                        ?.copyWith(color: AppTheme.textMute),
+                    tone: AppTextTone.muted,
                   ),
                 ],
               ),
@@ -1894,20 +1819,14 @@ class _CompressOverlay extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 14),
-            Text(
+            AppText.bodyBold(
               total > 0 ? '壓縮中… $done / $total' : '壓縮中…',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w600,
-                  ),
+              color: Colors.white,
             ),
             const SizedBox(height: 4),
-            Text(
+            AppText.small(
               '請稍候，超過 5MB 的會自動跳過',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Colors.white.withValues(alpha: 0.7),
-                    fontSize: 11,
-                  ),
+              color: Colors.white.withValues(alpha: 0.7),
             ),
           ],
         ),

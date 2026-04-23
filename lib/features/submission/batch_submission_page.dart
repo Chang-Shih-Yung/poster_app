@@ -81,20 +81,20 @@ class _BatchSubmissionPageState extends ConsumerState<BatchSubmissionPage> {
   Future<void> _submit() async {
     final user = ref.read(currentUserProvider);
     if (user == null) {
-      _toast('請先登入');
+      AppToast.show(context, '請先登入');
       return;
     }
     if (!_formKey.currentState!.validate()) return;
     if (_cards.isEmpty) {
-      _toast('請至少新增一張海報');
+      AppToast.show(context, '請至少新增一張海報');
       return;
     }
     if (!_allCardsReady) {
-      _toast('有圖片還在壓縮，請稍候');
+      AppToast.show(context, '有圖片還在壓縮，請稍候');
       return;
     }
     if (!_aiDeclaration) {
-      _toast('請先勾選「此批海報皆非 AI 生成」的聲明');
+      AppToast.show(context, '請先勾選「此批海報皆非 AI 生成」的聲明');
       return;
     }
 
@@ -150,30 +150,20 @@ class _BatchSubmissionPageState extends ConsumerState<BatchSubmissionPage> {
       await Future.wait(rows.map(repo.createSubmission));
 
       if (!mounted) return;
-      _toast('已送出 ${_cards.length} 張海報，感謝投稿！');
+      AppToast.show(context, '已送出 ${_cards.length} 張海報，感謝投稿！',
+          kind: AppToastKind.success);
       Navigator.of(context).pop();
     } catch (e) {
-      _toast('上傳失敗：$e');
+      AppToast.show(context, '上傳失敗：$e',
+          kind: AppToastKind.destructive);
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
   }
 
-  void _toast(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(msg),
-        backgroundColor: AppTheme.surfaceRaised,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final topInset = MediaQuery.paddingOf(context).top;
-    final theme = Theme.of(context);
 
     final signedIn = ref.watch(currentUserProvider) != null;
     if (!signedIn) {
@@ -190,24 +180,14 @@ class _BatchSubmissionPageState extends ConsumerState<BatchSubmissionPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('批量投稿',
-                style: theme.textTheme.headlineSmall
-                    ?.copyWith(fontWeight: FontWeight.w600)),
+            const AppText.title('批量投稿'),
             const SizedBox(height: 4),
-            Text(
-              '同一部電影的多張海報，共用基本資料 → 一次送審',
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(color: AppTheme.textMute),
-            ),
+            const AppText.caption('同一部電影的多張海報，共用基本資料 → 一次送審',
+                tone: AppTextTone.muted),
             const SizedBox(height: 24),
 
             // ── Shared work info ─────────────────────────────────────────
-            Text('共用資料',
-                style: theme.textTheme.labelMedium?.copyWith(
-                  color: AppTheme.textMute,
-                  letterSpacing: 1.6,
-                  fontWeight: FontWeight.w600,
-                )),
+            const AppText.label('共用資料', tone: AppTextTone.muted),
             const SizedBox(height: 10),
             _DarkField(
               controller: _titleZhController,
@@ -251,12 +231,7 @@ class _BatchSubmissionPageState extends ConsumerState<BatchSubmissionPage> {
             const SizedBox(height: 28),
 
             // ── Cards ────────────────────────────────────────────────────
-            Text('海報（${_cards.length}）',
-                style: theme.textTheme.labelMedium?.copyWith(
-                  color: AppTheme.textMute,
-                  letterSpacing: 1.6,
-                  fontWeight: FontWeight.w600,
-                )),
+            AppText.label('海報（${_cards.length}）', tone: AppTextTone.muted),
             const SizedBox(height: 10),
 
             for (var i = 0; i < _cards.length; i++) ...[
@@ -279,12 +254,7 @@ class _BatchSubmissionPageState extends ConsumerState<BatchSubmissionPage> {
 
             const SizedBox(height: 28),
             // Shared tags across the whole batch.
-            Text('分類（整批共用）',
-                style: theme.textTheme.labelMedium?.copyWith(
-                  color: AppTheme.textMute,
-                  letterSpacing: 1.6,
-                  fontWeight: FontWeight.w600,
-                )),
+            const AppText.label('分類（整批共用）', tone: AppTextTone.muted),
             const SizedBox(height: 8),
             TagPicker(
               selected: _selectedTags,
@@ -329,11 +299,10 @@ class _BatchSubmissionPageState extends ConsumerState<BatchSubmissionPage> {
                           : null,
                     ),
                     const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
+                    const Expanded(
+                      child: AppText.caption(
                         '我確認此批海報皆非 AI 生成。POSTER. 禁止收錄 AI 海報，違者永久停權。',
-                        style: theme.textTheme.bodySmall
-                            ?.copyWith(color: AppTheme.textMute),
+                        tone: AppTextTone.muted,
                       ),
                     ),
                   ],
@@ -424,7 +393,6 @@ class _PosterCardEditor extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final hasImage = card.imageBytes != null;
 
     return Container(
@@ -439,9 +407,7 @@ class _PosterCardEditor extends StatelessWidget {
         children: [
           Row(
             children: [
-              Text('#${index + 1}',
-                  style: theme.textTheme.labelMedium
-                      ?.copyWith(color: AppTheme.textMute)),
+              AppText.label('#${index + 1}', tone: AppTextTone.muted),
               const Spacer(),
               if (canRemove)
                 IconButton(
@@ -487,9 +453,8 @@ class _PosterCardEditor extends StatelessWidget {
                           Icon(LucideIcons.imagePlus,
                               color: AppTheme.textFaint),
                           const SizedBox(height: 4),
-                          Text('點擊選圖',
-                              style: theme.textTheme.bodySmall
-                                  ?.copyWith(color: AppTheme.textFaint)),
+                          const AppText.caption('點擊選圖',
+                              tone: AppTextTone.faint),
                         ],
                       ),
                     ),
@@ -547,10 +512,12 @@ class _DarkField extends StatelessWidget {
       controller: controller,
       keyboardType: keyboardType,
       validator: validator,
-      style: Theme.of(context)
-          .textTheme
-          .bodyMedium
-          ?.copyWith(color: AppTheme.text),
+      style: TextStyle(
+        fontFamily: 'InterDisplay',
+        fontFamilyFallback: const ['NotoSansTC'],
+        fontSize: 15,
+        color: AppTheme.text,
+      ),
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,

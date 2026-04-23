@@ -30,75 +30,23 @@ class MySubmissionsPage extends ConsumerWidget {
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(72, 6, 20, 12),
-            child: Text(
-              '我的投稿',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-            ),
+            child: const AppText.title('我的投稿', weight: FontWeight.w700),
           ),
           Expanded(
             child: async.when(
               loading: () => const AppLoader.centered(),
-              error: (e, _) => Center(child: Text('載入失敗：$e')),
+              error: (e, _) => AppEmptyState(title: '載入失敗：$e'),
               data: (items) {
                 if (items.isEmpty) {
-                  return Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(32),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(LucideIcons.upload,
-                              size: 36, color: AppTheme.textFaint),
-                          const SizedBox(height: 12),
-                          Text(
-                            '還沒投稿過',
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleMedium
-                                ?.copyWith(fontWeight: FontWeight.w600),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            '把你收藏中最特別的那一張寄出，讓更多人看到。',
-                            textAlign: TextAlign.center,
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodySmall
-                                ?.copyWith(color: AppTheme.textMute),
-                          ),
-                          const SizedBox(height: 18),
-                          Material(
-                            color: AppTheme.text,
-                            borderRadius: BorderRadius.circular(999),
-                            child: InkWell(
-                              onTap: () {
-                                HapticFeedback.selectionClick();
-                                context.push('/upload');
-                              },
-                              borderRadius: BorderRadius.circular(999),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 22, vertical: 10),
-                                child: Text(
-                                  '寄出第一張',
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .labelLarge
-                                      ?.copyWith(
-                                        color: AppTheme.bg,
-                                        fontWeight: FontWeight.w600,
-                                        fontSize: 13,
-                                        letterSpacing: 0,
-                                      ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+                  return AppEmptyState(
+                    icon: LucideIcons.upload,
+                    title: '還沒投稿過',
+                    subtitle: '把你收藏中最特別的那一張寄出，讓更多人看到。',
+                    actionLabel: '寄出第一張',
+                    onAction: () {
+                      HapticFeedback.selectionClick();
+                      context.push('/upload');
+                    },
                   );
                 }
                 return RefreshIndicator(
@@ -150,19 +98,16 @@ class _SubmissionTile extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
+                  AppText.bodyBold(
                     submission.workTitleZh,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.titleMedium,
                   ),
                   if (submission.movieReleaseYear != null) ...[
                     const SizedBox(height: 2),
-                    Text(
+                    AppText.caption(
                       '${submission.movieReleaseYear}  ${regionLabels[submission.region] ?? ''}',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: AppTheme.textMute,
-                          ),
+                      tone: AppTextTone.muted,
                     ),
                   ],
                   const SizedBox(height: 6),
@@ -170,9 +115,8 @@ class _SubmissionTile extends StatelessWidget {
                   if (submission.isRejected &&
                       submission.reviewNote != null) ...[
                     const SizedBox(height: 6),
-                    Text(
+                    AppText.caption(
                       '備註：${submission.reviewNote}',
-                      style: Theme.of(context).textTheme.bodySmall,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),

@@ -100,7 +100,6 @@ class _BatchGroup extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Container(
       decoration: BoxDecoration(
         border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
@@ -121,10 +120,9 @@ class _BatchGroup extends StatelessWidget {
               children: [
                 Icon(LucideIcons.layers, size: 16, color: AppTheme.textMute),
                 const SizedBox(width: 6),
-                Text(
+                AppText.body(
                   '批次投稿（${group.items.length} 張）',
-                  style: theme.textTheme.labelMedium
-                      ?.copyWith(color: AppTheme.textMute),
+                  tone: AppTextTone.muted,
                 ),
               ],
             ),
@@ -258,7 +256,6 @@ class _PendingCardState extends ConsumerState<_PendingCard> {
   @override
   Widget build(BuildContext context) {
     final s = widget.submission;
-    final theme = Theme.of(context);
     final regionText = regionLabels[s.region] ?? s.region.value;
 
     // Duplicate detection.
@@ -283,10 +280,9 @@ class _PendingCardState extends ConsumerState<_PendingCard> {
                             Icon(LucideIcons.triangleAlert,
                                 size: 14, color: Colors.amber),
                             const SizedBox(width: 6),
-                            Text(
+                            AppText.small(
                               '疑似重複：已有 $count 張同名海報',
-                              style: theme.textTheme.labelSmall
-                                  ?.copyWith(color: Colors.amber),
+                              color: Colors.amber,
                             ),
                           ],
                         ),
@@ -322,24 +318,21 @@ class _PendingCardState extends ConsumerState<_PendingCard> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       // Title.
-                      Text(s.workTitleZh,
-                          style: theme.textTheme.titleMedium),
+                      AppText.title(s.workTitleZh),
                       if (s.workTitleEn != null)
-                        Text(s.workTitleEn!,
-                            style: theme.textTheme.bodySmall
-                                ?.copyWith(color: AppTheme.textMute)),
+                        AppText.caption(s.workTitleEn!,
+                            tone: AppTextTone.muted),
 
                       // Meta line: year + region.
                       Padding(
                         padding: const EdgeInsets.only(top: 4),
-                        child: Text(
+                        child: AppText.caption(
                           [
                             if (s.movieReleaseYear != null)
                               '${s.movieReleaseYear}',
                             regionText,
                             if (s.posterName != null) s.posterName!,
                           ].join(' · '),
-                          style: theme.textTheme.bodySmall,
                         ),
                       ),
 
@@ -420,11 +413,7 @@ class _MiniChip extends StatelessWidget {
         color: AppTheme.chipBg,
         borderRadius: BorderRadius.circular(999),
       ),
-      child: Text(label,
-          style: Theme.of(context)
-              .textTheme
-              .labelSmall
-              ?.copyWith(color: AppTheme.textMute)),
+      child: AppText.small(label, tone: AppTextTone.muted),
     );
   }
 }
@@ -479,7 +468,6 @@ class _WorkMatchDialogState extends ConsumerState<_WorkMatchDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
 
     return AlertDialog(
       title: const Text('配對作品'),
@@ -510,11 +498,10 @@ class _WorkMatchDialogState extends ConsumerState<_WorkMatchDialog> {
                 child: AppLoader(),
               )
             else if (_results != null && _results!.isEmpty)
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Text('找不到符合的作品',
-                    style: theme.textTheme.bodySmall
-                        ?.copyWith(color: AppTheme.textMute)),
+              const Padding(
+                padding: EdgeInsets.all(16),
+                child: AppText.caption('找不到符合的作品',
+                    tone: AppTextTone.muted),
               )
             else if (_results != null)
               Flexible(
@@ -526,13 +513,12 @@ class _WorkMatchDialogState extends ConsumerState<_WorkMatchDialog> {
                     return ListTile(
                       dense: true,
                       title: Text(w.displayTitle),
-                      subtitle: Text(
+                      subtitle: AppText.caption(
                         [
                           if (w.movieReleaseYear != null)
                             '${w.movieReleaseYear}',
                           '${w.posterCount} 張海報',
                         ].join(' · '),
-                        style: theme.textTheme.bodySmall,
                       ),
                       trailing:
                           const Icon(LucideIcons.chevronRight, size: 16),

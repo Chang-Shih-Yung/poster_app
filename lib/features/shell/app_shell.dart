@@ -328,11 +328,13 @@ class _AvatarFallback extends StatelessWidget {
       alignment: Alignment.center,
       child: Text(
         letter,
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              fontWeight: FontWeight.w600,
-              fontSize: 11,
-              color: Colors.white,
-            ),
+        style: const TextStyle(
+          fontFamily: 'InterDisplay',
+          fontFamilyFallback: ['NotoSansTC'],
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          color: Colors.white,
+        ),
       ),
     );
   }

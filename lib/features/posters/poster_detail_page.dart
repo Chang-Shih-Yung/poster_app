@@ -69,9 +69,9 @@ class PosterDetailPage extends ConsumerWidget {
       extendBodyBehindAppBar: true,
       body: async.when(
         loading: () => const _LoadingView(),
-        error: (e, _) => _ErrorView(message: '$e'),
+        error: (e, _) => AppEmptyState(title: '$e'),
         data: (p) => p == null
-            ? const _ErrorView(message: '找不到這張海報')
+            ? const AppEmptyState(title: '找不到這張海報')
             : _DetailBody(poster: p),
       ),
     );
@@ -84,25 +84,6 @@ class _LoadingView extends StatelessWidget {
   Widget build(BuildContext context) => const AppLoader.centered();
 }
 
-class _ErrorView extends StatelessWidget {
-  const _ErrorView({required this.message});
-  final String message;
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Text(
-          message,
-          textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: AppTheme.textMute,
-              ),
-        ),
-      ),
-    );
-  }
-}
 
 class _DetailBody extends ConsumerStatefulWidget {
   const _DetailBody({required this.poster});
@@ -349,7 +330,6 @@ class _FujiInline extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final p = poster;
-    final theme = Theme.of(context);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -368,30 +348,15 @@ class _FujiInline extends ConsumerWidget {
           onTap: p.workId == null
               ? null
               : () => context.push('/work/${p.workId}'),
-          child: Text(
+          child: AppText.headline(
             p.title,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.headlineLarge?.copyWith(
-              color: AppTheme.text,
-              fontSize: 32,
-              height: 1.05,
-              // 600 — Inter SemiBold renders cleanly for Latin and
-              // CJK glyphs (NotoSansTC fallback at w500 is closest
-              // visually); w700 was clumping CJK strokes together.
-              fontWeight: FontWeight.w600,
-              letterSpacing: -0.8,
-            ),
           ),
         ),
         if (p.director != null && p.director!.isNotEmpty) ...[
           const SizedBox(height: 4),
-          Text(
-            p.director!,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: AppTheme.textMute,
-            ),
-          ),
+          AppText.body(p.director!, tone: AppTextTone.muted),
         ],
         const SizedBox(height: 16),
         // Stats row + tags shown unconditionally — no more
@@ -454,14 +419,7 @@ class _Eyebrow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (parts.isEmpty) return const SizedBox.shrink();
-    return Text(
-      parts.join(' · '),
-      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-            color: AppTheme.textMute,
-            letterSpacing: 2,
-            fontWeight: FontWeight.w600,
-          ),
-    );
+    return AppText.label(parts.join(' · '), tone: AppTextTone.muted);
   }
 }
 
@@ -498,27 +456,13 @@ class _Stat extends StatelessWidget {
   final String value;
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(
-          label,
-          style: theme.textTheme.labelSmall?.copyWith(
-            color: AppTheme.textFaint,
-            letterSpacing: 1,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
+        AppText.label(label, tone: AppTextTone.faint),
         const SizedBox(height: 3),
-        Text(
-          value,
-          style: theme.textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.w600,
-            color: AppTheme.text,
-          ),
-        ),
+        AppText.title(value),
       ],
     );
   }
@@ -530,7 +474,6 @@ class _ExpandedInfo extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
     final tagsAsync = ref.watch(tagsForPosterProvider(poster.id));
     final canonical = tagsAsync.asData?.value ?? const [];
 
@@ -569,13 +512,8 @@ class _ExpandedInfo extends ConsumerWidget {
                   Icon(LucideIcons.layers,
                       size: 13, color: AppTheme.textMute),
                   const SizedBox(width: 6),
-                  Text(
-                    '看這部作品的所有海報',
-                    style: theme.textTheme.labelMedium?.copyWith(
-                      color: AppTheme.textMute,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
+                  const AppText.caption('看這部作品的所有海報',
+                      tone: AppTextTone.muted, weight: FontWeight.w500),
                   const SizedBox(width: 4),
                   Icon(LucideIcons.chevronRight,
                       size: 13, color: AppTheme.textMute),

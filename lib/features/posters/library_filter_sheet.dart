@@ -97,12 +97,7 @@ class _BlurredFilterSheetState extends ConsumerState<_BlurredFilterSheet> {
                       ),
                     ),
                     const SizedBox(width: 4),
-                    Text(
-                      '篩選',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w600,
-                          ),
-                    ),
+                    const AppText.title('篩選'),
                   ],
                 ),
               ),
@@ -161,22 +156,16 @@ class _BlurredFilterSheetState extends ConsumerState<_BlurredFilterSheet> {
                     children: [
                       Row(
                         children: [
-                          Text('最近搜尋',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .labelSmall
-                                  ?.copyWith(color: AppTheme.textFaint)),
+                          const AppText.small('最近搜尋',
+                              tone: AppTextTone.faint),
                           const Spacer(),
                           GestureDetector(
                             onTap: () {
                               widget.onClearHistory();
                               setState(() => _history = const []);
                             },
-                            child: Text('清除',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .labelSmall
-                                    ?.copyWith(color: AppTheme.textFaint)),
+                            child: const AppText.small('清除',
+                                tone: AppTextTone.faint),
                           ),
                         ],
                       ),
@@ -223,15 +212,10 @@ class _BlurredFilterSheetState extends ConsumerState<_BlurredFilterSheet> {
                       // Year range.
                       Row(
                         children: [
-                          Text('年份',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .labelMedium
-                                  ?.copyWith(color: AppTheme.textMute)),
+                          const AppText.label('年份', tone: AppTextTone.muted),
                           const SizedBox(width: 8),
-                          Text(
+                          AppText.label(
                             '${_yearRange.start.round()} – ${_yearRange.end.round()}',
-                            style: Theme.of(context).textTheme.labelMedium,
                           ),
                         ],
                       ),
@@ -257,11 +241,7 @@ class _BlurredFilterSheetState extends ConsumerState<_BlurredFilterSheet> {
                       const SizedBox(height: 8),
 
                       // Tags.
-                      Text('標籤',
-                          style: Theme.of(context)
-                              .textTheme
-                              .labelMedium
-                              ?.copyWith(color: AppTheme.textMute)),
+                      const AppText.label('標籤', tone: AppTextTone.muted),
                       const SizedBox(height: 10),
                       topTagsAsync.when(
                         loading: () => Padding(
@@ -296,17 +276,12 @@ class _BlurredFilterSheetState extends ConsumerState<_BlurredFilterSheet> {
                                       : AppTheme.chipBg,
                                   borderRadius: BorderRadius.circular(999),
                                 ),
-                                child: Text(
+                                child: AppText.body(
                                   t,
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .labelMedium
-                                      ?.copyWith(
-                                        color: selected
-                                            ? Colors.black
-                                            : AppTheme.text,
-                                        fontWeight: FontWeight.w500,
-                                      ),
+                                  color: selected
+                                      ? Colors.black
+                                      : AppTheme.text,
+                                  weight: FontWeight.w500,
                                 ),
                               ),
                             );

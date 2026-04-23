@@ -5,6 +5,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/theme_mode_notifier.dart';
 import '../../core/widgets/app_loader.dart';
+import '../../core/widgets/ds/ds.dart';
 import '../../data/repositories/notifications_repository.dart';
 
 /// v19 notifications centre — wired to the real backend.
@@ -36,29 +37,14 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
           padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
           child: Align(
             alignment: Alignment.centerLeft,
-            child: Text(
-              '通知',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: -0.3,
-                  ),
-            ),
+            child: const AppText.title('通知', weight: FontWeight.w700),
           ),
         ),
         _TabRow(tab: _tab, onChange: (t) => setState(() => _tab = t)),
         Expanded(
           child: async.when(
             loading: () => const AppLoader.centered(),
-            error: (e, _) => Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Text(
-                  '載入失敗：$e',
-                  style: TextStyle(color: AppTheme.textMute),
-                  textAlign: TextAlign.center,
-                ),
-              ),
-            ),
+            error: (e, _) => AppEmptyState(title: '載入失敗：$e'),
             data: (items) {
               final filtered =
                   items.where((e) => _matchesTab(e, _tab)).toList(growable: false);
@@ -164,12 +150,10 @@ class _TabRow extends StatelessWidget {
             color: active ? AppTheme.text : AppTheme.line2,
           ),
         ),
-        child: Text(
+        child: AppText.body(
           label,
-          style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-                color: active ? AppTheme.bg : AppTheme.text,
-              ),
+          color: active ? AppTheme.bg : AppTheme.text,
+          weight: FontWeight.w600,
         ),
       ),
     );
@@ -183,14 +167,7 @@ class _GroupHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 14, 20, 6),
-      child: Text(
-        label,
-        style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: AppTheme.textFaint,
-              letterSpacing: 1.6,
-              fontWeight: FontWeight.w600,
-            ),
-      ),
+      child: AppText.label(label, tone: AppTextTone.faint),
     );
   }
 }
@@ -200,7 +177,6 @@ class _NotifTile extends StatelessWidget {
   final NotificationItem item;
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final (icon, tint) = switch (item.kind) {
       NotificationKind.favorite => (Icons.favorite, AppTheme.favoriteActive),
       NotificationKind.follow => (LucideIcons.userPlus, AppTheme.text),
@@ -235,19 +211,14 @@ class _NotifTile extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
+                AppText.body(
                   detail == null || detail.isEmpty
                       ? lead
                       : '$lead「$detail」',
-                  style: theme.textTheme.bodyMedium,
                 ),
                 const SizedBox(height: 2),
-                Text(
-                  _relative(item.createdAt),
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: AppTheme.textFaint,
-                  ),
-                ),
+                AppText.small(_relative(item.createdAt),
+                    tone: AppTextTone.faint),
               ],
             ),
           ),
@@ -282,20 +253,10 @@ class _EmptyView extends StatelessWidget {
   const _EmptyView();
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(LucideIcons.bellOff, size: 36, color: AppTheme.textFaint),
-          const SizedBox(height: 12),
-          Text('還沒有通知', style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 6),
-          Text('有人追蹤你或收藏你的海報時會出現在這裡',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppTheme.textMute,
-                  )),
-        ],
-      ),
+    return const AppEmptyState(
+      icon: LucideIcons.bellOff,
+      title: '還沒有通知',
+      subtitle: '有人追蹤你或收藏你的海報時會出現在這裡',
     );
   }
 }

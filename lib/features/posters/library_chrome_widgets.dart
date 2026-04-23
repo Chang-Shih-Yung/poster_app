@@ -51,12 +51,7 @@ class _AvatarFallback extends StatelessWidget {
       height: size,
       color: AppTheme.chipBgStrong,
       alignment: Alignment.center,
-      child: Text(
-        letter,
-        style: Theme.of(context).textTheme.labelLarge?.copyWith(
-              fontWeight: FontWeight.w600,
-            ),
-      ),
+      child: AppText.bodyBold(letter),
     );
   }
 }
@@ -112,13 +107,10 @@ class _FilterPill extends StatelessWidget {
                   color: Colors.white.withValues(alpha: 0.14), width: 0.5)
               : null,
         ),
-        child: Text(
+        child: AppText.body(
           label,
-          style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                color: selected ? Colors.white : AppTheme.textMute,
-                fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-                height: 1.3,
-              ),
+          color: selected ? Colors.white : AppTheme.textMute,
+          weight: selected ? FontWeight.w600 : FontWeight.w500,
         ),
       ),
     );
@@ -202,22 +194,10 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(LucideIcons.film, size: 36, color: AppTheme.textFaint),
-            const SizedBox(height: 14),
-            Text('目前沒有符合條件的海報',
-                style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 6),
-            Text('試試調整搜尋或清除篩選',
-                style: Theme.of(context).textTheme.bodySmall),
-          ],
-        ),
-      ),
+    return const AppEmptyState(
+      icon: LucideIcons.film,
+      title: '目前沒有符合條件的海報',
+      subtitle: '試試調整搜尋或清除篩選',
     );
   }
 }
@@ -227,25 +207,10 @@ class _EmptyFavoritesState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(LucideIcons.heartCrack,
-                size: 36, color: AppTheme.textFaint),
-            const SizedBox(height: 14),
-            Text('還沒有收藏的海報',
-                style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 6),
-            Text('長按海報即可加入收藏',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: AppTheme.textMute,
-                    )),
-          ],
-        ),
-      ),
+    return const AppEmptyState(
+      icon: LucideIcons.heartCrack,
+      title: '還沒有收藏的海報',
+      subtitle: '長按海報即可加入收藏',
     );
   }
 }
@@ -267,7 +232,6 @@ class _MeProfileRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final displayName = profile?.displayName.trim() ?? '';
     final emailPrefix = fallbackEmail.contains('@')
         ? fallbackEmail.split('@').first
@@ -287,37 +251,27 @@ class _MeProfileRow extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
+              AppText.bodyBold(
                 name,
+                size: 17,
+                weight: FontWeight.w700,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontSize: 17,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: -0.2,
-                ),
               ),
               const SizedBox(height: 2),
-              Text(
+              AppText.small(
                 handle,
+                tone: AppTextTone.faint,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.labelSmall?.copyWith(
-                  fontSize: 11,
-                  color: AppTheme.textFaint,
-                ),
               ),
               if (bio != null && bio.isNotEmpty) ...[
                 const SizedBox(height: 6),
-                Text(
+                AppText.small(
                   bio,
+                  tone: AppTextTone.muted,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    fontSize: 11,
-                    color: AppTheme.textMute,
-                    height: 1.45,
-                  ),
                 ),
               ],
             ],
@@ -362,14 +316,10 @@ class _SegTab extends StatelessWidget {
           ),
         ),
         alignment: Alignment.center,
-        child: Text(
+        child: AppText.caption(
           label,
-          style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                fontSize: 13,
-                color: active ? AppTheme.text : AppTheme.textMute,
-                fontWeight: active ? FontWeight.w600 : FontWeight.w500,
-                letterSpacing: 0,
-              ),
+          color: active ? AppTheme.text : AppTheme.textMute,
+          weight: active ? FontWeight.w600 : FontWeight.w500,
         ),
       ),
     );
@@ -519,19 +469,34 @@ class _MeStatsRow extends ConsumerWidget {
           label: '粉絲',
           onTap: () => context.push('/home/collection/followers'),
         ),
-        _StatDivider(),
+        const AppDivider(
+          axis: Axis.vertical,
+          thickness: 1,
+          length: 22,
+          margin: EdgeInsets.symmetric(horizontal: 14),
+        ),
         _Stat(
           n: following,
           label: '追蹤中',
           onTap: () => context.push('/home/collection/following'),
         ),
-        _StatDivider(),
+        const AppDivider(
+          axis: Axis.vertical,
+          thickness: 1,
+          length: 22,
+          margin: EdgeInsets.symmetric(horizontal: 14),
+        ),
         _Stat(
           n: subCount,
           label: '投稿',
           onTap: () => context.push('/me/submissions'),
         ),
-        _StatDivider(),
+        const AppDivider(
+          axis: Axis.vertical,
+          thickness: 1,
+          length: 22,
+          margin: EdgeInsets.symmetric(horizontal: 14),
+        ),
         _Stat(
           n: favCount,
           label: '收藏',
@@ -549,30 +514,15 @@ class _Stat extends StatelessWidget {
   final VoidCallback? onTap;
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final inner = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisAlignment: MainAxisAlignment.center,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(
-          n == null ? '–' : '$n',
-          style: theme.textTheme.titleMedium?.copyWith(
-            fontSize: 17,
-            fontWeight: FontWeight.w700,
-            letterSpacing: -0.4,
-            height: 1,
-          ),
-        ),
+        AppText.bodyBold(n == null ? '–' : '$n',
+            size: 17, weight: FontWeight.w700),
         const SizedBox(height: 2),
-        Text(
-          label,
-          style: theme.textTheme.labelSmall?.copyWith(
-            fontSize: 10,
-            color: AppTheme.textFaint,
-            letterSpacing: 0.5,
-          ),
-        ),
+        AppText.small(label, tone: AppTextTone.faint, size: 10),
       ],
     );
     if (onTap == null) return inner;
@@ -583,18 +533,6 @@ class _Stat extends StatelessWidget {
       },
       behavior: HitTestBehavior.opaque,
       child: inner,
-    );
-  }
-}
-
-class _StatDivider extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 1,
-      height: 22,
-      margin: const EdgeInsets.symmetric(horizontal: 14),
-      color: AppTheme.line1,
     );
   }
 }
