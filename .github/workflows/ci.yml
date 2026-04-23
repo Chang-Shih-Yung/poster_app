@@ -26,3 +26,37 @@ jobs:
 
       - name: flutter test
         run: flutter test
+
+  # Read-only black-box suite against live Supabase. Verifies the
+  # bot-seed fixture + every RPC that powers a home-surface is
+  # returning the shapes the Flutter client expects.
+  #
+  # Anon key only — same privilege level as an unauthed browser
+  # visitor. Cannot mutate prod data. A failure here means the
+  # discovery / social graph contract drifted, not that a deploy
+  # broke anything writable.
+  #
+  # Secrets required at repo level (Settings → Secrets and variables
+  # → Actions):
+  #   · SUPABASE_URL
+  #   · SUPABASE_ANON_KEY
+  integration:
+    name: integration tests (read-path)
+    runs-on: ubuntu-latest
+    # Don't block merges on integration-suite flakes — `flutter`
+    # job above is the hard gate. This job surfaces contract drift
+    # but failures here are typically actionable follow-ups, not
+    # showstoppers.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Run bot-flow integration suite
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: python3 scripts/tests/bot_flows_test.py

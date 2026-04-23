@@ -622,80 +622,105 @@ class _FeedCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () => context.push('/poster/${poster.id}'),
-      child: SizedBox(
-        width: 140,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Image + uploader avatar overlay.
-            Expanded(
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(10),
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    _homePosterImage(poster: poster, width: 140),
-                    // Uploader avatar overlay (bottom-right, 18px). Tappable
-                    // to jump to their profile. Only shown when RPC returned
-                    // uploader metadata (trending / recent_approved / etc.).
-                    if (poster.uploaderName != null)
-                      Positioned(
-                        right: 6,
-                        bottom: 6,
-                        child: _UploaderBadge(
-                          name: poster.uploaderName!,
-                          avatarUrl: poster.uploaderAvatar,
-                          userId: poster.uploaderId,
-                        ),
-                      ),
-                  ],
+    // v19 round 6: fixed-aspect image area copied from the 我的
+    // masonry pattern. Previously `Expanded` meant the image height
+    // floated with the meta row (which itself varied based on
+    // whether `director` was non-null — extra line = image area
+    // shorter). On detail-route pop-back, meta text re-measured a
+    // frame before images resolved, causing visible micro-shifts
+    // across the row. Fixed height = layout settles immediately,
+    // nothing moves when images finally decode.
+    //
+    // AppPosterTile also bundles Hero + blurhash + decode hints,
+    // which is the same contract the masonry gets. With HeroMode
+    // on the IndexedStack parent now gating non-visible tabs,
+    // Hero tags are exclusive per tab so reuse is safe.
+    return SizedBox(
+      width: 140,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 140,
+            height: 170,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                AppPosterTile(
+                  imageUrl: poster.thumbnailUrl ?? poster.posterUrl,
+                  fullImageUrl: poster.posterUrl,
+                  posterId: poster.id,
+                  blurhash: poster.blurhash,
+                  showOverlayText: false,
                 ),
-              ),
+                if (poster.uploaderName != null)
+                  Positioned(
+                    right: 6,
+                    bottom: 6,
+                    child: _UploaderBadge(
+                      name: poster.uploaderName!,
+                      avatarUrl: poster.uploaderAvatar,
+                      userId: poster.uploaderId,
+                    ),
+                  ),
+              ],
             ),
-            // Meta.
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        AppText.bodyBold(
-                          poster.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        if (poster.director != null) ...[
+          ),
+          // Meta. Fixed-height Row so any director / no-director
+          // mix along the same row gives perfectly aligned cards.
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: GestureDetector(
+              onTap: () => context.push('/poster/${poster.id}'),
+              behavior: HitTestBehavior.opaque,
+              child: SizedBox(
+                height: 34,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          AppText.bodyBold(
+                            poster.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                           const SizedBox(height: 1),
                           AppText.small(
-                            poster.director!,
+                            // Fall back to empty string instead of
+                            // collapsing the line entirely — keeps
+                            // every card's meta row at the same
+                            // height, which keeps the row of cards
+                            // pixel-aligned whether or not the
+                            // backend happened to seed director.
+                            poster.director ?? '',
                             tone: AppTextTone.faint,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
                         ],
-                      ],
+                      ),
                     ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.only(left: 4, top: 1),
-                    child: Icon(
-                      LucideIcons.heart,
-                      size: 14,
-                      color: isFav
-                          ? AppTheme.favoriteActive
-                          : AppTheme.textFaint,
+                    Padding(
+                      padding: const EdgeInsets.only(left: 4, top: 1),
+                      child: Icon(
+                        LucideIcons.heart,
+                        size: 14,
+                        color: isFav
+                            ? AppTheme.favoriteActive
+                            : AppTheme.textFaint,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

@@ -20,6 +20,7 @@ Exit 0 = all pass, 1 = any fail.
 from __future__ import annotations
 
 import json
+import os
 import pathlib
 import sys
 import urllib.error
@@ -41,8 +42,21 @@ BOT_IDS = [f"00000000-0000-0000-0000-00000000010{i}" for i in range(10)]
 # ────────────────────────────────────────────────────────────────────
 
 def load_env() -> tuple[str, str]:
+    """Resolve SUPABASE_URL + SUPABASE_ANON_KEY.
+
+    Precedence: process env vars first (so GitHub Actions can inject
+    from repo secrets), then fall back to parsing `.env.dev` for
+    local runs. Fails loudly if neither is set.
+    """
+    env_url = os.environ.get("SUPABASE_URL")
+    env_key = os.environ.get("SUPABASE_ANON_KEY")
+    if env_url and env_key:
+        return env_url, env_key
     if not ENV_FILE.exists():
-        sys.exit(f"missing {ENV_FILE}")
+        sys.exit(
+            "missing SUPABASE_URL / SUPABASE_ANON_KEY — set them as env vars "
+            f"or create {ENV_FILE}",
+        )
     env: dict[str, str] = {}
     for line in ENV_FILE.read_text().splitlines():
         line = line.strip()

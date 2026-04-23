@@ -73,9 +73,29 @@ class _AppShellState extends State<AppShell> {
       drawerEdgeDragWidth: widget.currentIndex == 0 ? 24 : 0,
       body: Stack(
         children: [
+          // v19 round 6: IndexedStack keeps every tab mounted so their
+          // state survives a tab swap. Side-effect: ALL tabs' Heroes
+          // are live at once, and every tab renders poster cards with
+          // the same `Hero(tag: 'poster-$id')` tag. When the user
+          // taps a poster on the home tab, Flutter finds multiple
+          // matching source Heroes (home + 我的, both hidden/visible)
+          // and picks one arbitrarily — so on pop-back the flight
+          // often lands on the wrong tab's card. That's the "poster
+          // jumps on return" symptom users reported.
+          //
+          // Canonical fix: wrap every non-active tab in
+          // `HeroMode(enabled: false)` so only the visible tab's
+          // Heroes participate in the flight. One source → one clean
+          // flight every time.
           IndexedStack(
             index: widget.currentIndex,
-            children: widget.children,
+            children: [
+              for (var i = 0; i < widget.children.length; i++)
+                HeroMode(
+                  enabled: i == widget.currentIndex,
+                  child: widget.children[i],
+                ),
+            ],
           ),
           Positioned(
             left: 0,
