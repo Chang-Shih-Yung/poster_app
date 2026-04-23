@@ -132,45 +132,80 @@ class _ProfileBody extends ConsumerWidget {
           ),
         ),
 
-        postersAsync.when(
-          loading: () => const SliverToBoxAdapter(
+        // v19 round 10: private-account privacy gate. When the target
+        // is_public=false and the viewer hasn't been accepted as a
+        // follower, the posters grid is replaced with a "僅限追蹤者
+        // 查看" placeholder — the header still renders so the viewer
+        // can tap 追蹤 on a private profile and see the request UI.
+        if (!profile.viewerCanSeeContent)
+          SliverToBoxAdapter(
             child: Padding(
-              padding: EdgeInsets.all(40),
-              child: AppLoader.centered(),
+              padding: const EdgeInsets.fromLTRB(20, 32, 20, 40),
+              child: Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: AppTheme.surface,
+                  borderRadius: BorderRadius.circular(AppTheme.r4),
+                  border: Border.all(color: AppTheme.line1, width: 0.5),
+                ),
+                child: Column(
+                  children: [
+                    Icon(LucideIcons.lock,
+                        size: 28, color: AppTheme.textFaint),
+                    const SizedBox(height: 12),
+                    const AppText.bodyBold('這是私人帳號',
+                        textAlign: TextAlign.center),
+                    const SizedBox(height: 6),
+                    const AppText.caption(
+                      '追蹤後才能看到這位使用者的收藏與投稿',
+                      tone: AppTextTone.muted,
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              ),
             ),
-          ),
-          error: (e, _) =>
-              SliverToBoxAdapter(child: AppEmptyState(title: '海報載入失敗：$e')),
-          data: (posters) {
-            if (posters.isEmpty) {
-              return SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 40),
-                  child: Text(
-                    '尚未有通過的海報',
-                    style: TextStyle(color: AppTheme.textFaint),
+          )
+        else
+          postersAsync.when(
+            loading: () => const SliverToBoxAdapter(
+              child: Padding(
+                padding: EdgeInsets.all(40),
+                child: AppLoader.centered(),
+              ),
+            ),
+            error: (e, _) => SliverToBoxAdapter(
+                child: AppEmptyState(title: '海報載入失敗：$e')),
+            data: (posters) {
+              if (posters.isEmpty) {
+                return SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 20, 20, 40),
+                    child: Text(
+                      '尚未有通過的海報',
+                      style: TextStyle(color: AppTheme.textFaint),
+                    ),
+                  ),
+                );
+              }
+              return SliverPadding(
+                padding: EdgeInsets.fromLTRB(16, 12, 16, bottomInset + 32),
+                sliver: SliverGrid(
+                  gridDelegate:
+                      const SliverGridDelegateWithMaxCrossAxisExtent(
+                    maxCrossAxisExtent: 200,
+                    mainAxisSpacing: 12,
+                    crossAxisSpacing: 12,
+                    childAspectRatio: 0.66,
+                  ),
+                  delegate: SliverChildBuilderDelegate(
+                    (context, i) => _PosterCell(poster: posters[i]),
+                    childCount: posters.length,
                   ),
                 ),
               );
-            }
-            return SliverPadding(
-              padding: EdgeInsets.fromLTRB(16, 12, 16, bottomInset + 32),
-              sliver: SliverGrid(
-                gridDelegate:
-                    const SliverGridDelegateWithMaxCrossAxisExtent(
-                  maxCrossAxisExtent: 200,
-                  mainAxisSpacing: 12,
-                  crossAxisSpacing: 12,
-                  childAspectRatio: 0.66,
-                ),
-                delegate: SliverChildBuilderDelegate(
-                  (context, i) => _PosterCell(poster: posters[i]),
-                  childCount: posters.length,
-                ),
-              ),
-            );
-          },
-        ),
+            },
+          ),
       ],
     );
   }

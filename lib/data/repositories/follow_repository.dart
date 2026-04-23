@@ -4,6 +4,15 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/social.dart';
 import '../providers/supabase_providers.dart';
 
+/// Result of the toggle_follow RPC under the v19-round-10 private-
+/// account flow. Encodes the three post-action states via two bools
+/// so the caller doesn't have to pattern-match on an enum.
+class ToggleFollowResult {
+  const ToggleFollowResult({required this.following, required this.pending});
+  final bool following;
+  final bool pending;
+}
+
 /// Lightweight user record returned by [FollowRepository.listFollowing]
 /// and [FollowRepository.listFollowers]. Only the fields the 粉絲 /
 /// 追蹤中 list UI actually renders.
@@ -38,13 +47,40 @@ class FollowRepository {
   FollowRepository(this._client);
   final SupabaseClient _client;
 
-  /// Toggle follow / unfollow the given user. Returns true if now following.
-  /// Throws if the caller tries to follow themselves — DB check catches it
-  /// too, but the RPC returns a readable error first.
-  Future<bool> toggle(String userId) async {
+  /// Toggle follow / request / unfollow the given user. Returns the
+  /// post-action state `{following, pending}`:
+  ///   · following=true              — accepted follow edge created
+  ///   · pending=true                — request queued for a private target
+  ///   · both false                  — existing edge was removed
+  ///
+  /// v19 round 10: before the private-account flow the RPC returned
+  /// a plain bool. The bool path is still accepted here as a fallback
+  /// for any pre-migration response.
+  Future<ToggleFollowResult> toggle(String userId) async {
     final result =
         await _client.rpc('toggle_follow', params: {'p_user_id': userId});
-    return (result as bool?) ?? false;
+    if (result is bool) {
+      return ToggleFollowResult(following: result, pending: false);
+    }
+    if (result is Map<String, dynamic>) {
+      return ToggleFollowResult(
+        following: (result['following'] as bool?) ?? false,
+        pending: (result['pending'] as bool?) ?? false,
+      );
+    }
+    return const ToggleFollowResult(following: false, pending: false);
+  }
+
+  /// Target approves a pending follow request from [followerId].
+  Future<void> approveRequest(String followerId) async {
+    await _client.rpc('approve_follow_request',
+        params: {'p_follower_id': followerId});
+  }
+
+  /// Target rejects (deletes) a pending request from [followerId].
+  Future<void> rejectRequest(String followerId) async {
+    await _client.rpc('reject_follow_request',
+        params: {'p_follower_id': followerId});
   }
 
   /// Fetch counts + directional flags for a profile.

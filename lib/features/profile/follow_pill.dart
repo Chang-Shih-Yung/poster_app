@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../core/theme/app_theme.dart';
+import '../../data/models/social.dart';
 import '../../data/providers/supabase_providers.dart';
 import '../../data/repositories/follow_repository.dart';
 import '../../data/repositories/social_repository.dart';
@@ -30,7 +31,9 @@ class FollowPill extends ConsumerStatefulWidget {
 }
 
 class _FollowPillState extends ConsumerState<FollowPill> {
-  bool? _optimistic;
+  /// Optimistic status while the RPC is in flight. Null = fall back
+  /// to the latest stat.
+  FollowStatus? _optimistic;
   bool _busy = false;
 
   @override
@@ -42,17 +45,20 @@ class _FollowPillState extends ConsumerState<FollowPill> {
 
     final statsAsync =
         ref.watch(userRelationshipStatsProvider(widget.targetUserId));
-    final amFollowing =
-        _optimistic ?? statsAsync.asData?.value.amIFollowing ?? false;
+    final status =
+        _optimistic ?? statsAsync.asData?.value.viewerStatus ?? FollowStatus.none;
 
-    final label = amFollowing ? '追蹤中' : '追蹤';
-    final icon = amFollowing ? LucideIcons.check : LucideIcons.plus;
+    // Three visual states:
+    //   none      → primary-filled "追蹤"     (positive CTA)
+    //   pending   → outlined  "等待確認"       (neutral, tappable to cancel)
+    //   accepted  → outlined  "追蹤中"         (neutral, tappable to unfollow)
+    final (label, icon, filled) = switch (status) {
+      FollowStatus.none => ('追蹤', LucideIcons.plus, true),
+      FollowStatus.pending => ('等待確認', LucideIcons.clock, false),
+      FollowStatus.accepted => ('追蹤中', LucideIcons.check, false),
+      FollowStatus.self => ('', LucideIcons.plus, false), // unreachable
+    };
 
-    // v19: drop the 12×12 in-button spinner. It was flicker-noise on
-    // slow networks (seizure-like swap between icon and tiny spinner
-    // on every toggle). Optimistic state already updates the
-    // icon+label instantly; a subtle alpha dim plus a disabled tap
-    // target is all the "pending" feedback this button needs.
     return Material(
       color: Colors.transparent,
       borderRadius: BorderRadius.circular(999),
@@ -69,9 +75,9 @@ class _FollowPillState extends ConsumerState<FollowPill> {
               vertical: widget.compact ? 6 : 9,
             ),
             decoration: BoxDecoration(
-              color: amFollowing ? AppTheme.chipBgStrong : AppTheme.text,
+              color: filled ? AppTheme.text : AppTheme.chipBgStrong,
               border: Border.all(
-                color: amFollowing ? AppTheme.line2 : AppTheme.text,
+                color: filled ? AppTheme.text : AppTheme.line2,
               ),
               borderRadius: BorderRadius.circular(999),
             ),
@@ -81,7 +87,7 @@ class _FollowPillState extends ConsumerState<FollowPill> {
                 Icon(
                   icon,
                   size: widget.compact ? 12 : 14,
-                  color: amFollowing ? AppTheme.text : AppTheme.bg,
+                  color: filled ? AppTheme.bg : AppTheme.text,
                 ),
                 const SizedBox(width: 6),
                 Text(
@@ -89,7 +95,7 @@ class _FollowPillState extends ConsumerState<FollowPill> {
                   style: TextStyle(
                     fontSize: widget.compact ? 12 : 13,
                     fontWeight: FontWeight.w600,
-                    color: amFollowing ? AppTheme.text : AppTheme.bg,
+                    color: filled ? AppTheme.bg : AppTheme.text,
                   ),
                 ),
               ],
@@ -102,35 +108,55 @@ class _FollowPillState extends ConsumerState<FollowPill> {
 
   Future<void> _toggle() async {
     final current = _optimistic ??
-        ref.read(userRelationshipStatsProvider(widget.targetUserId)).asData?.value.amIFollowing ??
-        false;
+        ref
+                .read(userRelationshipStatsProvider(widget.targetUserId))
+                .asData
+                ?.value
+                .viewerStatus ??
+        FollowStatus.none;
+
+    // Optimistic next state — we don't know public-vs-private yet so
+    // guess: if currently none, flip to pending if we previously knew
+    // the target was private (not tracked here, assume accepted and
+    // re-sync from the RPC response).
+    FollowStatus optimisticNext;
+    switch (current) {
+      case FollowStatus.none:
+        optimisticNext = FollowStatus.accepted; // will be corrected by RPC
+        break;
+      case FollowStatus.pending:
+      case FollowStatus.accepted:
+        optimisticNext = FollowStatus.none;
+        break;
+      case FollowStatus.self:
+        return; // can't toggle self-follow
+    }
 
     setState(() {
-      _optimistic = !current;
+      _optimistic = optimisticNext;
       _busy = true;
     });
     HapticFeedback.selectionClick();
 
     try {
-      await ref
-          .read(followRepositoryProvider)
-          .toggle(widget.targetUserId);
-      // Invalidate so stats refetch — both sides:
-      //   · target's followers count
-      //   · viewer's own following count (drove the bug where the
-      //     viewer's profile said "追蹤中 0" right after they tapped
-      //     follow on a stranger's page)
+      final result =
+          await ref.read(followRepositoryProvider).toggle(widget.targetUserId);
+      // Sync optimistic guess against the authoritative response.
+      final authoritative = result.following
+          ? FollowStatus.accepted
+          : result.pending
+              ? FollowStatus.pending
+              : FollowStatus.none;
+      if (mounted && authoritative != optimisticNext) {
+        setState(() => _optimistic = authoritative);
+      }
       ref.invalidate(userRelationshipStatsProvider(widget.targetUserId));
       final viewerId = ref.read(currentUserProvider)?.id;
       if (viewerId != null) {
         ref.invalidate(userRelationshipStatsProvider(viewerId));
       }
-      // Invalidate follow feed — it changes when the follow graph changes.
-      // EPIC 14: home sections are now config-driven, refresh the combined
-      // RPC so the follow-feed section re-evaluates with new follow graph.
       ref.invalidate(homeSectionsV2Provider);
     } catch (e) {
-      // Rollback optimistic update.
       setState(() => _optimistic = current);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

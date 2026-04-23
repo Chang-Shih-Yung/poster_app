@@ -21,6 +21,8 @@ class PublicProfile {
     this.submissionCount = 0,
     this.approvedPosterCount = 0,
     this.viewerReported = false,
+    this.isPublic = true,
+    this.viewerFollowStatus = 'none',
   });
 
   factory PublicProfile.fromRow(Map<String, dynamic> row) {
@@ -34,6 +36,9 @@ class PublicProfile {
       approvedPosterCount:
           (row['approved_poster_count'] as int?) ?? 0,
       viewerReported: (row['viewer_reported'] as bool?) ?? false,
+      isPublic: (row['is_public'] as bool?) ?? true,
+      viewerFollowStatus:
+          (row['viewer_follow_status'] as String?) ?? 'none',
     );
   }
 
@@ -49,6 +54,23 @@ class PublicProfile {
   /// avatar report for this target — used by the `檢舉頭像` sheet
   /// to render the action as already-done.
   final bool viewerReported;
+
+  /// Mirror of users.is_public on the server. When false, the viewer
+  /// only sees this profile's shell (name + handle + bio + counts)
+  /// unless they're an accepted follower.
+  final bool isPublic;
+
+  /// One of 'none' | 'pending' | 'accepted' | 'self'. Used to gate
+  /// private-profile content visibility on the client.
+  final String viewerFollowStatus;
+
+  /// True iff the viewer should be shown the target's posters / grids.
+  /// Public profiles are always open. Private profiles require an
+  /// accepted follow (or being the user themselves).
+  bool get viewerCanSeeContent =>
+      isPublic ||
+      viewerFollowStatus == 'accepted' ||
+      viewerFollowStatus == 'self';
 }
 
 class UserRepository {

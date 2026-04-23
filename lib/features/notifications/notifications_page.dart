@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -7,6 +8,8 @@ import '../../core/theme/app_theme.dart';
 import '../../core/theme/theme_mode_notifier.dart';
 import '../../core/widgets/app_loader.dart';
 import '../../core/widgets/ds/ds.dart';
+import '../../data/providers/supabase_providers.dart';
+import '../../data/repositories/follow_repository.dart';
 import '../../data/repositories/notifications_repository.dart';
 
 /// v19 notifications centre — wired to the real backend.
@@ -81,6 +84,7 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
         return true;
       case _NotifTab.social:
         return item.kind == NotificationKind.follow ||
+            item.kind == NotificationKind.followRequest ||
             item.kind == NotificationKind.favorite;
       case _NotifTab.system:
         return item.kind == NotificationKind.submissionApproved ||
@@ -173,24 +177,36 @@ class _GroupHeader extends StatelessWidget {
   }
 }
 
-class _NotifTile extends StatelessWidget {
+class _NotifTile extends ConsumerStatefulWidget {
   const _NotifTile({required this.item});
   final NotificationItem item;
   @override
+  ConsumerState<_NotifTile> createState() => _NotifTileState();
+}
+
+class _NotifTileState extends ConsumerState<_NotifTile> {
+  /// One of 'idle' / 'accepted' / 'rejected' — only used for
+  /// follow_request rows. Drives the inline button state.
+  String _requestState = 'idle';
+  bool _busy = false;
+
+  NotificationItem get item => widget.item;
+
+  @override
   Widget build(BuildContext context) {
-    // Payload carries the poster title for favorite notifications and
-    // the submission title for approved/rejected notifications.
     final title = (item.payload['title'] as String?)?.trim() ?? '';
     final actor = item.actorDisplay;
 
-    // One consistent copy style: actor leads when there is one, no
-    // quotes around content, no generic "有人" anywhere. Follows how
-    // IG / Threads render notification rows.
     final (icon, tint, text) = switch (item.kind) {
       NotificationKind.follow => (
           LucideIcons.userPlus,
           AppTheme.text,
           '$actor 開始追蹤你',
+        ),
+      NotificationKind.followRequest => (
+          LucideIcons.userPlus,
+          AppTheme.text,
+          '$actor 想追蹤你',
         ),
       NotificationKind.favorite => (
           Icons.favorite,
@@ -243,6 +259,13 @@ class _NotifTile extends StatelessWidget {
                   const SizedBox(height: 2),
                   AppText.small(_relative(item.createdAt),
                       tone: AppTextTone.faint),
+                  // Inline approve / reject buttons for follow_request.
+                  // Once acted upon, the row stays in place but reads
+                  // "已接受" / "已拒絕" until the next list refetch.
+                  if (item.kind == NotificationKind.followRequest) ...[
+                    const SizedBox(height: 8),
+                    _buildRequestActions(context),
+                  ],
                 ],
               ),
             ),
@@ -264,17 +287,64 @@ class _NotifTile extends StatelessWidget {
     );
   }
 
-  /// Compute a route target for the notification tap, based on kind.
-  /// Returns null when there's nothing sensible to navigate to (e.g.
-  /// the actor_id is null because they deleted their account).
-  ///   · follow                 → /user/{actor_id}
-  ///   · favorite               → /poster/{target_id}
-  ///   · submission approved    → /poster/{created_poster_id} if payload
-  ///                              carries one, else /me/submissions
-  ///   · submission rejected    → /me/submissions
+  Widget _buildRequestActions(BuildContext context) {
+    if (_requestState == 'accepted') {
+      return AppText.small('已接受', tone: AppTextTone.faint);
+    }
+    if (_requestState == 'rejected') {
+      return AppText.small('已拒絕', tone: AppTextTone.faint);
+    }
+    return Row(
+      children: [
+        AppButton.primary(
+          label: '接受',
+          size: AppButtonSize.small,
+          busy: _busy && _requestState == 'accepted',
+          onPressed: _busy ? null : () => _decide(approve: true),
+        ),
+        const SizedBox(width: 8),
+        AppButton.outline(
+          label: '拒絕',
+          size: AppButtonSize.small,
+          onPressed: _busy ? null : () => _decide(approve: false),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _decide({required bool approve}) async {
+    final actor = item.actorId;
+    if (actor == null) return;
+    HapticFeedback.selectionClick();
+    setState(() => _busy = true);
+    try {
+      if (approve) {
+        await ref.read(followRepositoryProvider).approveRequest(actor);
+      } else {
+        await ref.read(followRepositoryProvider).rejectRequest(actor);
+      }
+      if (!mounted) return;
+      setState(() => _requestState = approve ? 'accepted' : 'rejected');
+      // Target's relationship stats shift (follower +1 on accept).
+      ref.invalidate(userRelationshipStatsProvider(actor));
+      final me = ref.read(currentUserProvider);
+      if (me != null) {
+        ref.invalidate(userRelationshipStatsProvider(me.id));
+      }
+    } catch (e) {
+      if (mounted) {
+        AppToast.show(context, '操作失敗：$e',
+            kind: AppToastKind.destructive);
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   String? _resolveTapTarget() {
     switch (item.kind) {
       case NotificationKind.follow:
+      case NotificationKind.followRequest:
         return item.actorId != null ? '/user/${item.actorId}' : null;
       case NotificationKind.favorite:
         return item.targetId != null ? '/poster/${item.targetId}' : null;

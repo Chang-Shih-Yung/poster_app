@@ -133,20 +133,61 @@ class FollowActivity {
   final DateTime actionAt;
 }
 
+/// v19 round 10: IG-style follow states. Private accounts require a
+/// request-approval round-trip; accepted means the edge is live.
+enum FollowStatus {
+  /// No outbound edge from the viewer to this target.
+  none,
+
+  /// Viewer requested to follow a private account; target hasn't
+  /// approved yet.
+  pending,
+
+  /// Follow edge is live; viewer sees the target's private content.
+  accepted,
+
+  /// The target IS the viewer — can't follow yourself.
+  self;
+
+  static FollowStatus fromRaw(String? s) {
+    switch (s) {
+      case 'pending':
+        return FollowStatus.pending;
+      case 'accepted':
+        return FollowStatus.accepted;
+      case 'self':
+        return FollowStatus.self;
+      default:
+        return FollowStatus.none;
+    }
+  }
+}
+
 /// Result of `user_relationship_stats(p_user_id)`.
 class UserRelationshipStats {
   const UserRelationshipStats({
     required this.followerCount,
     required this.followingCount,
-    required this.amIFollowing,
+    required this.viewerStatus,
     required this.isFollowingMe,
   });
 
   factory UserRelationshipStats.fromRow(Map<String, dynamic> row) {
+    // Legacy `is_following` flag (the pre-v10 RPC returned
+    // `am_i_following`; the post-v10 RPC returns `is_following`).
+    // If neither is present but we have viewer_follow_status, derive.
+    final rawStatus = row['viewer_follow_status'] as String?;
+    final derived = FollowStatus.fromRaw(rawStatus);
     return UserRelationshipStats(
       followerCount: (row['follower_count'] as num?)?.toInt() ?? 0,
       followingCount: (row['following_count'] as num?)?.toInt() ?? 0,
-      amIFollowing: (row['am_i_following'] as bool?) ?? false,
+      viewerStatus: derived != FollowStatus.none
+          ? derived
+          : ((row['is_following'] as bool?) ??
+                  (row['am_i_following'] as bool?) ??
+                  false)
+              ? FollowStatus.accepted
+              : FollowStatus.none,
       isFollowingMe: (row['is_following_me'] as bool?) ?? false,
     );
   }
@@ -154,12 +195,21 @@ class UserRelationshipStats {
   static const empty = UserRelationshipStats(
     followerCount: 0,
     followingCount: 0,
-    amIFollowing: false,
+    viewerStatus: FollowStatus.none,
     isFollowingMe: false,
   );
 
   final int followerCount;
   final int followingCount;
-  final bool amIFollowing;
+  final FollowStatus viewerStatus;
   final bool isFollowingMe;
+
+  /// Back-compat shim: true iff the viewer has an accepted follow
+  /// edge. Callers that only cared about "is this follow live"
+  /// keep working without changes.
+  bool get amIFollowing => viewerStatus == FollowStatus.accepted;
+
+  /// Pending request from viewer to target — pill shows
+  /// "等待確認" / "取消請求".
+  bool get viewerHasPendingRequest => viewerStatus == FollowStatus.pending;
 }

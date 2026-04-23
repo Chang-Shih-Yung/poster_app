@@ -7,6 +7,7 @@ import '../providers/supabase_providers.dart';
 /// `notification_type` enum in the v19 migration.
 enum NotificationKind {
   follow,
+  followRequest,
   favorite,
   submissionApproved,
   submissionRejected;
@@ -15,6 +16,8 @@ enum NotificationKind {
     switch (s) {
       case 'follow':
         return NotificationKind.follow;
+      case 'follow_request':
+        return NotificationKind.followRequest;
       case 'favorite':
         return NotificationKind.favorite;
       case 'submission_approved':
