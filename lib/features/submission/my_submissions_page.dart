@@ -9,6 +9,7 @@ import '../../core/constants/enums.dart';
 import '../../core/constants/region_labels.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/app_loader.dart';
+import '../../core/widgets/ds/ds.dart';
 import '../../data/models/submission.dart';
 import '../../data/repositories/submission_repository.dart';
 
@@ -193,19 +194,20 @@ class _StatusChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (label, color, icon) = switch (status) {
-      SubmissionStatus.approved => ('已上架', Colors.green, Icons.check_circle),
-      SubmissionStatus.rejected => ('已退回', Colors.red, Icons.cancel),
-      SubmissionStatus.duplicate => ('重複', Colors.orange, Icons.copy),
-      SubmissionStatus.pending => ('審核中', Colors.orange, Icons.hourglass_top),
+      SubmissionStatus.approved =>
+        ('已上架', AppTheme.success, Icons.check_circle),
+      SubmissionStatus.rejected =>
+        ('已退回', AppTheme.favoriteActive, Icons.cancel),
+      SubmissionStatus.duplicate =>
+        ('重複', AppTheme.danger, Icons.copy),
+      SubmissionStatus.pending =>
+        ('審核中', AppTheme.danger, Icons.hourglass_top),
     };
-    return Chip(
-      avatar: Icon(icon, size: 16, color: color),
-      label: Text(label, style: TextStyle(color: color, fontSize: 12)),
-      backgroundColor: color.withValues(alpha: 0.1),
-      side: BorderSide(color: color.withValues(alpha: 0.3)),
-      padding: EdgeInsets.zero,
-      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-      visualDensity: VisualDensity.compact,
+    return AppBadge(
+      label: label,
+      icon: icon,
+      variant: AppBadgeVariant.accent,
+      color: color,
     );
   }
 }

@@ -326,6 +326,7 @@ class _SearchLanding extends ConsumerWidget {
                     return AppPosterTile(
                       imageUrl: p.thumbnailUrl ?? p.posterUrl,
       fullImageUrl: p.posterUrl,
+      blurhash: p.blurhash,
                       posterId: p.id,
                       title: p.title,
                       width: 120,

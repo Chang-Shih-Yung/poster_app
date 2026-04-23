@@ -1,5 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_blurhash/flutter_blurhash.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
@@ -43,6 +44,7 @@ class AppPosterTile extends StatelessWidget {
     this.height,
     this.borderRadius,
     this.showOverlayText = true,
+    this.blurhash,
   });
 
   /// Canonical image URL — what the tile renders. Usually the
@@ -87,6 +89,13 @@ class AppPosterTile extends StatelessWidget {
   /// their text outside the image (row-based layouts).
   final bool showOverlayText;
 
+  /// BlurHash string (~30 base83 chars from Wolt's blurha.sh
+  /// algorithm). When provided, paint as the placeholder while the
+  /// real image fetches — gives the page a pixel-correct blurred
+  /// preview instead of a flat grey rect. Null falls back to
+  /// [ShimmerPlaceholder].
+  final String? blurhash;
+
   @override
   Widget build(BuildContext context) {
     // v19 image-perf: decode hint capped at 800px (covers 2x DPR
@@ -97,6 +106,23 @@ class AppPosterTile extends StatelessWidget {
     // pop in like a slideshow.
     final dpr = MediaQuery.devicePixelRatioOf(context);
     final decodeWidth = (800 * dpr).toInt();
+    Widget placeholder() {
+      final hash = blurhash;
+      if (hash != null && hash.isNotEmpty) {
+        // Wolt's algorithm — pixel-correct blurred preview decoded
+        // client-side from the 30-byte hash. No network round-trip,
+        // visually feels "this image is on the way" instead of
+        // "the page is broken".
+        return BlurHash(
+          hash: hash,
+          imageFit: BoxFit.cover,
+          decodingHeight: 32,
+          decodingWidth: 32,
+        );
+      }
+      return const ShimmerPlaceholder();
+    }
+
     final img = imageUrl == null
         ? ColoredBox(color: AppTheme.surface)
         : CachedNetworkImage(
@@ -106,7 +132,7 @@ class AppPosterTile extends StatelessWidget {
             maxWidthDiskCache: decodeWidth,
             fadeInDuration: const Duration(milliseconds: 200),
             fadeOutDuration: Duration.zero,
-            placeholder: (_, _) => const ShimmerPlaceholder(),
+            placeholder: (_, _) => placeholder(),
             errorWidget: (_, _, _) => ColoredBox(
               color: AppTheme.surface,
               child: Icon(LucideIcons.imageOff,

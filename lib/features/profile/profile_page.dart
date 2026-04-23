@@ -225,22 +225,7 @@ class _IdentityCard extends StatelessWidget {
                     ),
                     if (profile?.isAdmin == true) ...[
                       const SizedBox(width: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: AppTheme.chipBgStrong,
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                        child: Text(
-                          'ADMIN',
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            fontSize: 9,
-                            letterSpacing: 1.4,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
+                      const AppBadge(label: 'ADMIN'),
                     ],
                   ],
                 ),

@@ -391,6 +391,7 @@ class _PosterTile extends StatelessWidget {
     return AppPosterTile(
       imageUrl: poster.thumbnailUrl ?? poster.posterUrl,
       fullImageUrl: poster.posterUrl,
+      blurhash: poster.blurhash,
       posterId: poster.id,
       title: poster.title,
     );

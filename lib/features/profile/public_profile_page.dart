@@ -1,4 +1,3 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -68,8 +67,10 @@ class _ProfileBody extends ConsumerWidget {
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    _Avatar(
+                    AppAvatar(
                       url: profile.avatarUrl,
+                      name: profile.displayName,
+                      customSize: 64,
                       onTap: () => showAvatarViewer(
                         context,
                         url: profile.avatarUrl,
@@ -94,21 +95,7 @@ class _ProfileBody extends ConsumerWidget {
                           ),
                           if (stats?.isFollowingMe == true) ...[
                             const SizedBox(height: 4),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 6, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: AppTheme.chipBg,
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: Text(
-                                '追蹤你',
-                                style: theme.textTheme.labelSmall?.copyWith(
-                                  color: AppTheme.textMute,
-                                  fontSize: 10,
-                                ),
-                              ),
-                            ),
+                            const AppBadge(label: '追蹤你'),
                           ],
                         ],
                       ),
@@ -207,104 +194,32 @@ Future<void> _openReportSheet(
   String targetName,
 ) async {
   HapticFeedback.selectionClick();
-  await showModalBottomSheet<void>(
-    context: context,
-    backgroundColor: AppTheme.surface,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(AppTheme.r6)),
+  await AppSheet.show<void>(
+    context,
+    child: ListTile(
+      leading: Icon(LucideIcons.flag,
+          color: AppTheme.favoriteActive, size: 20),
+      title: AppText.body('檢舉頭像',
+          color: AppTheme.favoriteActive, weight: FontWeight.w600),
+      onTap: () async {
+        Navigator.of(context).pop();
+        try {
+          await ref.read(userRepositoryProvider).reportAvatar(targetUserId);
+          if (context.mounted) {
+            AppToast.show(context, '已檢舉「$targetName」的頭像');
+          }
+        } catch (e) {
+          if (context.mounted) {
+            AppToast.show(context, '檢舉失敗：$e',
+                kind: AppToastKind.destructive);
+          }
+        }
+      },
     ),
-    builder: (sheetCtx) {
-      return SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 36,
-                height: 4,
-                margin: const EdgeInsets.only(bottom: 14),
-                decoration: BoxDecoration(
-                  color: AppTheme.line2,
-                  borderRadius: BorderRadius.circular(99),
-                ),
-              ),
-              ListTile(
-                leading: Icon(LucideIcons.flag,
-                    color: AppTheme.favoriteActive, size: 20),
-                title: Text(
-                  '檢舉頭像',
-                  style: TextStyle(
-                    color: AppTheme.favoriteActive,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                onTap: () async {
-                  Navigator.of(sheetCtx).pop();
-                  try {
-                    await ref
-                        .read(userRepositoryProvider)
-                        .reportAvatar(targetUserId);
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                            content: Text('已檢舉「$targetName」的頭像')),
-                      );
-                    }
-                  } catch (e) {
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('檢舉失敗：$e')),
-                      );
-                    }
-                  }
-                },
-              ),
-            ],
-          ),
-        ),
-      );
-    },
   );
 }
 
-class _Avatar extends StatelessWidget {
-  const _Avatar({this.url, this.onTap});
-  final String? url;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    const size = 64.0;
-    final inner = url == null || url!.isEmpty
-        ? Container(
-            width: size,
-            height: size,
-            decoration: BoxDecoration(
-              color: AppTheme.surfaceRaised,
-              shape: BoxShape.circle,
-            ),
-            child: Icon(LucideIcons.user, color: AppTheme.textFaint),
-          )
-        : ClipOval(
-            child: CachedNetworkImage(
-              imageUrl: url!,
-              width: size,
-              height: size,
-              fit: BoxFit.cover,
-              errorWidget: (_, _, _) => Container(
-                width: size,
-                height: size,
-                color: AppTheme.surfaceRaised,
-                child:
-                    Icon(LucideIcons.user, color: AppTheme.textFaint),
-              ),
-            ),
-          );
-    return GestureDetector(onTap: onTap, child: inner);
-  }
-}
+// _Avatar deleted in v19 — replaced by the shared AppAvatar primitive.
 
 class _PosterCell extends StatelessWidget {
   const _PosterCell({required this.poster});
@@ -315,6 +230,7 @@ class _PosterCell extends StatelessWidget {
     return AppPosterTile(
       imageUrl: poster.thumbnailUrl ?? poster.posterUrl,
       fullImageUrl: poster.posterUrl,
+      blurhash: poster.blurhash,
       posterId: poster.id,
       showOverlayText: false,
     );

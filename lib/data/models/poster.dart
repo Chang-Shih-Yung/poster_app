@@ -39,6 +39,11 @@ class Poster {
     // join users, absent in plain posters.* queries. Never persisted.
     this.uploaderName,
     this.uploaderAvatar,
+    // v19 Phase 3 — BlurHash placeholder string (~30 base83 chars).
+    // Filled by an Edge Function on upload; nullable for legacy rows
+    // until the backfill completes. AppPosterTile renders BlurHash
+    // when present, ShimmerPlaceholder when null.
+    this.blurhash,
   });
 
   factory Poster.fromRow(Map<String, dynamic> row) {
@@ -94,6 +99,7 @@ class Poster {
           : null,
       uploaderName: row['uploader_name'] as String?,
       uploaderAvatar: row['uploader_avatar'] as String?,
+      blurhash: row['blurhash'] as String?,
     );
   }
 
@@ -136,4 +142,7 @@ class Poster {
   // recent_approved_feed / trending_favorites / follow_feed).
   final String? uploaderName;
   final String? uploaderAvatar;
+  // BlurHash placeholder (~30 base83 chars). Null until the Edge
+  // Function backfills.
+  final String? blurhash;
 }

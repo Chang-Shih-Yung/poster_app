@@ -53,6 +53,11 @@ dependencies:
   flutter_animate: ^4.5.2
   lucide_icons_flutter: ^3.1.12
   image: ^4.8.0
+  # v19 Phase 3 — BlurHash placeholders on poster tiles. The back-end
+  # Edge Function fills the `posters.blurhash` column with a ~30-byte
+  # base83 string; this package paints that as a pixel-correct blur
+  # while the real image fetches.
+  flutter_blurhash: ^0.8.2
 
 dev_dependencies:
   flutter_test:
