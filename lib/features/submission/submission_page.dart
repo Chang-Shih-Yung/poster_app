@@ -685,27 +685,38 @@ class _SubmissionPageState extends ConsumerState<SubmissionPage> {
             // `addSlotHasDot` is the red badge that nudges first-time
             // users toward the multi-upload affordance; cleared on
             // first interaction via `_dismissHint`.
-            _ThumbRow(
-              images: _images,
-              activeIdx: _primaryIdx,
-              onRemove: _submitting ? null : _removeImageAt,
-              onSelect: _submitting ? null : _setPrimary,
-              onAdd: _submitting
-                  ? null
-                  : () {
-                      _dismissHint();
-                      _addImages();
-                    },
-              addSlotHasDot: _hintUnseen,
+            //
+            // v19 round 10: wrap in a Stack with `clipBehavior:
+            // Clip.none` so the hint bubble — when visible — overlays
+            // BELOW the thumb row (at y=76) without consuming layout
+            // space. Without this the bubble's Padding pushed the
+            // entire form down for 6 s on first entry, felt jarring.
+            // With Clip.none the bubble floats; form stays put.
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                _ThumbRow(
+                  images: _images,
+                  activeIdx: _primaryIdx,
+                  onRemove: _submitting ? null : _removeImageAt,
+                  onSelect: _submitting ? null : _setPrimary,
+                  onAdd: _submitting
+                      ? null
+                      : () {
+                          _dismissHint();
+                          _addImages();
+                        },
+                  addSlotHasDot: _hintUnseen,
+                ),
+                if (_hintBubbleVisible)
+                  Positioned(
+                    top: 76,
+                    left: 0,
+                    right: 0,
+                    child: _MultiUploadHintBubble(onDismiss: _dismissHint),
+                  ),
+              ],
             ),
-            // Pop-up bubble pointing at the ＋ slot. Only visible
-            // in the brief window between the post-entry delay and
-            // the user's first acknowledgement; see _scheduleHint.
-            if (_hintBubbleVisible)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: _MultiUploadHintBubble(onDismiss: _dismissHint),
-              ),
 
             const SizedBox(height: 24),
 

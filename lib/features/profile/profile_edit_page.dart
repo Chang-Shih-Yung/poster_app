@@ -140,9 +140,9 @@ class _ProfileEditPageState extends ConsumerState<ProfileEditPage> {
       // Postgres throws "duplicate key value violates unique
       // constraint" — surface a friendlier copy.
       final msg = e.toString().contains('duplicate key')
-          ? '這個 @handle 已被使用'
+          ? '這個使用者名稱已被使用'
           : '儲存失敗：$e';
-      if (msg.contains('@handle')) {
+      if (msg.contains('使用者名稱')) {
         setState(() => _handleError = msg);
       }
       if (mounted) {
@@ -209,7 +209,7 @@ class _ProfileEditPageState extends ConsumerState<ProfileEditPage> {
                       maxLength: 30,
                     ),
                     const SizedBox(height: 16),
-                    _Label('@handle'),
+                    _Label('使用者名稱'),
                     const SizedBox(height: 6),
                     AppField(
                       controller: _handleCtrl,

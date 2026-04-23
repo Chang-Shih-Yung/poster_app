@@ -108,7 +108,12 @@ class _ProfileBody extends ConsumerWidget {
                       color: AppTheme.textMute,
                       semanticsLabel: '更多',
                       onTap: () => _openReportSheet(
-                          context, ref, profile.id, profile.displayName),
+                        context,
+                        ref,
+                        profile.id,
+                        profile.displayName,
+                        alreadyReported: profile.viewerReported,
+                      ),
                     ),
                   ],
                 ),
@@ -177,20 +182,37 @@ Future<void> _openReportSheet(
   BuildContext context,
   WidgetRef ref,
   String targetUserId,
-  String targetName,
-) async {
+  String targetName, {
+  bool alreadyReported = false,
+}) async {
   HapticFeedback.selectionClick();
   await AppSheet.show<void>(
     context,
     child: ListTile(
       leading: Icon(LucideIcons.flag,
-          color: AppTheme.favoriteActive, size: 20),
-      title: AppText.body('檢舉頭像',
-          color: AppTheme.favoriteActive, weight: FontWeight.w600),
+          color: alreadyReported
+              ? AppTheme.textFaint
+              : AppTheme.favoriteActive,
+          size: 20),
+      title: AppText.body(
+        alreadyReported ? '已檢舉頭像' : '檢舉頭像',
+        color: alreadyReported
+            ? AppTheme.textFaint
+            : AppTheme.favoriteActive,
+        weight: FontWeight.w600,
+      ),
+      // Disable the action when the viewer has already reported this
+      // target. Sheet still renders the row so the user sees the
+      // "done" state instead of the option silently disappearing.
+      enabled: !alreadyReported,
       onTap: () async {
         Navigator.of(context).pop();
         try {
           await ref.read(userRepositoryProvider).reportAvatar(targetUserId);
+          // Refetch the public profile so the `viewer_reported` flag
+          // flips to true and a subsequent re-open shows the grey
+          // "已檢舉頭像" row.
+          ref.invalidate(publicProfileProvider(targetUserId));
           if (context.mounted) {
             AppToast.show(context, '已檢舉「$targetName」的頭像');
           }

@@ -1133,42 +1133,25 @@ class _CollectorCard extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Conic-gradient ring around the avatar. 2px band, 68px total.
-            // Uses theme-aware tokens so day mode renders a visible ring
-            // (earlier pure-white ring disappeared on the beige scaffold).
-            Container(
-              width: 68,
-              height: 68,
-              padding: const EdgeInsets.all(2),
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: SweepGradient(
-                  colors: [
-                    AppTheme.text,
-                    AppTheme.text.withValues(alpha: 0.6),
-                    AppTheme.line2,
-                    AppTheme.text,
-                  ],
-                  stops: const [0.0, 0.5, 0.8, 1.0],
-                ),
-              ),
-              child: Container(
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: AppTheme.bg,
-                ),
-                padding: const EdgeInsets.all(2),
-                child: ClipOval(
-                  child: (collector.avatarUrl != null &&
-                          collector.avatarUrl!.isNotEmpty)
-                      ? CachedNetworkImage(
-                          imageUrl: collector.avatarUrl!,
-                          fit: BoxFit.cover,
-                          errorWidget: (_, _, _) =>
-                              _avatarFallback(context, letter),
-                        )
-                      : _avatarFallback(context, letter),
-                ),
+            // v19 round 10: story-style ring removed. In IG the ring
+            // signals "has a live story right now"; this app has no
+            // stories, so the ring was decorative at best and caused
+            // users to misread "does this account have new content?".
+            // Plain circle avatar now — matches 粉絲 list, search, and
+            // public profile usages everywhere else in the app.
+            SizedBox(
+              width: 64,
+              height: 64,
+              child: ClipOval(
+                child: (collector.avatarUrl != null &&
+                        collector.avatarUrl!.isNotEmpty)
+                    ? CachedNetworkImage(
+                        imageUrl: collector.avatarUrl!,
+                        fit: BoxFit.cover,
+                        errorWidget: (_, _, _) =>
+                            _avatarFallback(context, letter),
+                      )
+                    : _avatarFallback(context, letter),
               ),
             ),
             const SizedBox(height: 8),

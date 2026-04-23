@@ -396,26 +396,33 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
     final chrome = _buildTopChrome(context, topInset, density, profile, user);
     final useInlineChrome = density == BrowseDensity.medium;
 
+    // v19 round 9: 我的 tab also wraps in HeroMode(enabled: false) for
+    // consistency with home. The user chose to give up the poster-
+    // grows-into-fullscreen animation everywhere — the visual
+    // artefacts in horizontal scrolls weren't worth the complexity,
+    // and a homogeneous slide/fade on every surface reads cleaner.
     return Scaffold(
-      
-      body: Stack(
-        children: [
-          Positioned.fill(
-            child: _buildContent(
-              density,
-              displayItems,
-              favIds,
-              inlineHeader: useInlineChrome ? chrome : null,
+      body: HeroMode(
+        enabled: false,
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: _buildContent(
+                density,
+                displayItems,
+                favIds,
+                inlineHeader: useInlineChrome ? chrome : null,
+              ),
             ),
-          ),
-          if (!useInlineChrome)
-            Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              child: chrome,
-            ),
-        ],
+            if (!useInlineChrome)
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: chrome,
+              ),
+          ],
+        ),
       ),
     );
   }

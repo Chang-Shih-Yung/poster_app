@@ -20,6 +20,7 @@ class PublicProfile {
     this.handle,
     this.submissionCount = 0,
     this.approvedPosterCount = 0,
+    this.viewerReported = false,
   });
 
   factory PublicProfile.fromRow(Map<String, dynamic> row) {
@@ -32,6 +33,7 @@ class PublicProfile {
       submissionCount: (row['submission_count'] as int?) ?? 0,
       approvedPosterCount:
           (row['approved_poster_count'] as int?) ?? 0,
+      viewerReported: (row['viewer_reported'] as bool?) ?? false,
     );
   }
 
@@ -42,6 +44,11 @@ class PublicProfile {
   final String? handle;
   final int submissionCount;
   final int approvedPosterCount;
+
+  /// True when the current auth'd viewer has already submitted an
+  /// avatar report for this target — used by the `檢舉頭像` sheet
+  /// to render the action as already-done.
+  final bool viewerReported;
 }
 
 class UserRepository {
