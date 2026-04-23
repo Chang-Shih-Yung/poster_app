@@ -4,12 +4,26 @@
 -- RLS + fire triggers).
 --
 -- Each test is self-contained, rolls back its own side-effects, and
--- prints a PASS / FAIL row. Read-path coverage lives in
--- `scripts/tests/bot_flows_test.py` (runs with anon + no Dashboard).
+-- writes a PASS / FAIL row into `_test_results`. The trailing SELECT
+-- dumps that table into the Results grid so every run is readable
+-- without opening the Messages panel. Read-path coverage lives in
+-- `scripts/tests/bot_flows_test.py`.
 --
 -- Safe to re-run. Safe to interrupt — every test is wrapped in its
--- own transaction with a rollback at the end.
+-- own DO block and the session-scoped temp table auto-drops on
+-- commit.
 -- ═══════════════════════════════════════════════════════════════════
+
+begin;
+
+-- Session-scoped results buffer so every RAISE NOTICE also lands in
+-- the grid. ON COMMIT DROP = gone the moment we finish.
+create temp table _test_results (
+  test_id text primary key,
+  status  text not null,      -- 'PASS' | 'FAIL' | 'SKIP'
+  detail  text not null
+) on commit drop;
+
 
 -- ───────────────────────────────────────────────────────────────────
 -- T1 · avatar 3-report safety net
@@ -37,10 +51,13 @@ begin
   select avatar_status into status_after from public.users where id = target;
 
   if status_before = 'ok' and status_after = 'pending_review' then
-    raise notice 'T1 PASS · avatar 3-report: ok → pending_review';
+    insert into _test_results values
+      ('T1', 'PASS',
+       format('avatar 3-report safety net: %s → %s', status_before, status_after));
   else
-    raise warning 'T1 FAIL · expected ok → pending_review, got % → %',
-      status_before, status_after;
+    insert into _test_results values
+      ('T1', 'FAIL',
+       format('expected ok → pending_review, got %s → %s', status_before, status_after));
   end if;
 
   -- Rollback side effects
@@ -84,13 +101,19 @@ begin
   select count(*) into cnt_after_unfollow from public.follows where followee_id = target;
 
   if pre_existing then
-    raise notice 'T2 SKIP · Henry already follows bot00 (no-op)';
+    insert into _test_results values
+      ('T2', 'SKIP',
+       'Henry already followed bot00 before the test — no-op');
   elsif cnt_after_follow = cnt_before + 1 and cnt_after_unfollow = cnt_before then
-    raise notice 'T2 PASS · follow/unfollow cycle: % → % → %',
-      cnt_before, cnt_after_follow, cnt_after_unfollow;
+    insert into _test_results values
+      ('T2', 'PASS',
+       format('follow/unfollow cycle: %s → %s → %s',
+              cnt_before, cnt_after_follow, cnt_after_unfollow));
   else
-    raise warning 'T2 FAIL · follow toggle leaked: before=%, after_follow=%, after_unfollow=%',
-      cnt_before, cnt_after_follow, cnt_after_unfollow;
+    insert into _test_results values
+      ('T2', 'FAIL',
+       format('cycle leaked: before=%s, after_follow=%s, after_unfollow=%s',
+              cnt_before, cnt_after_follow, cnt_after_unfollow));
   end if;
 end $$;
 
@@ -112,9 +135,11 @@ begin
   end;
 
   if blocked then
-    raise notice 'T3 PASS · self-follow blocked by CHECK constraint';
+    insert into _test_results values
+      ('T3', 'PASS', 'self-follow blocked by no_self_follow CHECK constraint');
   else
-    raise warning 'T3 FAIL · self-follow got through — constraint missing!';
+    insert into _test_results values
+      ('T3', 'FAIL', 'self-follow got through — constraint missing!');
     delete from public.follows
     where follower_id = bot00 and followee_id = bot00;
   end if;
@@ -137,7 +162,8 @@ begin
   from public.favorites where user_id = bot00 limit 1;
 
   if sample_poster is null then
-    raise notice 'T4 SKIP · bot00 has no favorites yet';
+    insert into _test_results values
+      ('T4', 'SKIP', 'bot00 has no favorites yet — nothing to duplicate');
     return;
   end if;
 
@@ -153,10 +179,14 @@ begin
   select count(*) into cnt_after from public.favorites where user_id = bot00;
 
   if blocked and cnt_after = cnt_before then
-    raise notice 'T4 PASS · duplicate favorite blocked by PK, count stable %', cnt_before;
+    insert into _test_results values
+      ('T4', 'PASS',
+       format('duplicate favorite blocked by PK; count stable at %s', cnt_before));
   else
-    raise warning 'T4 FAIL · duplicate favorite leaked: before=%, after=%, blocked=%',
-      cnt_before, cnt_after, blocked;
+    insert into _test_results values
+      ('T4', 'FAIL',
+       format('duplicate leaked: before=%s, after=%s, blocked=%s',
+              cnt_before, cnt_after, blocked));
   end if;
 end $$;
 
@@ -187,13 +217,16 @@ begin
   from public.avatar_reports where target_user_id = target and reporter_id = reporter;
 
   if cnt_first = 1 and cnt_second = 1 then
-    raise notice 'T5 PASS · re-report from same user is a no-op';
+    insert into _test_results values
+      ('T5', 'PASS', 're-report from same user is a no-op (on conflict)');
   else
-    raise warning 'T5 FAIL · dup report leaked: first=%, second=%', cnt_first, cnt_second;
+    insert into _test_results values
+      ('T5', 'FAIL',
+       format('dup leaked: first=%s, second=%s', cnt_first, cnt_second));
   end if;
 
   -- Clean up the single report we inserted. Make sure we don't leave
-  -- bot09 pending_review (3-threshold may have already fired).
+  -- the target in pending_review (3-threshold may have already fired).
   delete from public.avatar_reports
   where target_user_id = target and reporter_id = reporter
     and reason like 'test T5%';
@@ -203,10 +236,8 @@ end $$;
 
 
 -- ───────────────────────────────────────────────────────────────────
--- T6 · home_sections_v2 returns real payload (spot-check shape)
+-- T6 · home_sections_v2 returns a real jsonb payload
 -- ───────────────────────────────────────────────────────────────────
--- The RPC returns `jsonb` (a single JSON array of section objects),
--- not a SETOF rows, so we probe it with jsonb operators.
 do $$
 declare
   payload jsonb;
@@ -218,16 +249,28 @@ begin
   first_section := payload -> 0 ->> 'slug';
 
   if row_count >= 3 then
-    raise notice 'T6 PASS · home_sections_v2: % sections, first=%', row_count, first_section;
+    insert into _test_results values
+      ('T6', 'PASS',
+       format('home_sections_v2 returned %s sections, first=%s', row_count, first_section));
   else
-    raise warning 'T6 FAIL · home_sections_v2 returned only % sections', row_count;
+    insert into _test_results values
+      ('T6', 'FAIL',
+       format('home_sections_v2 only returned %s sections', row_count));
   end if;
 end $$;
 
 
 -- ═══════════════════════════════════════════════════════════════════
--- Final: print bot + relationship counts after all tests
+-- Dump results + post-test state sanity. Both land in the grid so
+-- the human running this can see PASS/FAIL without opening Messages.
 -- ═══════════════════════════════════════════════════════════════════
+select test_id, status, detail
+from _test_results
+order by test_id;
+
+-- Post-state: every number should match the pre-state. Non-zero
+-- open_reports or pending_avatars here means a test's cleanup
+-- leaked and needs a look.
 select
   (select count(*) from public.users where handle like 'bot%')                                as bots,
   (select count(*) from public.follows
@@ -236,3 +279,5 @@ select
      where user_id in (select id from public.users where handle like 'bot%'))                 as bot_favorites,
   (select count(*) from public.avatar_reports)                                                as open_reports,
   (select count(*) from public.users where avatar_status = 'pending_review')                  as pending_avatars;
+
+commit;
