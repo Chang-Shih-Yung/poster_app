@@ -1,6 +1,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_blurhash/flutter_blurhash.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -27,6 +28,52 @@ import '../shell/app_shell.dart';
 /// Map lucide icon name (from DB) → IconData.
 /// Short whitelist — we only wire icons that seeded rows use today.
 /// Unknown icons fall back to LucideIcons.tag.
+/// Shared builder for poster card images on the home feed.
+///
+/// v19 round 5: previously all three home card variants (_HeroCard,
+/// _FeedCard, _TrendingRow) rendered `CachedNetworkImage` raw — no
+/// Hero wrapper, no blurhash placeholder. Two consequences:
+///
+///   1. The poster-detail route uses `Hero(tag: 'poster-$id')`; when
+///      the user popped back, Flutter's Hero flight had no matching
+///      source on home and visibly "flew to nowhere", making the
+///      tapped card appear to jump.
+///   2. Cold-cache images faded in from flat grey, so the grid
+///      flickered on return even for untouched cards.
+///
+/// The 我的 tab didn't have either symptom because its cards route
+/// through AppPosterTile which already wraps with Hero + blurhash.
+/// This helper gives the home cards the same contract while keeping
+/// their bespoke overlays (uploader badge, gradient dim, title pill)
+/// free to compose in a Stack above.
+Widget _homePosterImage({
+  required Poster poster,
+  double? width,
+  double? height,
+}) {
+  final img = CachedNetworkImage(
+    imageUrl: poster.thumbnailUrl ?? poster.posterUrl,
+    fit: BoxFit.cover,
+    width: width,
+    height: height,
+    fadeInDuration: const Duration(milliseconds: 180),
+    placeholder: (_, _) {
+      final h = poster.blurhash;
+      if (h != null && h.isNotEmpty) {
+        return BlurHash(
+          hash: h,
+          imageFit: BoxFit.cover,
+          decodingHeight: 32,
+          decodingWidth: 32,
+        );
+      }
+      return const ShimmerPlaceholder();
+    },
+    errorWidget: (_, _, _) => ColoredBox(color: AppTheme.surfaceRaised),
+  );
+  return Hero(tag: 'poster-${poster.id}', child: img);
+}
+
 IconData _iconFromName(String? name) {
   switch (name) {
     case 'flame':
@@ -396,13 +443,7 @@ class _HeroCard extends StatelessWidget {
             child: Stack(
               fit: StackFit.expand,
               children: [
-                CachedNetworkImage(
-                  imageUrl: poster.thumbnailUrl ?? poster.posterUrl,
-                  fit: BoxFit.cover,
-                  placeholder: (_, _) => const ShimmerPlaceholder(),
-                  errorWidget: (_, _, _) =>
-                      ColoredBox(color: AppTheme.surfaceRaised),
-                ),
+                _homePosterImage(poster: poster),
                 // Hero gradient — fades into AppTheme.bg at the hem
                 // so the title overlay sits on solid dark. Stops are
                 // soft top dim → transparent middle → opaque bg.
@@ -595,14 +636,7 @@ class _FeedCard extends StatelessWidget {
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    CachedNetworkImage(
-                      imageUrl: poster.thumbnailUrl ?? poster.posterUrl,
-                      fit: BoxFit.cover,
-                      width: 140,
-                      placeholder: (_, _) => const ShimmerPlaceholder(),
-                      errorWidget: (_, _, _) =>
-                          ColoredBox(color: AppTheme.surfaceRaised),
-                    ),
+                    _homePosterImage(poster: poster, width: 140),
                     // Uploader avatar overlay (bottom-right, 18px). Tappable
                     // to jump to their profile. Only shown when RPC returned
                     // uploader metadata (trending / recent_approved / etc.).
@@ -878,13 +912,7 @@ class _RankedCard extends StatelessWidget {
               child: SizedBox(
                 width: 86,
                 height: 129,
-                child: CachedNetworkImage(
-                  imageUrl: p.thumbnailUrl ?? p.posterUrl,
-                  fit: BoxFit.cover,
-                  placeholder: (_, _) => const ShimmerPlaceholder(),
-                  errorWidget: (_, _, _) =>
-                      ColoredBox(color: AppTheme.surfaceRaised),
-                ),
+                child: _homePosterImage(poster: p, width: 86, height: 129),
               ),
             ),
             const SizedBox(width: 12),

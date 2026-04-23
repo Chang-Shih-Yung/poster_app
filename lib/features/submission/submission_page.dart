@@ -98,37 +98,79 @@ class _SubmissionPageState extends ConsumerState<SubmissionPage> {
   // ── Expandable sections ──
   bool _showAdvanced = false;
 
-  // v19 round 3: one-shot multi-upload hint. Previously we dangled
-  // the "點縮圖切換預覽，按 ＋ 加更多張（共用同一筆作品資料）" line
-  // under the thumb row, which read as a desktop footnote. Now we
-  // fire a brief iOS-style modal the first time the user lands on
-  // this page — tap 知道了 and it never shows again (persisted via
-  // SharedPreferences). Subsequent visits are chrome-free.
+  // v19 round 5: multi-upload tip, second iteration.
+  //
+  // Previous round put up a full-screen modal on first entry — read
+  // as heavy-handed for a line of copy that's really just an
+  // affordance nudge. Now:
+  //
+  //   · The ＋ tile in the thumb row carries a small red dot while
+  //     the tip is unseen (visual anchor — "there's something new
+  //     here, look").
+  //   · After a short delay (~1.2 s) once the page settles, a slim
+  //     toast-bubble slides in below the thumb row pointing at ＋,
+  //     with a single-line hint and a close affordance. No scrim,
+  //     no route push — the rest of the page stays interactive.
+  //   · Dismissal triggers on: tapping the bubble, tapping the ＋,
+  //     scrolling further, or 6 s of idle. Any of those mark the
+  //     hint as seen in SharedPreferences, so the red dot + bubble
+  //     both disappear and never return.
   static const _prefsKeyHintSeen = 'submission_multi_hint_seen_v1';
+
+  /// Drives both the red dot on ＋ and the pop-up bubble visibility.
+  /// Starts true assuming unseen; initState overrides with the
+  /// persisted flag.
+  bool _hintUnseen = true;
+
+  /// Only true during the short window between "page-settled delay"
+  /// and "user acknowledged" — the bubble itself is driven by this.
+  bool _hintBubbleVisible = false;
+
+  Timer? _hintShowTimer;
+  Timer? _hintAutoDismissTimer;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeShowHint());
+    WidgetsBinding.instance.addPostFrameCallback((_) => _scheduleHint());
   }
 
-  Future<void> _maybeShowHint() async {
+  Future<void> _scheduleHint() async {
     if (!mounted) return;
     final prefs = await SharedPreferences.getInstance();
-    if (prefs.getBool(_prefsKeyHintSeen) == true) return;
+    final seen = prefs.getBool(_prefsKeyHintSeen) == true;
     if (!mounted) return;
-    await showDialog<void>(
-      context: context,
-      barrierColor: Colors.black.withValues(alpha: 0.55),
-      builder: (ctx) => _MultiUploadHintDialog(
-        onDismiss: () => Navigator.of(ctx).pop(),
-      ),
-    );
-    await prefs.setBool(_prefsKeyHintSeen, true);
+    if (seen) {
+      setState(() => _hintUnseen = false);
+      return;
+    }
+    // Unseen — delay briefly so the form has painted and the user
+    // isn't confronted with a tip the instant the page opens.
+    _hintShowTimer = Timer(const Duration(milliseconds: 1200), () {
+      if (!mounted) return;
+      setState(() => _hintBubbleVisible = true);
+      // Auto-dismiss after 6 s if the user doesn't interact.
+      _hintAutoDismissTimer = Timer(const Duration(seconds: 6), _dismissHint);
+    });
+  }
+
+  void _dismissHint() {
+    _hintShowTimer?.cancel();
+    _hintAutoDismissTimer?.cancel();
+    if (!mounted) return;
+    if (!_hintUnseen && !_hintBubbleVisible) return;
+    setState(() {
+      _hintUnseen = false;
+      _hintBubbleVisible = false;
+    });
+    SharedPreferences.getInstance()
+        .then((p) => p.setBool(_prefsKeyHintSeen, true));
   }
 
   @override
   void dispose() {
+    _hintShowTimer?.cancel();
+    _hintAutoDismissTimer?.cancel();
     _titleZhController.dispose();
     _titleEnController.dispose();
     _yearController.dispose();
@@ -640,19 +682,30 @@ class _SubmissionPageState extends ConsumerState<SubmissionPage> {
             const SizedBox(height: 10),
 
             // Thumb row — each picked image + a trailing ＋ slot.
+            // `addSlotHasDot` is the red badge that nudges first-time
+            // users toward the multi-upload affordance; cleared on
+            // first interaction via `_dismissHint`.
             _ThumbRow(
               images: _images,
               activeIdx: _primaryIdx,
               onRemove: _submitting ? null : _removeImageAt,
               onSelect: _submitting ? null : _setPrimary,
-              onAdd: _submitting ? null : _addImages,
+              onAdd: _submitting
+                  ? null
+                  : () {
+                      _dismissHint();
+                      _addImages();
+                    },
+              addSlotHasDot: _hintUnseen,
             ),
-            // Hint when there's at least one image, so the multi-upload
-            // affordance is unmissable.
-            // v19 round 3: the inline "點縮圖切換預覽…" footnote was
-            // removed — reads as desktop chrome. The same content is
-            // now delivered once, on first entry, via the
-            // _MultiUploadHintDialog (see initState).
+            // Pop-up bubble pointing at the ＋ slot. Only visible
+            // in the brief window between the post-entry delay and
+            // the user's first acknowledgement; see _scheduleHint.
+            if (_hintBubbleVisible)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: _MultiUploadHintBubble(onDismiss: _dismissHint),
+              ),
 
             const SizedBox(height: 24),
 
@@ -1694,12 +1747,18 @@ class _ThumbRow extends StatelessWidget {
     required this.onRemove,
     required this.onSelect,
     required this.onAdd,
+    this.addSlotHasDot = false,
   });
   final List<_PickedImage> images;
   final int activeIdx;
   final ValueChanged<int>? onRemove;
   final ValueChanged<int>? onSelect;
   final VoidCallback? onAdd;
+
+  /// When true, overlay a small red dot on the ＋ slot as a
+  /// first-run affordance nudge. Cleared the moment the user
+  /// acknowledges the companion hint bubble.
+  final bool addSlotHasDot;
 
   @override
   Widget build(BuildContext context) {
@@ -1713,7 +1772,9 @@ class _ThumbRow extends StatelessWidget {
         itemCount: images.length + 1,
         separatorBuilder: (_, _) => const SizedBox(width: 8),
         itemBuilder: (context, i) {
-          if (i == images.length) return _AddSlot(onTap: onAdd);
+          if (i == images.length) {
+            return _AddSlot(onTap: onAdd, showRedDot: addSlotHasDot);
+          }
           return _ThumbTile(
             image: images[i],
             active: i == activeIdx,
@@ -1844,81 +1905,139 @@ class _CompressOverlay extends StatelessWidget {
 }
 
 class _AddSlot extends StatelessWidget {
-  const _AddSlot({required this.onTap});
+  const _AddSlot({required this.onTap, this.showRedDot = false});
   final VoidCallback? onTap;
+
+  /// Paint a 8×8 red dot in the top-right corner. Used as a
+  /// first-run affordance nudge (see `_MultiUploadHintBubble`).
+  final bool showRedDot;
 
   @override
   Widget build(BuildContext context) {
+    final slot = Container(
+      width: 48,
+      height: 64,
+      decoration: BoxDecoration(
+        color: const Color(0x0AFFFFFF),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppTheme.line2),
+      ),
+      child: Icon(LucideIcons.plus, size: 18, color: AppTheme.textMute),
+    );
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
-      child: Container(
-        width: 48,
-        height: 64,
-        decoration: BoxDecoration(
-          color: const Color(0x0AFFFFFF),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: AppTheme.line2),
-        ),
-        child: Icon(LucideIcons.plus, size: 18, color: AppTheme.textMute),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          slot,
+          if (showRedDot)
+            Positioned(
+              top: -3,
+              right: -3,
+              child: Container(
+                width: 10,
+                height: 10,
+                decoration: BoxDecoration(
+                  color: AppTheme.favoriteActive,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: AppTheme.bg, width: 1.5),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
 }
 
-/// First-run tip shown on initial entry to the submission page.
-/// App-style brief modal — one icon, a short heading, a one-line
-/// description, one action button. Mirrors the pattern iOS uses
-/// for feature onboarding (e.g. Safari "Continue in Reader") —
-/// lightweight enough to dismiss with muscle memory.
+/// First-run tip, second-iteration version. Slim horizontal bubble
+/// that renders inline below the thumb row, with a small upward
+/// caret pointing at the ＋ slot (leftmost column of the row, where
+/// ＋ lives when there are no picked images yet). Visible for 6 s
+/// or until the user taps anywhere on it.
 ///
-/// Persistence lives in [_SubmissionPageState._prefsKeyHintSeen].
-class _MultiUploadHintDialog extends StatelessWidget {
-  const _MultiUploadHintDialog({required this.onDismiss});
+/// Why inline instead of an Overlay-anchored popover:
+///   · Inline stays aligned to ＋ without needing a GlobalKey +
+///     RenderBox position math — the thumb row is the line above
+///     so pointing up-left lands on ＋ for the empty-state case
+///     (when ＋ is the first slot).
+///   · The scroll body isn't obstructed; the user can scroll past
+///     to dismiss naturally.
+///   · Cheap to render, cheap to dismiss.
+class _MultiUploadHintBubble extends StatelessWidget {
+  const _MultiUploadHintBubble({required this.onDismiss});
   final VoidCallback onDismiss;
 
   @override
   Widget build(BuildContext context) {
-    return Dialog(
-      backgroundColor: AppTheme.surface,
-      insetPadding: const EdgeInsets.symmetric(horizontal: 40),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppTheme.r5),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(24, 28, 24, 20),
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: GestureDetector(
+        onTap: onDismiss,
+        behavior: HitTestBehavior.opaque,
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
+            // Upward caret anchored to the left, pointing at the ＋ slot.
+            Padding(
+              padding: const EdgeInsets.only(left: 20),
+              child: CustomPaint(
+                size: const Size(12, 6),
+                painter: _CaretPainter(AppTheme.surfaceRaised),
+              ),
+            ),
             Container(
-              width: 52,
-              height: 52,
+              padding: const EdgeInsets.fromLTRB(14, 10, 10, 10),
               decoration: BoxDecoration(
                 color: AppTheme.surfaceRaised,
-                shape: BoxShape.circle,
+                borderRadius: BorderRadius.circular(AppTheme.r3),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.3),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
               ),
-              child: Icon(LucideIcons.images,
-                  size: 22, color: AppTheme.text),
-            ),
-            const SizedBox(height: 16),
-            const AppText.bodyBold('可一次上傳多張海報',
-                textAlign: TextAlign.center),
-            const SizedBox(height: 6),
-            const AppText.caption(
-              '每張會建立獨立投稿，共用你填的作品資料。'
-              '縮圖點一下切換預覽，按 ＋ 再加更多張。',
-              tone: AppTextTone.muted,
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 20),
-            AppButton.primary(
-              label: '知道了',
-              fullWidth: true,
-              onPressed: onDismiss,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(LucideIcons.images, size: 15, color: AppTheme.text),
+                  const SizedBox(width: 8),
+                  const Flexible(
+                    child: AppText.small(
+                      '按 ＋ 可一次加多張海報，共用同一筆資料',
+                      weight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Icon(LucideIcons.x, size: 14, color: AppTheme.textFaint),
+                ],
+              ),
             ),
           ],
         ),
       ),
     );
   }
+}
+
+class _CaretPainter extends CustomPainter {
+  const _CaretPainter(this.color);
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final p = Path()
+      ..moveTo(size.width / 2, 0)
+      ..lineTo(size.width, size.height)
+      ..lineTo(0, size.height)
+      ..close();
+    canvas.drawPath(p, Paint()..color = color);
+  }
+
+  @override
+  bool shouldRepaint(_CaretPainter old) => old.color != color;
 }
