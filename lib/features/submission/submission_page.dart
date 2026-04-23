@@ -20,6 +20,12 @@ import '../../data/repositories/submission_repository.dart';
 import '../../data/repositories/work_repository.dart';
 import 'tag_picker.dart';
 
+/// Two-stage upload flow — pick first, compose second. Mirrors
+/// Instagram / Threads / Pinterest where tapping ＋ takes you to a
+/// gallery-style picker and only a deliberate 下一步 moves to the
+/// caption / metadata step.
+enum _UploadStage { pick, compose }
+
 class SubmissionPage extends ConsumerStatefulWidget {
   const SubmissionPage({super.key});
 
@@ -64,20 +70,24 @@ class _SubmissionPageState extends ConsumerState<SubmissionPage> {
   final _sourcePlatformController = TextEditingController();
   final _sourceNoteController = TextEditingController();
 
-  // ── Image state ──
+  // ── Upload stage machine ──
   //
-  // v19 round 10: single-image upload only. Multi-upload UI (thumb
-  // row, ＋ slot, dedup fingerprint, batch compression overlay) was
-  // removed — reads too desktop-y, the empty-picker placeholder felt
-  // like a file-upload form rather than a mobile share flow. Now:
+  // v19 round 11 — two-stage flow matching IG:
+  //   _UploadStage.pick      — user picks the image; cancel = pop route,
+  //                            下一步 = advance to compose (enabled only
+  //                            when an image is picked).
+  //   _UploadStage.compose   — caption / tags / AI declaration / 送審.
+  //                            Back button returns to pick so the user
+  //                            can swap the image without losing form.
   //
-  //   · On page mount, the image picker fires immediately (the user
-  //     already intended to upload — don't make them tap through a
-  //     placeholder card first).
-  //   · Cancelling the picker before selecting anything pops the
-  //     route back (IG does the same — cancel = abort upload).
-  //   · The form renders with the chosen image previewed at top; a
-  //     tap on the preview lets the user swap for a different one.
+  // On web, the "in-app gallery grid" IG-style isn't buildable — the
+  // browser's File API only exposes a native file chooser. Step 1 on
+  // web renders the empty-preview → tap → system chooser path. On
+  // iOS/Android image_picker still triggers the OS sheet. Either way
+  // we never auto-fire the picker on page entry; the user taps the
+  // preview deliberately, which is the behaviour the design review
+  // called for.
+  _UploadStage _stage = _UploadStage.pick;
   _PickedImage? _picked;
 
   bool _compressing = false;
@@ -85,23 +95,6 @@ class _SubmissionPageState extends ConsumerState<SubmissionPage> {
 
   // ── Expandable sections ──
   bool _showAdvanced = false;
-
-  @override
-  void initState() {
-    super.initState();
-    // Fire the picker as soon as the page is on-screen so the user
-    // doesn't stare at a large empty card.
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      if (!mounted) return;
-      await _pickOne();
-      // If they cancelled without picking anything, the submission
-      // flow is effectively aborted — pop back to the shell.
-      if (!mounted) return;
-      if (_picked == null && Navigator.of(context).canPop()) {
-        Navigator.of(context).pop();
-      }
-    });
-  }
 
   @override
   void dispose() {
@@ -371,7 +364,7 @@ class _SubmissionPageState extends ConsumerState<SubmissionPage> {
     final signedIn = ref.watch(currentUserProvider) != null;
     if (!signedIn) {
       return Scaffold(
-        
+
         body: Center(
           child: Text('請先登入才能上傳',
               style: TextStyle(color: AppTheme.textMute)),
@@ -382,29 +375,132 @@ class _SubmissionPageState extends ConsumerState<SubmissionPage> {
     final topInset = MediaQuery.paddingOf(context).top;
     final theme = Theme.of(context);
 
+    // v19 round 11 — dispatch on stage. Pick stage shows a large
+    // centered preview tile + 下一步 in the header. Compose stage
+    // shows the full form with the image pinned at the top and the
+    // back button returns to pick (so users can swap the image
+    // without losing the form they've typed).
     return Scaffold(
-      
+
       body: Stack(
         children: [
-          _buildScrollableForm(topInset, theme),
-          // v18 sticky header — X (no bg circle) + 上傳海報 + 送審 pill.
-          // The pill lights up only when a title + at least one image
-          // are present, matching the prototype's canSubmit gate.
-          // AnimatedBuilder listens to the title controller so only
-          // the header (not the whole form tree) rebuilds per keystroke.
-          AnimatedBuilder(
-            animation: _titleZhController,
-            builder: (_, _) => StickyHeader(
-              title: '上傳海報',
-              actionLabel: '送審',
+          if (_stage == _UploadStage.pick)
+            _buildPickStage(topInset)
+          else
+            _buildScrollableForm(topInset, theme),
+          if (_stage == _UploadStage.pick)
+            StickyHeader(
+              title: '新增海報',
+              actionLabel: '下一步',
               backText: '取消',
-              actionLoading: _submitting || _compressing,
-              actionEnabled: !_submitting &&
-                  !_compressing &&
-                  _picked != null &&
-                  _titleZhController.text.trim().isNotEmpty,
-              onAction: (_submitting || _compressing) ? null : _showPreview,
+              actionLoading: _compressing,
+              actionEnabled: !_compressing && _picked != null,
+              onAction: () {
+                HapticFeedback.selectionClick();
+                setState(() => _stage = _UploadStage.compose);
+              },
+            )
+          else
+            // AnimatedBuilder listens to the title controller so only
+            // the header (not the whole form tree) rebuilds per keystroke.
+            AnimatedBuilder(
+              animation: _titleZhController,
+              builder: (_, _) => StickyHeader(
+                title: '填寫資訊',
+                actionLabel: '送審',
+                // Back returns to pick — lets the user swap the image
+                // without clearing the form fields they've filled in.
+                // During submit we make it a no-op instead of null so
+                // the StickyHeader default (maybePop) doesn't kick the
+                // user out of the page mid-upload.
+                onBack: () {
+                  if (_submitting) return;
+                  HapticFeedback.selectionClick();
+                  setState(() => _stage = _UploadStage.pick);
+                },
+                actionLoading: _submitting || _compressing,
+                actionEnabled: !_submitting &&
+                    !_compressing &&
+                    _picked != null &&
+                    _titleZhController.text.trim().isNotEmpty,
+                onAction: (_submitting || _compressing) ? null : _showPreview,
+              ),
             ),
+        ],
+      ),
+    );
+  }
+
+  /// Stage 1 — big centered tap-to-pick tile. Mirrors IG's ＋ entry:
+  /// no auto-popup on page entry, the user deliberately taps the
+  /// preview to summon the native file chooser. Empty-state shows
+  /// the camera icon + hint; once picked, the 2:3 preview fills the
+  /// card with a 更換 pill at the bottom-right so re-pick is obvious.
+  Widget _buildPickStage(double topInset) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(20, topInset + 80, 20, 40),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(
+            child: Center(
+              child: Stack(
+                children: [
+                  if (_picked == null)
+                    GestureDetector(
+                      onTap: _compressing ? null : _pickOne,
+                      child: _EmptyPicker(compressing: _compressing),
+                    )
+                  else
+                    GestureDetector(
+                      onTap: _compressing ? null : _pickOne,
+                      child: _ImagePreview(
+                        bytes: _picked!.bytes,
+                        compressing: _compressing,
+                      ),
+                    ),
+                  if (_compressing)
+                    const Positioned.fill(child: _CompressOverlay()),
+                  if (_picked != null && !_compressing)
+                    Positioned(
+                      right: 10,
+                      bottom: 10,
+                      child: GestureDetector(
+                        onTap: _pickOne,
+                        behavior: HitTestBehavior.opaque,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.55),
+                            borderRadius:
+                                BorderRadius.circular(AppTheme.rPill),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: const [
+                              Icon(LucideIcons.repeat2,
+                                  size: 14, color: Colors.white),
+                              SizedBox(width: 6),
+                              AppText.small('更換',
+                                  color: Colors.white,
+                                  weight: FontWeight.w600),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+          AppText.caption(
+            _picked == null
+                ? '點擊上方以選擇照片'
+                : '準備好後按右上角「下一步」填寫資訊',
+            tone: AppTextTone.faint,
+            textAlign: TextAlign.center,
           ),
         ],
       ),
@@ -420,65 +516,29 @@ class _SubmissionPageState extends ConsumerState<SubmissionPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // ── Single image preview ──
-            // Picker fires on page entry (see initState). If the user
-            // cancelled, initState pops the route. If they picked,
-            // _picked is set and we render the 2:3 preview. Tapping
-            // the preview opens the picker again (更換照片).
-            Stack(
-              children: [
-                if (_picked == null)
-                  GestureDetector(
-                    onTap: _submitting || _compressing ? null : _pickOne,
-                    child: _EmptyPicker(compressing: _compressing),
-                  )
-                else
-                  GestureDetector(
-                    onTap: _submitting || _compressing ? null : _pickOne,
+            // ── Compose-stage thumbnail ──
+            // Small image strip (70% width, 2:3 aspect) pinned at top so
+            // the user keeps visual context of which photo they're
+            // composing metadata for. Tapping it returns to the pick
+            // stage rather than re-opening the system picker — if they
+            // want a different image, the two-stage flow expects a
+            // deliberate "上一步" before re-picking.
+            if (_picked != null)
+              Align(
+                alignment: Alignment.center,
+                child: FractionallySizedBox(
+                  widthFactor: 0.55,
+                  child: GestureDetector(
+                    onTap: _submitting
+                        ? null
+                        : () => setState(() => _stage = _UploadStage.pick),
                     child: _ImagePreview(
                       bytes: _picked!.bytes,
-                      compressing: _compressing,
+                      compressing: false,
                     ),
                   ),
-                if (_compressing)
-                  const Positioned.fill(
-                    child: _CompressOverlay(),
-                  ),
-                // 更換 button overlay — bottom-right pill that explicitly
-                // offers to re-pick. Keeps the tap affordance visible
-                // without requiring the user to guess the whole preview
-                // is tappable.
-                if (_picked != null && !_submitting && !_compressing)
-                  Positioned(
-                    right: 10,
-                    bottom: 10,
-                    child: GestureDetector(
-                      onTap: _pickOne,
-                      behavior: HitTestBehavior.opaque,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.55),
-                          borderRadius:
-                              BorderRadius.circular(AppTheme.rPill),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: const [
-                            Icon(LucideIcons.repeat2,
-                                size: 14, color: Colors.white),
-                            SizedBox(width: 6),
-                            AppText.small('更換',
-                                color: Colors.white,
-                                weight: FontWeight.w600),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
+                ),
+              ),
 
             const SizedBox(height: 24),
 
