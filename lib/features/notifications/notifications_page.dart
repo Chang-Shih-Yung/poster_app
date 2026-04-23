@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../core/theme/app_theme.dart';
@@ -177,66 +178,115 @@ class _NotifTile extends StatelessWidget {
   final NotificationItem item;
   @override
   Widget build(BuildContext context) {
-    final (icon, tint) = switch (item.kind) {
-      NotificationKind.favorite => (Icons.favorite, AppTheme.favoriteActive),
-      NotificationKind.follow => (LucideIcons.userPlus, AppTheme.text),
-      NotificationKind.submissionApproved =>
-        (LucideIcons.check, AppTheme.success),
-      NotificationKind.submissionRejected =>
-        (LucideIcons.x, AppTheme.textMute),
+    // Payload carries the poster title for favorite notifications and
+    // the submission title for approved/rejected notifications.
+    final title = (item.payload['title'] as String?)?.trim() ?? '';
+    final actor = item.actorDisplay;
+
+    // One consistent copy style: actor leads when there is one, no
+    // quotes around content, no generic "有人" anywhere. Follows how
+    // IG / Threads render notification rows.
+    final (icon, tint, text) = switch (item.kind) {
+      NotificationKind.follow => (
+          LucideIcons.userPlus,
+          AppTheme.text,
+          '$actor 開始追蹤你',
+        ),
+      NotificationKind.favorite => (
+          Icons.favorite,
+          AppTheme.favoriteActive,
+          title.isEmpty
+              ? '$actor 收藏了你的海報'
+              : '$actor 收藏了你的 $title',
+        ),
+      NotificationKind.submissionApproved => (
+          LucideIcons.check,
+          AppTheme.success,
+          title.isEmpty ? '投稿已核准' : '投稿已核准：$title',
+        ),
+      NotificationKind.submissionRejected => (
+          LucideIcons.x,
+          AppTheme.textMute,
+          title.isEmpty ? '投稿被退回' : '投稿被退回：$title',
+        ),
     };
-    final lead = switch (item.kind) {
-      NotificationKind.favorite => '有人收藏了',
-      NotificationKind.follow => '有人開始追蹤你',
-      NotificationKind.submissionApproved => '投稿已核准',
-      NotificationKind.submissionRejected => '投稿被退回',
-    };
-    final detail = (item.payload['title'] as String?)?.trim();
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: AppTheme.surfaceRaised,
-              shape: BoxShape.circle,
-            ),
-            child: Icon(icon, size: 18, color: tint),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                AppText.body(
-                  detail == null || detail.isEmpty
-                      ? lead
-                      : '$lead「$detail」',
-                ),
-                const SizedBox(height: 2),
-                AppText.small(_relative(item.createdAt),
-                    tone: AppTextTone.faint),
-              ],
-            ),
-          ),
-          if (item.isUnread) ...[
-            const SizedBox(width: 10),
+
+    final tappable = _resolveTapTarget() != null;
+
+    return InkWell(
+      onTap: tappable
+          ? () {
+              final route = _resolveTapTarget();
+              if (route != null) context.push(route);
+            }
+          : null,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
             Container(
-              width: 8,
-              height: 8,
-              margin: const EdgeInsets.only(top: 8),
+              width: 40,
+              height: 40,
               decoration: BoxDecoration(
-                color: AppTheme.unreadDot,
+                color: AppTheme.surfaceRaised,
                 shape: BoxShape.circle,
               ),
+              child: Icon(icon, size: 18, color: tint),
             ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  AppText.body(text),
+                  const SizedBox(height: 2),
+                  AppText.small(_relative(item.createdAt),
+                      tone: AppTextTone.faint),
+                ],
+              ),
+            ),
+            if (item.isUnread) ...[
+              const SizedBox(width: 10),
+              Container(
+                width: 8,
+                height: 8,
+                margin: const EdgeInsets.only(top: 8),
+                decoration: BoxDecoration(
+                  color: AppTheme.unreadDot,
+                  shape: BoxShape.circle,
+                ),
+              ),
+            ],
           ],
-        ],
+        ),
       ),
     );
+  }
+
+  /// Compute a route target for the notification tap, based on kind.
+  /// Returns null when there's nothing sensible to navigate to (e.g.
+  /// the actor_id is null because they deleted their account).
+  ///   · follow                 → /user/{actor_id}
+  ///   · favorite               → /poster/{target_id}
+  ///   · submission approved    → /poster/{created_poster_id} if payload
+  ///                              carries one, else /me/submissions
+  ///   · submission rejected    → /me/submissions
+  String? _resolveTapTarget() {
+    switch (item.kind) {
+      case NotificationKind.follow:
+        return item.actorId != null ? '/user/${item.actorId}' : null;
+      case NotificationKind.favorite:
+        return item.targetId != null ? '/poster/${item.targetId}' : null;
+      case NotificationKind.submissionApproved:
+        final createdPoster = item.payload['created_poster_id'] as String?;
+        if (createdPoster != null && createdPoster.isNotEmpty) {
+          return '/poster/$createdPoster';
+        }
+        return '/me/submissions';
+      case NotificationKind.submissionRejected:
+        return '/me/submissions';
+    }
   }
 
   String _relative(DateTime t) {

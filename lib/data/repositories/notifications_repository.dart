@@ -32,6 +32,9 @@ class NotificationItem {
     required this.id,
     required this.kind,
     required this.actorId,
+    required this.actorName,
+    required this.actorHandle,
+    required this.actorAvatarUrl,
     required this.targetId,
     required this.targetKind,
     required this.payload,
@@ -44,6 +47,9 @@ class NotificationItem {
         id: r['id'] as String,
         kind: NotificationKind.fromRaw(r['type'] as String),
         actorId: r['actor_id'] as String?,
+        actorName: (r['actor_name'] as String?)?.trim() ?? '',
+        actorHandle: r['actor_handle'] as String?,
+        actorAvatarUrl: r['actor_avatar_url'] as String?,
         targetId: r['target_id'] as String?,
         targetKind: r['target_kind'] as String?,
         payload: (r['payload'] as Map?)?.cast<String, dynamic>() ??
@@ -58,6 +64,14 @@ class NotificationItem {
   final String id;
   final NotificationKind kind;
   final String? actorId;
+
+  /// Actor display_name / handle / avatar_url snapshotted by the RPC
+  /// at read-time. actorName is guaranteed non-null (empty string if
+  /// the actor's row is missing, e.g. deleted user).
+  final String actorName;
+  final String? actorHandle;
+  final String? actorAvatarUrl;
+
   final String? targetId;
   final String? targetKind;
   final Map<String, dynamic> payload;
@@ -65,6 +79,16 @@ class NotificationItem {
   final DateTime createdAt;
 
   bool get isUnread => readAt == null;
+
+  /// Display name for rendering — falls back to handle or
+  /// "某使用者" when the actor has no display_name (or is null).
+  String get actorDisplay {
+    if (actorName.isNotEmpty) return actorName;
+    if (actorHandle != null && actorHandle!.isNotEmpty) {
+      return '@$actorHandle';
+    }
+    return '某使用者';
+  }
 }
 
 class NotificationsRepository {
