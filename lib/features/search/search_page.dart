@@ -385,19 +385,28 @@ class _BrowseCategories extends ConsumerWidget {
             style: TextStyle(color: AppTheme.textMute)),
       ),
       data: (cats) {
+        // v19 round 2: Spotify "瀏覽全部" grid — 2 cols, text anchored
+        // top-left, fixed aspect (roughly 1.8:1 like Spotify's cards).
+        // Switched from a vertical stack because stacked full-width
+        // cards ate two full viewports on mobile; the grid gets the
+        // same density into one.
         return Padding(
           padding: EdgeInsets.fromLTRB(20, 0, 20, bottomInset + 40),
-          child: Column(
-            children: [
-              for (var i = 0; i < cats.length; i++) ...[
-                _CategoryCard(
-                  title: _shortCatName(cats[i].titleZh),
-                  background: _bgFor(i),
-                  onTap: () => _openCategorySheet(context, cats[i]),
-                ),
-                if (i < cats.length - 1) const SizedBox(height: 10),
-              ],
-            ],
+          child: GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: cats.length,
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              mainAxisSpacing: 10,
+              crossAxisSpacing: 10,
+              childAspectRatio: 1.6,
+            ),
+            itemBuilder: (_, i) => _CategoryCard(
+              title: _shortCatName(cats[i].titleZh),
+              background: _bgFor(i),
+              onTap: () => _openCategorySheet(context, cats[i]),
+            ),
           ),
         );
       },
@@ -504,22 +513,27 @@ class _CategoryCard extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(AppTheme.r4),
-        child: Container(
-          height: 96,
-          padding: const EdgeInsets.all(16),
+        child: Ink(
           decoration: BoxDecoration(
             color: background,
             borderRadius: BorderRadius.circular(AppTheme.r4),
           ),
-          child: Text(
-            title,
-            style: const TextStyle(
-              fontFamily: 'InterDisplay',
-              fontFamilyFallback: ['NotoSansTC'],
-              fontSize: 22,
-              fontWeight: FontWeight.w700,
-              letterSpacing: -0.4,
-              color: Colors.white,
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Align(
+              alignment: Alignment.topLeft,
+              child: Text(
+                title,
+                style: const TextStyle(
+                  fontFamily: 'InterDisplay',
+                  fontFamilyFallback: ['NotoSansTC'],
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.4,
+                  height: 1.1,
+                  color: Colors.white,
+                ),
+              ),
             ),
           ),
         ),

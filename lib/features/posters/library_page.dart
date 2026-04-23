@@ -217,20 +217,52 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
     }
   }
 
+  /// Swap the active filter without the old "wipe → skeleton → refetch"
+  /// flicker. The modern pattern (iOS stock apps, Instagram, Spotify):
+  /// keep the current grid visible while the next page fetches in the
+  /// background, then atomically replace the item list when it lands.
+  ///
+  /// Concretely:
+  ///   · old code cleared `_items`, set `_firstLoad = true`, and
+  ///     re-rendered the skeleton — every 收藏 ↔ 投稿 tap triggered
+  ///     a visible empty-then-skeleton-then-items shuffle and even
+  ///     reflowed the header because the page's scroll extent
+  ///     collapsed mid-fetch.
+  ///   · new code bumps the request seq, fires the fetch, and only
+  ///     calls `setState` once — with the new items already in hand.
+  ///     _loading stays true during the in-flight fetch so the
+  ///     trailing loader pip on the masonry grid shows progress
+  ///     without wiping the current view.
   Future<void> _applyFilter(PosterFilter next) async {
-    _requestSeq++;
+    final seq = ++_requestSeq;
     setState(() {
-      _items.clear();
-      _end = false;
-      _loading = false;
-      _firstLoad = true;
+      _loading = true;
       _filter = next;
       _heroPage = 0;
     });
     if (_heroPageController.hasClients) {
       _heroPageController.jumpToPage(0);
     }
-    await _loadMore();
+    try {
+      final page = await ref.read(posterRepositoryProvider).listApproved(
+            filter: next,
+            offset: 0,
+          );
+      if (!mounted || seq != _requestSeq) return;
+      setState(() {
+        _items
+          ..clear()
+          ..addAll(page.items);
+        _end = !page.hasMore;
+        _firstLoad = false;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted || seq != _requestSeq) return;
+      setState(() => _loading = false);
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('載入失敗：$e')));
+    }
   }
 
   /// Advanced filter sheet — kept for future "更多篩選" entry point but

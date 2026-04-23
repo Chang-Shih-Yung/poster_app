@@ -848,66 +848,52 @@ class _EmptyPicker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // v19 round 2: the earlier diagonal-stripe placeholder read as
+    // "under-construction hatch-pattern" — too noisy against the
+    // otherwise clean submission form. Replaced with a flat iOS-style
+    // card: muted surface, single hairline border, centered camera
+    // icon + label. Reads as a tappable drop zone without tech debt
+    // vibes.
     return AspectRatio(
       aspectRatio: 2 / 3,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(14),
-        child: Container(
-          decoration: BoxDecoration(
-            color: AppTheme.ink2,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: AppTheme.line2),
-          ),
-          child: CustomPaint(
-            painter: _DiagonalStripePainter(),
-            child: Center(
-              child: compressing
-                  ? const AppLoader()
-                  : Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(LucideIcons.camera,
-                            size: 32, color: AppTheme.textMute),
-                        const SizedBox(height: 10),
-                        AppText.caption(
-                          '點擊選擇圖片 · 支援多張',
-                          tone: AppTextTone.muted,
-                        ),
-                      ],
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppTheme.surface,
+          borderRadius: BorderRadius.circular(AppTheme.r4),
+          border: Border.all(color: AppTheme.line1, width: 0.5),
+        ),
+        child: Center(
+          child: compressing
+              ? const AppLoader()
+              : Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 56,
+                      height: 56,
+                      decoration: BoxDecoration(
+                        color: AppTheme.surfaceRaised,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(LucideIcons.camera,
+                          size: 24, color: AppTheme.textMute),
                     ),
-            ),
-          ),
+                    const SizedBox(height: 12),
+                    const AppText.body(
+                      '點擊選擇圖片',
+                      weight: FontWeight.w500,
+                    ),
+                    const SizedBox(height: 2),
+                    const AppText.small(
+                      '支援多張',
+                      tone: AppTextTone.faint,
+                    ),
+                  ],
+                ),
         ),
       ),
     );
   }
-}
-
-/// Diagonal-stripe pattern using `canvas.drawRect` only (rectangles
-/// have well-defined bounds, unlike the previous path-fill which
-/// extended beyond canvas and triggered an assertion). Each stripe is
-/// rotated 45° via canvas.transform.
-class _DiagonalStripePainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    canvas.save();
-    canvas.clipRect(Rect.fromLTWH(0, 0, size.width, size.height));
-    // Translate to centre, rotate 45°, draw vertical stripes that
-    // cover the rotated bounding box.
-    final centre = Offset(size.width / 2, size.height / 2);
-    canvas.translate(centre.dx, centre.dy);
-    canvas.rotate(0.785398); // π/4
-    final diag = (size.width + size.height); // covers rotated bbox
-    final paint = Paint()..color = AppTheme.fieldFillTranslucent;
-    const band = 12.0;
-    for (var x = -diag; x < diag; x += band * 2) {
-      canvas.drawRect(Rect.fromLTWH(x, -diag, band, diag * 2), paint);
-    }
-    canvas.restore();
-  }
-
-  @override
-  bool shouldRepaint(_DiagonalStripePainter old) => false;
 }
 
 /// v13 image preview — just the image, 2:3 aspect, rounded.

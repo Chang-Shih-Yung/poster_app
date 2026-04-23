@@ -47,7 +47,6 @@ dependencies:
   # shimmer dropped v19 — no more reflective sweep, just flat placeholders
   # google_fonts dropped — see EPIC 12 / app_theme.dart
   sentry_flutter: ^8.14.2
-  phosphor_flutter: ^2.1.0
   animations: ^2.0.11
   modal_bottom_sheet: ^3.0.0
   flutter_animate: ^4.5.2
@@ -109,6 +108,9 @@ flutter:
     # Used as the primary fontFamily; NotoSansTC is registered as
     # fontFamilyFallback so CJK characters still render glyphs
     # instead of tofu (Inter has no Han coverage).
+    # v19 round 2: dropped ExtraBold (w800) — `grep -r FontWeight.w800`
+    # returned 0 hits across lib/. Saves one OTF round-trip + ~150 KB
+    # on first-load. Medium (w500) is still used in 33+ sites so kept.
     - family: InterDisplay
       fonts:
         - asset: assets/fonts/InterDisplay-Regular.otf
@@ -119,8 +121,6 @@ flutter:
           weight: 600
         - asset: assets/fonts/InterDisplay-Bold.otf
           weight: 700
-        - asset: assets/fonts/InterDisplay-ExtraBold.otf
-          weight: 800
 
     # CJK fallback. Subset (~4.4MB per weight) covers Basic Latin,
     # Latin-1 supplement, CJK punctuation + symbols, common Han.

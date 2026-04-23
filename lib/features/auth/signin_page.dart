@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:phosphor_flutter/phosphor_flutter.dart'; // TODO(v11): remove when Google logo is replaced
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/ds/ds.dart';
@@ -120,9 +120,16 @@ class _SigninPageState extends ConsumerState<SigninPage> {
                 // here via 切換帳號 or after a session expiry, and
                 // silently re-signing the cached account is the wrong
                 // default in both cases.
+                // v19 round 2: Google G logo replaced with a generic
+                // log-in glyph from Lucide. The phosphor_flutter
+                // dependency carried ~2 MB of icon-weight TTFs for
+                // a single icon; dropping it saves six font round-
+                // trips on first load. Brand recognition is handled
+                // by the text label — Apple's sign-in flows use the
+                // same pattern (text-only CTA is acceptable).
                 AppButton.primary(
                   label: '使用 Google 登入',
-                  icon: PhosphorIconsRegular.googleLogo,
+                  icon: LucideIcons.logIn,
                   size: AppButtonSize.large,
                   fullWidth: true,
                   onPressed: () => ref

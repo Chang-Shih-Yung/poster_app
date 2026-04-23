@@ -850,16 +850,24 @@ class _RankedCard extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            // Solid white rank numeral.
+            // v19 round 2: plain numeric rank (was "01 / 02 / 03"
+            // with leading zero — read as verbose / magazine-style).
+            // "1. / 2. / 3." is how iOS / Spotify display list
+            // positions; feels native. Weight bumped down to w700
+            // since we just dropped the ExtraBold font weight to
+            // save first-load bytes; visually w700 reads identical
+            // at this display size.
             SizedBox(
               width: 52,
               child: Text(
-                rank.toString().padLeft(2, '0'),
+                '$rank.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  fontSize: 44,
+                  fontFamily: 'InterDisplay',
+                  fontFamilyFallback: const ['NotoSansTC'],
+                  fontSize: 40,
                   height: 0.9,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w700,
                   letterSpacing: -1,
                   color: AppTheme.text,
                 ),
