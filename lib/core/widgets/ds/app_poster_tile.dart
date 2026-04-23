@@ -140,7 +140,22 @@ class AppPosterTile extends StatelessWidget {
             ),
           );
 
-    final hero = posterId != null ? Hero(tag: 'poster-$posterId', child: img) : img;
+    // v19 round 8: explicit `placeholderBuilder` keeps an equal-sized
+    // SizedBox in the card's slot while the Hero is mid-flight.
+    // Flutter's default placeholder is NOT size-preserving in every
+    // parent layout — in horizontal ListViews in particular, the
+    // source can visually "vacate" and the next card shifts left.
+    // Users reported that tapping poster A on home caused poster B
+    // ("另一張神隱少女的海報會亂飄") to drift. Locking the placeholder
+    // to the source's rendered size keeps neighbors pinned.
+    final hero = posterId != null
+        ? Hero(
+            tag: 'poster-$posterId',
+            placeholderBuilder: (_, size, _) =>
+                SizedBox(width: size.width, height: size.height),
+            child: img,
+          )
+        : img;
 
     final overlays = <Widget>[
       if (showOverlayText && (title != null || subtitle != null))

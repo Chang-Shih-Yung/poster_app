@@ -197,6 +197,8 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                           children: [
                             Hero(
                               tag: 'poster-${p.id}',
+                              placeholderBuilder: (_, size, _) =>
+                                  SizedBox(width: size.width, height: size.height),
                               child: CachedNetworkImage(
                                 imageUrl: p.posterUrl,
                                 fit: BoxFit.cover,

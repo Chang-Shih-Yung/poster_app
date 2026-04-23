@@ -99,7 +99,12 @@ class _SigninPageState extends ConsumerState<SigninPage> {
             child: Column(
               children: [
                 const Spacer(flex: 3),
-                // Brand — wide letter-spacing per v13 spec.
+                // Brand only — tagline removed v19 round 8 per
+                // design call ("登入頁你把slogan拿掉"). Apple/
+                // Spotify signin screens lead with the mark alone;
+                // any line underneath competes with the CTA for
+                // attention and adds no new information to someone
+                // already on the signin page.
                 Text(
                   'POSTER.',
                   style: TextStyle(
@@ -111,9 +116,6 @@ class _SigninPageState extends ConsumerState<SigninPage> {
                     color: AppTheme.text,
                   ),
                 ),
-                const SizedBox(height: 14),
-                const AppText.body('探索電影海報的世界',
-                    tone: AppTextTone.muted),
                 const Spacer(flex: 4),
                 // v19: AppButton.primary replaces the inlined _WhitePill.
                 // Manual taps always show Google's picker — users land

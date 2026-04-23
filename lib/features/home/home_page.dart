@@ -212,32 +212,44 @@ class HomePage extends ConsumerWidget {
               }
 
               // ── Cross-section dedup ───────────────────────────────
-              // v19 round 7: same poster can appear in multiple server
-              // sections (trending + popular + recent_approved + for_you
-              // routinely overlap in the top ~20), which was creating
-              // two problems:
+              // Same poster can appear across sections (trending +
+              // popular + recent_approved + for_you routinely overlap
+              // in the top ~20), and that was causing two problems:
               //
               //   1. Hero-tag collisions — two live `Hero(tag:
               //      poster-$id)` on the same route → Flutter picked
               //      the flight destination arbitrarily → cards
               //      visibly "jumped to the wrong card" on pop-back.
-              //      HeroMode on IndexedStack covers cross-tab but
-              //      within-home collisions still needed client dedup.
-              //   2. UX — users scrolled past the same movie three
+              //   2. UX — users scrolled past the same movie in three
               //      sections in a row, home felt smaller than it is.
               //
               // Fix: precompute a skip-set per section in one forward
               // pass. Each section only sees posters NOT already shown
-              // in an earlier section (or as the hero). Sections that
-              // get emptied by dedup are dropped silently.
+              // in an earlier section (or as the hero).
+              //
+              // v19 round 8: `trending_favorites` is exempt from
+              // FILTERING but still contributes to the seen set. Why:
+              // the section's whole identity is "本週 TOP 10" — a
+              // ranked list. If earlier sections ate 9 of the 10
+              // entries, TOP 10 collapsed to "TOP 1", which is what
+              // the user reported. Trending keeps its full ranking;
+              // later sections dedupe against it so nothing appears
+              // a third time below.
               final heroId = hero?.id;
               final seenIds = <String>{?heroId};
               final skipSets = <Set<String>>[];
               for (final s in sections) {
-                // Snapshot what was "already shown" before this section.
-                skipSets.add(Set.of(seenIds));
-                // Contribute this section's IDs so downstream sections
-                // dedup against them too.
+                final isRankedTrending = s.sourceType == 'trending_favorites';
+                if (isRankedTrending) {
+                  // Trending shows its full ranking — only the hero
+                  // gets filtered out (otherwise the hero duplicates
+                  // as rank #1 right below itself).
+                  skipSets.add(<String>{?heroId});
+                } else {
+                  skipSets.add(Set.of(seenIds));
+                }
+                // Every section still contributes to the seen set so
+                // later sections dedupe against it.
                 seenIds.addAll(_posterIdsIn(s));
               }
 

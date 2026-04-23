@@ -410,9 +410,14 @@ begin
   -- T15 · soft-deleted poster disappears from trending_favorites
   -- ============================================================
   v_poster := null;
-  select id into v_poster from public.posters
-   where status = 'approved' and deleted_at is null and favorite_count > 0
-   order by favorite_count desc limit 1;
+  -- The function has a local OUT variable named `status`; qualify the
+  -- column with the table alias so Postgres doesn't treat
+  -- `status = 'approved'` as an assignment to that local.
+  select p.id into v_poster
+  from public.posters p
+  where p.status = 'approved' and p.deleted_at is null and p.favorite_count > 0
+  order by p.favorite_count desc
+  limit 1;
 
   test_id := 'T15';
   if v_poster is null then

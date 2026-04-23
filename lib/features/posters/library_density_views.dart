@@ -101,6 +101,8 @@ class _FullBleedFeedState extends State<_FullBleedFeed>
                 },
                 child: Hero(
                   tag: 'poster-${poster.id}',
+                  placeholderBuilder: (_, size, _) =>
+                      SizedBox(width: size.width, height: size.height),
                   child: Stack(
                     fit: StackFit.expand,
                     children: [
