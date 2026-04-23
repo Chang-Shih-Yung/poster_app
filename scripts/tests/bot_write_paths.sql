@@ -9,26 +9,31 @@
 -- without opening the Messages panel. Read-path coverage lives in
 -- `scripts/tests/bot_flows_test.py`.
 --
--- Safe to re-run. Safe to interrupt — every test is wrapped in its
--- own DO block and the session-scoped temp table auto-drops on
--- commit.
+-- Design notes:
+--   · No begin/commit wrapper. Supabase's dashboard SQL editor wraps
+--     every statement in its own implicit transaction, so an outer
+--     `begin ... commit` + `on commit drop` would drop the temp
+--     table the instant we create it — next statement reads a
+--     relation that doesn't exist. A session-scoped temp table
+--     (default behaviour, no ON COMMIT clause) persists across the
+--     implicit per-statement transactions inside the same connection.
+--   · Skip the Supabase "Enable RLS" dialog for _test_results —
+--     it's a temp table in pg_temp and RLS is moot there.
 -- ═══════════════════════════════════════════════════════════════════
 
-begin;
-
--- Session-scoped results buffer so every RAISE NOTICE also lands in
--- the grid. ON COMMIT DROP = gone the moment we finish.
+-- Fresh buffer for this run.
+drop table if exists _test_results;
 create temp table _test_results (
   test_id text primary key,
-  status  text not null,      -- 'PASS' | 'FAIL' | 'SKIP'
+  status  text not null,   -- 'PASS' | 'FAIL' | 'SKIP'
   detail  text not null
-) on commit drop;
+);
 
 
 -- ───────────────────────────────────────────────────────────────────
 -- T1 · avatar 3-report safety net
 -- Target: bot09. Reporters: bot00, bot01, bot02.
--- Expects: avatar_status flips from 'ok' → 'pending_review'.
+-- Expects: avatar_status flips 'ok' → 'pending_review'.
 -- ───────────────────────────────────────────────────────────────────
 do $$
 declare
@@ -120,7 +125,6 @@ end $$;
 
 -- ───────────────────────────────────────────────────────────────────
 -- T3 · self-follow DB constraint
--- Assert the `no_self_follow` CHECK constraint actually fires.
 -- ───────────────────────────────────────────────────────────────────
 do $$
 declare
@@ -148,7 +152,6 @@ end $$;
 
 -- ───────────────────────────────────────────────────────────────────
 -- T4 · favorite idempotency (PK)
--- Re-liking the same poster should be a no-op (primary key collision).
 -- ───────────────────────────────────────────────────────────────────
 do $$
 declare
@@ -208,7 +211,6 @@ begin
   select count(*) into cnt_first
   from public.avatar_reports where target_user_id = target and reporter_id = reporter;
 
-  -- Same pair again → should be a no-op (ON CONFLICT)
   insert into public.avatar_reports (target_user_id, reporter_id, reason)
   values (target, reporter, 'test T5 second')
   on conflict do nothing;
@@ -225,8 +227,6 @@ begin
        format('dup leaked: first=%s, second=%s', cnt_first, cnt_second));
   end if;
 
-  -- Clean up the single report we inserted. Make sure we don't leave
-  -- the target in pending_review (3-threshold may have already fired).
   delete from public.avatar_reports
   where target_user_id = target and reporter_id = reporter
     and reason like 'test T5%';
@@ -261,8 +261,7 @@ end $$;
 
 
 -- ═══════════════════════════════════════════════════════════════════
--- Dump results + post-test state sanity. Both land in the grid so
--- the human running this can see PASS/FAIL without opening Messages.
+-- Dump results + post-test state sanity. Both land in the grid.
 -- ═══════════════════════════════════════════════════════════════════
 select test_id, status, detail
 from _test_results
@@ -280,4 +279,5 @@ select
   (select count(*) from public.avatar_reports)                                                as open_reports,
   (select count(*) from public.users where avatar_status = 'pending_review')                  as pending_avatars;
 
-commit;
+-- Optional cleanup (temp table auto-drops on session end anyway).
+drop table if exists _test_results;
