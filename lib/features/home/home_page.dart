@@ -129,9 +129,36 @@ class HomePage extends ConsumerWidget {
     final sectionsAsync = ref.watch(homeSectionsV2Provider);
     final myId = ref.watch(currentUserProvider)?.id;
 
+    // v19 round 9: the home page is giving up on Hero flight entirely.
+    //
+    // We tried, in order: adding Hero wrappers, HeroMode gating on the
+    // IndexedStack, fixed-aspect _FeedCard layout, cross-section dedup,
+    // explicit placeholderBuilder, exempting trending from dedup, and
+    // sizing a static slot so neighbours don't shift. After every fix
+    // the user still reported one card visibly "drifting across the
+    // screen" on detail-page close.
+    //
+    // The root cost: home renders dozens of poster cards across 6+
+    // horizontal-scroll sections. Even with dedup, Flutter's Hero
+    // mechanic produces visible artefacts at this scale — the flight
+    // ghost animates on an Overlay that outlives the page transition,
+    // so on pop the ghost briefly appears to "cross" cards it never
+    // touched. In the 我的 tab this is fine (one grid, one occurrence
+    // per poster, no horizontal overlap) but on home it isn't worth
+    // the implementation burden.
+    //
+    // Killing Hero for home only: wrap the CustomScrollView in
+    // HeroMode(enabled: false). Any Hero widget inside this subtree
+    // silently becomes a no-op. Detail route still has its Hero with
+    // the same tag — with no matching source on home, Flutter opens
+    // the route with a standard slide/fade and returns the same way.
+    // 我的 tab stays as-is because it's in a separate IndexedStack
+    // child outside this HeroMode boundary.
     return Scaffold(
-      
-      body: CustomScrollView(
+
+      body: HeroMode(
+        enabled: false,
+        child: CustomScrollView(
         slivers: [
           // v18 top chrome: hamburger + search icon on a glass pill.
           // Floating behaviour (`floating: true, snap: true, pinned:
@@ -274,6 +301,7 @@ class HomePage extends ConsumerWidget {
             child: SizedBox(height: bottomInset + 80),
           ),
         ],
+        ),
       ),
     );
   }
