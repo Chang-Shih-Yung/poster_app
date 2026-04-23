@@ -473,8 +473,14 @@ begin
       );
       perform set_config('request.jwt.claims', '', true);
 
-      -- RPC returns jsonb; pull the id out.
-      v_sug_id := (v_sug_payload ->> 'id')::uuid;
+      -- RPC returns jsonb with shape
+      --   { "auto_merged": bool, "suggestion_id": uuid }
+      -- When auto_merged = true there's no new suggestion row (it got
+      -- merged into an existing tag); only grab the id when a real
+      -- suggestion was created.
+      if (v_sug_payload ->> 'auto_merged')::boolean = false then
+        v_sug_id := (v_sug_payload ->> 'suggestion_id')::uuid;
+      end if;
       v_t9_success := true;
     exception when others then
       perform set_config('request.jwt.claims', '', true);
@@ -484,12 +490,15 @@ begin
     if not v_t9_success then
       status := 'FAIL';
       detail := format('submit_tag_suggestion raised: %s', v_t9_reason);
+    elsif (v_sug_payload ->> 'auto_merged')::boolean = true then
+      status := 'PASS';
+      detail := format('submit_tag_suggestion auto-merged: %s', v_sug_payload::text);
     elsif v_sug_id is not null then
       status := 'PASS';
-      detail := format('submit_tag_suggestion returned id=%s', v_sug_id);
+      detail := format('submit_tag_suggestion created suggestion_id=%s', v_sug_id);
     else
       status := 'FAIL';
-      detail := format('submit_tag_suggestion returned %s (no id)', v_sug_payload::text);
+      detail := format('submit_tag_suggestion returned %s (no suggestion_id)', v_sug_payload::text);
     end if;
     return next;
 
