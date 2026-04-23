@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/constants/enums.dart';
 import '../../core/constants/region_labels.dart';
@@ -96,6 +97,35 @@ class _SubmissionPageState extends ConsumerState<SubmissionPage> {
 
   // ── Expandable sections ──
   bool _showAdvanced = false;
+
+  // v19 round 3: one-shot multi-upload hint. Previously we dangled
+  // the "點縮圖切換預覽，按 ＋ 加更多張（共用同一筆作品資料）" line
+  // under the thumb row, which read as a desktop footnote. Now we
+  // fire a brief iOS-style modal the first time the user lands on
+  // this page — tap 知道了 and it never shows again (persisted via
+  // SharedPreferences). Subsequent visits are chrome-free.
+  static const _prefsKeyHintSeen = 'submission_multi_hint_seen_v1';
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeShowHint());
+  }
+
+  Future<void> _maybeShowHint() async {
+    if (!mounted) return;
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.getBool(_prefsKeyHintSeen) == true) return;
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.55),
+      builder: (ctx) => _MultiUploadHintDialog(
+        onDismiss: () => Navigator.of(ctx).pop(),
+      ),
+    );
+    await prefs.setBool(_prefsKeyHintSeen, true);
+  }
 
   @override
   void dispose() {
@@ -619,13 +649,10 @@ class _SubmissionPageState extends ConsumerState<SubmissionPage> {
             ),
             // Hint when there's at least one image, so the multi-upload
             // affordance is unmissable.
-            if (_images.isNotEmpty) ...[
-              const SizedBox(height: 6),
-              AppText.small(
-                '點縮圖切換預覽，按 ＋ 加更多張（共用同一筆作品資料）',
-                tone: AppTextTone.faint,
-              ),
-            ],
+            // v19 round 3: the inline "點縮圖切換預覽…" footnote was
+            // removed — reads as desktop chrome. The same content is
+            // now delivered once, on first entry, via the
+            // _MultiUploadHintDialog (see initState).
 
             const SizedBox(height: 24),
 
@@ -882,11 +909,6 @@ class _EmptyPicker extends StatelessWidget {
                     const AppText.body(
                       '點擊選擇圖片',
                       weight: FontWeight.w500,
-                    ),
-                    const SizedBox(height: 2),
-                    const AppText.small(
-                      '支援多張',
-                      tone: AppTextTone.faint,
                     ),
                   ],
                 ),
@@ -1839,6 +1861,63 @@ class _AddSlot extends StatelessWidget {
           border: Border.all(color: AppTheme.line2),
         ),
         child: Icon(LucideIcons.plus, size: 18, color: AppTheme.textMute),
+      ),
+    );
+  }
+}
+
+/// First-run tip shown on initial entry to the submission page.
+/// App-style brief modal — one icon, a short heading, a one-line
+/// description, one action button. Mirrors the pattern iOS uses
+/// for feature onboarding (e.g. Safari "Continue in Reader") —
+/// lightweight enough to dismiss with muscle memory.
+///
+/// Persistence lives in [_SubmissionPageState._prefsKeyHintSeen].
+class _MultiUploadHintDialog extends StatelessWidget {
+  const _MultiUploadHintDialog({required this.onDismiss});
+  final VoidCallback onDismiss;
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: AppTheme.surface,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 40),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppTheme.r5),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 28, 24, 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 52,
+              height: 52,
+              decoration: BoxDecoration(
+                color: AppTheme.surfaceRaised,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(LucideIcons.images,
+                  size: 22, color: AppTheme.text),
+            ),
+            const SizedBox(height: 16),
+            const AppText.bodyBold('可一次上傳多張海報',
+                textAlign: TextAlign.center),
+            const SizedBox(height: 6),
+            const AppText.caption(
+              '每張會建立獨立投稿，共用你填的作品資料。'
+              '縮圖點一下切換預覽，按 ＋ 再加更多張。',
+              tone: AppTextTone.muted,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 20),
+            AppButton.primary(
+              label: '知道了',
+              fullWidth: true,
+              onPressed: onDismiss,
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -217,26 +217,23 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
     }
   }
 
-  /// Swap the active filter without the old "wipe → skeleton → refetch"
-  /// flicker. The modern pattern (iOS stock apps, Instagram, Spotify):
-  /// keep the current grid visible while the next page fetches in the
-  /// background, then atomically replace the item list when it lands.
+  /// Swap the active filter. Single setState at the start (items cleared
+  /// + skeleton flag on) and a single setState at the end (new items
+  /// + skeleton off) — the three-state shuffle (items → empty → skeleton
+  /// → items) the old implementation produced is gone.
   ///
-  /// Concretely:
-  ///   · old code cleared `_items`, set `_firstLoad = true`, and
-  ///     re-rendered the skeleton — every 收藏 ↔ 投稿 tap triggered
-  ///     a visible empty-then-skeleton-then-items shuffle and even
-  ///     reflowed the header because the page's scroll extent
-  ///     collapsed mid-fetch.
-  ///   · new code bumps the request seq, fires the fetch, and only
-  ///     calls `setState` once — with the new items already in hand.
-  ///     _loading stays true during the in-flight fetch so the
-  ///     trailing loader pip on the masonry grid shows progress
-  ///     without wiping the current view.
+  /// The skeleton renders *inside* the scroll body, BELOW the inline
+  /// header (see `_buildContent`). Header / avatar / stats / segmented
+  /// tabs therefore stay pinned in place during the fetch — only the
+  /// grid area shows the muted rect placeholders. Seq-guard discards
+  /// any stale responses if the user taps again mid-fetch.
   Future<void> _applyFilter(PosterFilter next) async {
     final seq = ++_requestSeq;
     setState(() {
+      _items.clear();
+      _end = false;
       _loading = true;
+      _firstLoad = true;
       _filter = next;
       _heroPage = 0;
     });
@@ -250,9 +247,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
           );
       if (!mounted || seq != _requestSeq) return;
       setState(() {
-        _items
-          ..clear()
-          ..addAll(page.items);
+        _items.addAll(page.items);
         _end = !page.hasMore;
         _firstLoad = false;
         _loading = false;
@@ -592,20 +587,46 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
     // breathing room) so cards don't hug the nav pill.
     final bottomPad = bottomInset + 110;
 
+    // Skeleton during the brief load window. When the page is running
+    // in inline-header mode (M density — 我的 default), the header is
+    // part of the scroll body, so we need to render it ABOVE the
+    // skeleton; otherwise the header visibly vanishes during tab
+    // switches. In Positioned-header modes (L/S) the header is pinned
+    // as a separate Stack layer and the inline slot stays empty, so
+    // this block only affects 我的.
     if (_firstLoad && _loading) {
-      return Padding(
+      return ListView(
+        controller: _scrollController,
         padding: EdgeInsets.only(
             top: inlineHeader != null ? topInset : topPad, bottom: bottomPad),
-        child: LibraryDensitySkeleton(density: density),
+        children: [
+          ?inlineHeader,
+          SizedBox(
+            // Skeleton needs a concrete height — LibraryDensitySkeleton
+            // contains its own GridView which would otherwise try to
+            // be infinite. 520 gives ~3 rows of M-density cards, which
+            // is enough to feel "full-viewport" without overflowing on
+            // shorter phones.
+            height: 520,
+            child: LibraryDensitySkeleton(density: density),
+          ),
+        ],
       );
     }
     if (displayItems.isEmpty && !_loading) {
-      return Padding(
+      return ListView(
+        controller: _scrollController,
         padding: EdgeInsets.only(
             top: inlineHeader != null ? topInset : topPad, bottom: bottomPad),
-        child: _meTab == _MeTab.favorites
-            ? const _EmptyFavoritesState()
-            : const _EmptyState(),
+        children: [
+          ?inlineHeader,
+          SizedBox(
+            height: 320,
+            child: _meTab == _MeTab.favorites
+                ? const _EmptyFavoritesState()
+                : const _EmptyState(),
+          ),
+        ],
       );
     }
     // v18 我的: always Pinterest masonry. Heart overlay shows only on
