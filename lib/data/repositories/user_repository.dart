@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -115,6 +116,13 @@ class UserRepository {
   /// Upload an avatar image to the avatars bucket. Returns the public URL.
   /// Old avatar (if any) is left in place — Supabase storage doesn't auto-
   /// clean. We pick a new path each upload (uuid suffix) to bust caches.
+  ///
+  /// v19: after upload, fire-and-forget the `avatar-moderation` Edge
+  /// Function. It runs server-side NSFW classification via Hugging
+  /// Face Inference API and writes `users.avatar_status` to
+  /// ok / pending_review / rejected. Failing open (on HF outage /
+  /// timeout) is intentional — the user-report path already catches
+  /// anything the model misses.
   Future<String> uploadAvatar({
     required String userId,
     required Uint8List bytes,
@@ -132,7 +140,24 @@ class UserRepository {
           bytes,
           fileOptions: FileOptions(contentType: contentType, upsert: false),
         );
-    return _client.storage.from('avatars').getPublicUrl(objectKey);
+    final url = _client.storage.from('avatars').getPublicUrl(objectKey);
+    unawaited(_moderateAvatar(userId: userId, imageUrl: url));
+    return url;
+  }
+
+  Future<void> _moderateAvatar({
+    required String userId,
+    required String imageUrl,
+  }) async {
+    try {
+      await _client.functions.invoke(
+        'avatar-moderation',
+        body: {'user_id': userId, 'image_url': imageUrl},
+      );
+    } catch (_) {
+      // Soft-fail — avatar_status defaults to 'ok' on the DB side.
+      // The server-side report trigger is the safety net.
+    }
   }
 }
 

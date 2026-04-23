@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -94,7 +95,30 @@ class PosterUploadRepository {
         })
         .select('id')
         .single();
-    return row['id'] as String;
+    final posterId = row['id'] as String;
+    // Fire-and-forget: have the poster-blurhash Edge Function compute
+    // the ~30-byte BlurHash and write it back to posters.blurhash.
+    // We don't await — the upload flow finishes instantly; the hash
+    // arrives asynchronously (seconds), and AppPosterTile gracefully
+    // falls back to ShimmerPlaceholder when blurhash is still null.
+    unawaited(_requestBlurhash(posterId: posterId, imageUrl: thumbnailUrl));
+    return posterId;
+  }
+
+  Future<void> _requestBlurhash({
+    required String posterId,
+    required String imageUrl,
+  }) async {
+    try {
+      await _client.functions.invoke(
+        'poster-blurhash',
+        body: {'poster_id': posterId, 'image_url': imageUrl},
+      );
+    } catch (_) {
+      // Soft-fail — the hash is a nice-to-have; missing it means the
+      // tile shows a flat ShimmerPlaceholder instead of the pixel-
+      // correct blur. Don't block the submission flow.
+    }
   }
 }
 
