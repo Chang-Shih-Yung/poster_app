@@ -205,14 +205,17 @@ end $$;
 -- ───────────────────────────────────────────────────────────────────
 -- T6 · home_sections_v2 returns real payload (spot-check shape)
 -- ───────────────────────────────────────────────────────────────────
+-- The RPC returns `jsonb` (a single JSON array of section objects),
+-- not a SETOF rows, so we probe it with jsonb operators.
 do $$
 declare
+  payload jsonb;
   row_count int;
   first_section text;
 begin
-  select count(*), (array_agg(slug))[1]
-  into row_count, first_section
-  from public.home_sections_v2();
+  payload := public.home_sections_v2();
+  row_count := jsonb_array_length(payload);
+  first_section := payload -> 0 ->> 'slug';
 
   if row_count >= 3 then
     raise notice 'T6 PASS · home_sections_v2: % sections, first=%', row_count, first_section;
