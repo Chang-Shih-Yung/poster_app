@@ -1,275 +1,241 @@
 -- ═══════════════════════════════════════════════════════════════════
 -- Write-path integration tests. Paste into Supabase Dashboard →
--- SQL Editor to run (needs service-role-equivalent privs to bypass
--- RLS + fire triggers).
---
--- Each test is self-contained, rolls back its own side-effects, and
--- writes a PASS / FAIL row into `_test_results`. The trailing SELECT
--- dumps that table into the Results grid so every run is readable
--- without opening the Messages panel. Read-path coverage lives in
--- `scripts/tests/bot_flows_test.py`.
+-- SQL Editor to run.
 --
 -- Design notes:
---   · No begin/commit wrapper. Supabase's dashboard SQL editor wraps
---     every statement in its own implicit transaction, so an outer
---     `begin ... commit` + `on commit drop` would drop the temp
---     table the instant we create it — next statement reads a
---     relation that doesn't exist. A session-scoped temp table
---     (default behaviour, no ON COMMIT clause) persists across the
---     implicit per-statement transactions inside the same connection.
---   · Skip the Supabase "Enable RLS" dialog for _test_results —
---     it's a temp table in pg_temp and RLS is moot there.
+--   · Previous versions used a temp table, but Supabase's dashboard
+--     seems to isolate each statement into its own session (not just
+--     transaction), so session-scoped temp tables die between
+--     statements. Fixed by wrapping all test logic in a persistent
+--     plpgsql function — catalog-stored, survives statement
+--     boundaries, then dropped at the bottom.
+--   · No auth.uid() paths — every mutation uses explicit UUIDs, and
+--     the `postgres` role the dashboard runs as bypasses RLS
+--     automatically.
+--   · Each test rolls back its own side-effects inside the function
+--     body. The final summary query confirms post-state matches
+--     pre-state (non-zero open_reports / pending_avatars = leak).
 -- ═══════════════════════════════════════════════════════════════════
 
--- Fresh buffer for this run.
-drop table if exists _test_results;
-create temp table _test_results (
-  test_id text primary key,
-  status  text not null,   -- 'PASS' | 'FAIL' | 'SKIP'
-  detail  text not null
-);
+drop function if exists public._write_path_tests();
 
-
--- ───────────────────────────────────────────────────────────────────
--- T1 · avatar 3-report safety net
--- Target: bot09. Reporters: bot00, bot01, bot02.
--- Expects: avatar_status flips 'ok' → 'pending_review'.
--- ───────────────────────────────────────────────────────────────────
-do $$
+create or replace function public._write_path_tests()
+returns table(test_id text, status text, detail text)
+language plpgsql
+as $fn$
 declare
-  target uuid := '00000000-0000-0000-0000-000000000109';
-  r1 uuid := '00000000-0000-0000-0000-000000000100';
-  r2 uuid := '00000000-0000-0000-0000-000000000101';
-  r3 uuid := '00000000-0000-0000-0000-000000000102';
-  status_before public.avatar_status;
-  status_after public.avatar_status;
+  -- T1
+  t1_target uuid := '00000000-0000-0000-0000-000000000109';
+  t1_r1     uuid := '00000000-0000-0000-0000-000000000100';
+  t1_r2     uuid := '00000000-0000-0000-0000-000000000101';
+  t1_r3     uuid := '00000000-0000-0000-0000-000000000102';
+  t1_before public.avatar_status;
+  t1_after  public.avatar_status;
+
+  -- T2
+  t2_follower uuid := 'a1cb9f23-6423-4735-83ea-d10d29693a88';  -- Henry
+  t2_target   uuid := '00000000-0000-0000-0000-000000000100';  -- bot00
+  t2_cnt_before        int;
+  t2_cnt_after_follow  int;
+  t2_cnt_after_unfollow int;
+  t2_pre_existing boolean;
+
+  -- T3
+  t3_bot00 uuid := '00000000-0000-0000-0000-000000000100';
+  t3_blocked boolean := false;
+
+  -- T4
+  t4_sample uuid;
+  t4_before int;
+  t4_after  int;
+  t4_blocked boolean := false;
+
+  -- T5
+  t5_target   uuid := '00000000-0000-0000-0000-000000000109';
+  t5_reporter uuid := '00000000-0000-0000-0000-000000000100';
+  t5_first  int;
+  t5_second int;
+
+  -- T6
+  t6_payload   jsonb;
+  t6_count     int;
+  t6_first_slug text;
 begin
-  select avatar_status into status_before from public.users where id = target;
+  -- ================================================================
+  -- T1 · avatar 3-report safety net
+  -- ================================================================
+  select avatar_status into t1_before from public.users where id = t1_target;
 
   insert into public.avatar_reports (target_user_id, reporter_id, reason)
   values
-    (target, r1, 'test T1'),
-    (target, r2, 'test T1'),
-    (target, r3, 'test T1')
+    (t1_target, t1_r1, 'test T1'),
+    (t1_target, t1_r2, 'test T1'),
+    (t1_target, t1_r3, 'test T1')
   on conflict do nothing;
 
-  select avatar_status into status_after from public.users where id = target;
+  select avatar_status into t1_after from public.users where id = t1_target;
 
-  if status_before = 'ok' and status_after = 'pending_review' then
-    insert into _test_results values
-      ('T1', 'PASS',
-       format('avatar 3-report safety net: %s → %s', status_before, status_after));
+  if t1_before = 'ok' and t1_after = 'pending_review' then
+    test_id := 'T1'; status := 'PASS';
+    detail := format('avatar 3-report safety net: %s → %s', t1_before, t1_after);
   else
-    insert into _test_results values
-      ('T1', 'FAIL',
-       format('expected ok → pending_review, got %s → %s', status_before, status_after));
+    test_id := 'T1'; status := 'FAIL';
+    detail := format('expected ok → pending_review, got %s → %s', t1_before, t1_after);
   end if;
+  return next;
 
-  -- Rollback side effects
-  delete from public.avatar_reports where target_user_id = target and reason = 'test T1';
-  update public.users set avatar_status = status_before where id = target;
-end $$;
+  -- Cleanup T1
+  delete from public.avatar_reports where target_user_id = t1_target and reason = 'test T1';
+  update public.users set avatar_status = t1_before where id = t1_target;
 
-
--- ───────────────────────────────────────────────────────────────────
--- T2 · follow toggle (insert + delete cycle)
--- Henry follows bot00, then unfollows. Verify counts before/after.
--- ───────────────────────────────────────────────────────────────────
-do $$
-declare
-  follower uuid := 'a1cb9f23-6423-4735-83ea-d10d29693a88';  -- Henry
-  target   uuid := '00000000-0000-0000-0000-000000000100';  -- bot00
-  cnt_before int;
-  cnt_after_follow int;
-  cnt_after_unfollow int;
-  pre_existing boolean;
-begin
+  -- ================================================================
+  -- T2 · follow toggle (insert + delete cycle)
+  -- ================================================================
   select exists (
     select 1 from public.follows
-    where follower_id = follower and followee_id = target
-  ) into pre_existing;
+    where follower_id = t2_follower and followee_id = t2_target
+  ) into t2_pre_existing;
 
-  select count(*) into cnt_before from public.follows where followee_id = target;
+  select count(*) into t2_cnt_before from public.follows where followee_id = t2_target;
 
-  if not pre_existing then
-    insert into public.follows (follower_id, followee_id)
-    values (follower, target);
+  if not t2_pre_existing then
+    insert into public.follows (follower_id, followee_id) values (t2_follower, t2_target);
   end if;
+  select count(*) into t2_cnt_after_follow from public.follows where followee_id = t2_target;
 
-  select count(*) into cnt_after_follow from public.follows where followee_id = target;
-
-  if not pre_existing then
-    delete from public.follows
-    where follower_id = follower and followee_id = target;
+  if not t2_pre_existing then
+    delete from public.follows where follower_id = t2_follower and followee_id = t2_target;
   end if;
+  select count(*) into t2_cnt_after_unfollow from public.follows where followee_id = t2_target;
 
-  select count(*) into cnt_after_unfollow from public.follows where followee_id = target;
-
-  if pre_existing then
-    insert into _test_results values
-      ('T2', 'SKIP',
-       'Henry already followed bot00 before the test — no-op');
-  elsif cnt_after_follow = cnt_before + 1 and cnt_after_unfollow = cnt_before then
-    insert into _test_results values
-      ('T2', 'PASS',
-       format('follow/unfollow cycle: %s → %s → %s',
-              cnt_before, cnt_after_follow, cnt_after_unfollow));
+  test_id := 'T2';
+  if t2_pre_existing then
+    status := 'SKIP';
+    detail := 'Henry already followed bot00 before the test — no-op';
+  elsif t2_cnt_after_follow = t2_cnt_before + 1
+        and t2_cnt_after_unfollow = t2_cnt_before then
+    status := 'PASS';
+    detail := format('follow/unfollow cycle: %s → %s → %s',
+                     t2_cnt_before, t2_cnt_after_follow, t2_cnt_after_unfollow);
   else
-    insert into _test_results values
-      ('T2', 'FAIL',
-       format('cycle leaked: before=%s, after_follow=%s, after_unfollow=%s',
-              cnt_before, cnt_after_follow, cnt_after_unfollow));
+    status := 'FAIL';
+    detail := format('cycle leaked: before=%s, after_follow=%s, after_unfollow=%s',
+                     t2_cnt_before, t2_cnt_after_follow, t2_cnt_after_unfollow);
   end if;
-end $$;
+  return next;
 
-
--- ───────────────────────────────────────────────────────────────────
--- T3 · self-follow DB constraint
--- ───────────────────────────────────────────────────────────────────
-do $$
-declare
-  bot00 uuid := '00000000-0000-0000-0000-000000000100';
-  blocked boolean := false;
-begin
+  -- ================================================================
+  -- T3 · self-follow DB constraint
+  -- ================================================================
   begin
-    insert into public.follows (follower_id, followee_id)
-    values (bot00, bot00);
+    insert into public.follows (follower_id, followee_id) values (t3_bot00, t3_bot00);
   exception when check_violation then
-    blocked := true;
+    t3_blocked := true;
   end;
 
-  if blocked then
-    insert into _test_results values
-      ('T3', 'PASS', 'self-follow blocked by no_self_follow CHECK constraint');
+  test_id := 'T3';
+  if t3_blocked then
+    status := 'PASS';
+    detail := 'self-follow blocked by no_self_follow CHECK constraint';
   else
-    insert into _test_results values
-      ('T3', 'FAIL', 'self-follow got through — constraint missing!');
-    delete from public.follows
-    where follower_id = bot00 and followee_id = bot00;
+    status := 'FAIL';
+    detail := 'self-follow got through — constraint missing!';
+    delete from public.follows where follower_id = t3_bot00 and followee_id = t3_bot00;
   end if;
-end $$;
+  return next;
 
+  -- ================================================================
+  -- T4 · favorite idempotency (PK)
+  -- ================================================================
+  select poster_id into t4_sample
+  from public.favorites where user_id = t3_bot00 limit 1;
 
--- ───────────────────────────────────────────────────────────────────
--- T4 · favorite idempotency (PK)
--- ───────────────────────────────────────────────────────────────────
-do $$
-declare
-  bot00 uuid := '00000000-0000-0000-0000-000000000100';
-  sample_poster uuid;
-  cnt_before int;
-  cnt_after int;
-  blocked boolean := false;
-begin
-  select poster_id into sample_poster
-  from public.favorites where user_id = bot00 limit 1;
-
-  if sample_poster is null then
-    insert into _test_results values
-      ('T4', 'SKIP', 'bot00 has no favorites yet — nothing to duplicate');
-    return;
-  end if;
-
-  select count(*) into cnt_before from public.favorites where user_id = bot00;
-
-  begin
-    insert into public.favorites (user_id, poster_id)
-    values (bot00, sample_poster);
-  exception when unique_violation then
-    blocked := true;
-  end;
-
-  select count(*) into cnt_after from public.favorites where user_id = bot00;
-
-  if blocked and cnt_after = cnt_before then
-    insert into _test_results values
-      ('T4', 'PASS',
-       format('duplicate favorite blocked by PK; count stable at %s', cnt_before));
+  test_id := 'T4';
+  if t4_sample is null then
+    status := 'SKIP';
+    detail := 'bot00 has no favorites — nothing to duplicate';
   else
-    insert into _test_results values
-      ('T4', 'FAIL',
-       format('duplicate leaked: before=%s, after=%s, blocked=%s',
-              cnt_before, cnt_after, blocked));
+    select count(*) into t4_before from public.favorites where user_id = t3_bot00;
+
+    begin
+      insert into public.favorites (user_id, poster_id) values (t3_bot00, t4_sample);
+    exception when unique_violation then
+      t4_blocked := true;
+    end;
+
+    select count(*) into t4_after from public.favorites where user_id = t3_bot00;
+
+    if t4_blocked and t4_after = t4_before then
+      status := 'PASS';
+      detail := format('duplicate favorite blocked by PK; count stable at %s', t4_before);
+    else
+      status := 'FAIL';
+      detail := format('duplicate leaked: before=%s, after=%s, blocked=%s',
+                       t4_before, t4_after, t4_blocked);
+    end if;
   end if;
-end $$;
+  return next;
 
-
--- ───────────────────────────────────────────────────────────────────
--- T5 · avatar-report uniqueness (same reporter twice)
--- ───────────────────────────────────────────────────────────────────
-do $$
-declare
-  target uuid := '00000000-0000-0000-0000-000000000109';
-  reporter uuid := '00000000-0000-0000-0000-000000000100';
-  cnt_first int;
-  cnt_second int;
-begin
+  -- ================================================================
+  -- T5 · avatar-report uniqueness (same reporter twice)
+  -- ================================================================
   insert into public.avatar_reports (target_user_id, reporter_id, reason)
-  values (target, reporter, 'test T5 first')
+  values (t5_target, t5_reporter, 'test T5 first')
   on conflict do nothing;
-
-  select count(*) into cnt_first
-  from public.avatar_reports where target_user_id = target and reporter_id = reporter;
+  select count(*) into t5_first
+  from public.avatar_reports where target_user_id = t5_target and reporter_id = t5_reporter;
 
   insert into public.avatar_reports (target_user_id, reporter_id, reason)
-  values (target, reporter, 'test T5 second')
+  values (t5_target, t5_reporter, 'test T5 second')
   on conflict do nothing;
+  select count(*) into t5_second
+  from public.avatar_reports where target_user_id = t5_target and reporter_id = t5_reporter;
 
-  select count(*) into cnt_second
-  from public.avatar_reports where target_user_id = target and reporter_id = reporter;
-
-  if cnt_first = 1 and cnt_second = 1 then
-    insert into _test_results values
-      ('T5', 'PASS', 're-report from same user is a no-op (on conflict)');
+  test_id := 'T5';
+  if t5_first = 1 and t5_second = 1 then
+    status := 'PASS';
+    detail := 're-report from same user is a no-op (on conflict)';
   else
-    insert into _test_results values
-      ('T5', 'FAIL',
-       format('dup leaked: first=%s, second=%s', cnt_first, cnt_second));
+    status := 'FAIL';
+    detail := format('dup leaked: first=%s, second=%s', t5_first, t5_second);
   end if;
+  return next;
 
+  -- Cleanup T5
   delete from public.avatar_reports
-  where target_user_id = target and reporter_id = reporter
+  where target_user_id = t5_target and reporter_id = t5_reporter
     and reason like 'test T5%';
   update public.users set avatar_status = 'ok'
-  where id = target and avatar_status = 'pending_review';
-end $$;
+  where id = t5_target and avatar_status = 'pending_review';
 
+  -- ================================================================
+  -- T6 · home_sections_v2 returns a real jsonb payload
+  -- ================================================================
+  t6_payload := public.home_sections_v2();
+  t6_count := jsonb_array_length(t6_payload);
+  t6_first_slug := t6_payload -> 0 ->> 'slug';
 
--- ───────────────────────────────────────────────────────────────────
--- T6 · home_sections_v2 returns a real jsonb payload
--- ───────────────────────────────────────────────────────────────────
-do $$
-declare
-  payload jsonb;
-  row_count int;
-  first_section text;
-begin
-  payload := public.home_sections_v2();
-  row_count := jsonb_array_length(payload);
-  first_section := payload -> 0 ->> 'slug';
-
-  if row_count >= 3 then
-    insert into _test_results values
-      ('T6', 'PASS',
-       format('home_sections_v2 returned %s sections, first=%s', row_count, first_section));
+  test_id := 'T6';
+  if t6_count >= 3 then
+    status := 'PASS';
+    detail := format('home_sections_v2 returned %s sections, first=%s',
+                     t6_count, t6_first_slug);
   else
-    insert into _test_results values
-      ('T6', 'FAIL',
-       format('home_sections_v2 only returned %s sections', row_count));
+    status := 'FAIL';
+    detail := format('home_sections_v2 only returned %s sections', t6_count);
   end if;
-end $$;
+  return next;
+
+  return;
+end;
+$fn$;
 
 
--- ═══════════════════════════════════════════════════════════════════
--- Dump results + post-test state sanity. Both land in the grid.
--- ═══════════════════════════════════════════════════════════════════
-select test_id, status, detail
-from _test_results
-order by test_id;
+-- Run the tests — these rows land in the Results grid.
+select * from public._write_path_tests() order by test_id;
 
--- Post-state: every number should match the pre-state. Non-zero
--- open_reports or pending_avatars here means a test's cleanup
--- leaked and needs a look.
+-- Post-state sanity: both open_reports and pending_avatars should
+-- be zero if the tests cleaned up after themselves.
 select
   (select count(*) from public.users where handle like 'bot%')                                as bots,
   (select count(*) from public.follows
@@ -279,5 +245,5 @@ select
   (select count(*) from public.avatar_reports)                                                as open_reports,
   (select count(*) from public.users where avatar_status = 'pending_review')                  as pending_avatars;
 
--- Optional cleanup (temp table auto-drops on session end anyway).
-drop table if exists _test_results;
+-- Cleanup: drop the function so nothing sits around in `public`.
+drop function public._write_path_tests();
