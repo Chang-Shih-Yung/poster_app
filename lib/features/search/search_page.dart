@@ -563,37 +563,239 @@ class _ResultsView extends ConsumerWidget {
             style: TextStyle(color: AppTheme.textMute)),
       ),
       data: (r) {
-        if (r.isEmpty) {
-          return Center(
-            child: Padding(
-              padding: const EdgeInsets.all(32),
-              child: Text('找不到「$query」的相關結果',
-                  style: TextStyle(color: AppTheme.textMute)),
-            ),
-          );
+        // v19 round 10 item #5: IG-style tabbed results. After the
+        // user submits a query, three horizontally-swipeable tabs:
+        //   為你推薦 — mixed (works + posters + users; current order)
+        //   個人檔案 — users only
+        //   標籤    — tags matching the query label
+        //
+        // Tabs always render even when a sub-list is empty, so the
+        // user can swipe between them freely. Empty-per-tab state
+        // shows an inline message instead of the whole-screen one.
+        return DefaultTabController(
+          length: 3,
+          child: Column(
+            children: [
+              Container(
+                decoration: BoxDecoration(
+                  border: Border(
+                    bottom: BorderSide(color: AppTheme.line1, width: 0.5),
+                  ),
+                ),
+                child: TabBar(
+                  labelColor: AppTheme.text,
+                  unselectedLabelColor: AppTheme.textMute,
+                  indicatorColor: AppTheme.text,
+                  indicatorWeight: 2,
+                  indicatorSize: TabBarIndicatorSize.label,
+                  labelStyle: const TextStyle(
+                    fontFamily: 'InterDisplay',
+                    fontFamilyFallback: ['NotoSansTC'],
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  unselectedLabelStyle: const TextStyle(
+                    fontFamily: 'InterDisplay',
+                    fontFamilyFallback: ['NotoSansTC'],
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  tabs: const [
+                    Tab(text: '為你推薦'),
+                    Tab(text: '個人檔案'),
+                    Tab(text: '標籤'),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: TabBarView(
+                  children: [
+                    _ForYouTab(result: r, bottomInset: bottomInset, query: query),
+                    _ProfilesTab(users: r.users, bottomInset: bottomInset, query: query),
+                    _TagsTab(query: query, bottomInset: bottomInset),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _ForYouTab extends StatelessWidget {
+  const _ForYouTab({
+    required this.result,
+    required this.bottomInset,
+    required this.query,
+  });
+  final dynamic result; // UnifiedSearchResult — kept dynamic to avoid leaking the type
+  final double bottomInset;
+  final String query;
+
+  @override
+  Widget build(BuildContext context) {
+    final works = result.works as List;
+    final posters = result.posters as List;
+    final users = result.users as List;
+
+    if (works.isEmpty && posters.isEmpty && users.isEmpty) {
+      return _EmptyResultsView(query: query);
+    }
+    return ListView(
+      padding: EdgeInsets.fromLTRB(16, 8, 16, bottomInset + 32),
+      children: [
+        if (works.isNotEmpty) ...[
+          _SectionHeader(
+              icon: LucideIcons.film, label: '作品', count: works.length),
+          ...works.map((w) => _WorkTile(work: w)),
+          const SizedBox(height: 16),
+        ],
+        if (posters.isNotEmpty) ...[
+          _SectionHeader(
+              icon: LucideIcons.image, label: '海報', count: posters.length),
+          ...posters.map((p) => _PosterTile(poster: p)),
+          const SizedBox(height: 16),
+        ],
+        if (users.isNotEmpty) ...[
+          _SectionHeader(
+              icon: LucideIcons.users, label: '使用者', count: users.length),
+          ...users.map((u) => _UserTile(user: u)),
+        ],
+      ],
+    );
+  }
+}
+
+class _ProfilesTab extends StatelessWidget {
+  const _ProfilesTab({
+    required this.users,
+    required this.bottomInset,
+    required this.query,
+  });
+  final List<AppUser> users;
+  final double bottomInset;
+  final String query;
+
+  @override
+  Widget build(BuildContext context) {
+    if (users.isEmpty) return _EmptyResultsView(query: query, what: '使用者');
+    return ListView(
+      padding: EdgeInsets.fromLTRB(16, 8, 16, bottomInset + 32),
+      children: [
+        for (final u in users) _UserTile(user: u),
+      ],
+    );
+  }
+}
+
+/// Tags tab — searches canonical tags by label (zh / en / alias).
+/// Uses the shared `allCanonicalTagsProvider` and filters client-side
+/// because the tag catalogue is small (~100 rows) and the filter is
+/// trivially fast.
+class _TagsTab extends ConsumerWidget {
+  const _TagsTab({required this.query, required this.bottomInset});
+  final String query;
+  final double bottomInset;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final async = ref.watch(allCanonicalTagsProvider);
+    final q = query.trim().toLowerCase();
+    return async.when(
+      loading: () => const AppLoader.centered(),
+      error: (e, _) => Center(
+        child: Text('載入失敗：$e',
+            style: TextStyle(color: AppTheme.textMute)),
+      ),
+      data: (tags) {
+        final hits = tags.where((t) {
+          if (t.labelZh.toLowerCase().contains(q)) return true;
+          if (t.labelEn.toLowerCase().contains(q)) return true;
+          return t.aliases.any((a) => a.toLowerCase().contains(q));
+        }).toList(growable: false);
+        if (hits.isEmpty) {
+          return _EmptyResultsView(query: query, what: '標籤');
         }
         return ListView(
           padding: EdgeInsets.fromLTRB(16, 8, 16, bottomInset + 32),
           children: [
-            if (r.works.isNotEmpty) ...[
-              _SectionHeader(icon: LucideIcons.film, label: '作品', count: r.works.length),
-              ...r.works.map((w) => _WorkTile(work: w)),
-              const SizedBox(height: 16),
-            ],
-            if (r.posters.isNotEmpty) ...[
-              _SectionHeader(
-                  icon: LucideIcons.image, label: '海報', count: r.posters.length),
-              ...r.posters.map((p) => _PosterTile(poster: p)),
-              const SizedBox(height: 16),
-            ],
-            if (r.users.isNotEmpty) ...[
-              _SectionHeader(
-                  icon: LucideIcons.users, label: '使用者', count: r.users.length),
-              ...r.users.map((u) => _UserTile(user: u)),
-            ],
+            for (final t in hits) _TagTile(tag: t),
           ],
         );
       },
+    );
+  }
+}
+
+class _TagTile extends StatelessWidget {
+  const _TagTile({required this.tag});
+  final Tag tag;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => context.push('/tags/${tag.slug}'),
+        borderRadius: BorderRadius.circular(10),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: AppTheme.chipBg,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(LucideIcons.hash,
+                    size: 18, color: AppTheme.textMute),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    AppText.bodyBold(tag.labelZh,
+                        maxLines: 1, overflow: TextOverflow.ellipsis),
+                    if (tag.labelEn.isNotEmpty && tag.labelEn != tag.labelZh)
+                      AppText.caption(tag.labelEn,
+                          tone: AppTextTone.muted,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis),
+                  ],
+                ),
+              ),
+              Icon(LucideIcons.chevronRight,
+                  size: 14, color: AppTheme.textFaint),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _EmptyResultsView extends StatelessWidget {
+  const _EmptyResultsView({required this.query, this.what});
+  final String query;
+  final String? what;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Text(
+          what == null
+              ? '找不到「$query」的相關結果'
+              : '找不到相關$what',
+          style: TextStyle(color: AppTheme.textMute),
+        ),
+      ),
     );
   }
 }

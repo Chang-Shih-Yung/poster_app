@@ -6,7 +6,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/constants/enums.dart';
 import '../../core/constants/region_labels.dart';
@@ -65,112 +64,47 @@ class _SubmissionPageState extends ConsumerState<SubmissionPage> {
   final _sourcePlatformController = TextEditingController();
   final _sourceNoteController = TextEditingController();
 
-  // ── Image state (multi-upload, v13 2026-04-21) ──
+  // ── Image state ──
   //
-  // Each entry = one picked poster. Big 2:3 preview shows whichever
-  // thumb the user tapped (defaults to the first). The thumb row
-  // below shows the full queue with a ring around the active one,
-  // plus a ＋ slot. On submit, each image becomes its own submission
-  // row, sharing the same work metadata.
-  final List<_PickedImage> _images = [];
-  int _primaryIdx = 0;
+  // v19 round 10: single-image upload only. Multi-upload UI (thumb
+  // row, ＋ slot, dedup fingerprint, batch compression overlay) was
+  // removed — reads too desktop-y, the empty-picker placeholder felt
+  // like a file-upload form rather than a mobile share flow. Now:
+  //
+  //   · On page mount, the image picker fires immediately (the user
+  //     already intended to upload — don't make them tap through a
+  //     placeholder card first).
+  //   · Cancelling the picker before selecting anything pops the
+  //     route back (IG does the same — cancel = abort upload).
+  //   · The form renders with the chosen image previewed at top; a
+  //     tap on the preview lets the user swap for a different one.
+  _PickedImage? _picked;
 
-  // Compression progress (visible blocking overlay so the user
-  // doesn't think the app is hung when picking a 30MB photo).
   bool _compressing = false;
-  int _compressDone = 0;
-  int _compressTotal = 0;
-
   bool _submitting = false;
-
-  // v18: previously every keystroke in the title field called setState
-  // on the entire submission form (~a dozen widgets incl. image preview
-  // + tag picker) just so the 送審 pill could toggle its enabled state.
-  // That stuttered on older Android when typing long CJK titles. Now
-  // the StickyHeader wraps the pill in an AnimatedBuilder listening to
-  // this controller — only the pill rebuilds on keystroke.
-
-  Uint8List? get _primaryImageBytes =>
-      _images.isEmpty ? null : _images[_primaryIdx.clamp(0, _images.length - 1)].bytes;
-  CompressedImages? get _primaryCompressed =>
-      _images.isEmpty ? null : _images[_primaryIdx.clamp(0, _images.length - 1)].compressed;
 
   // ── Expandable sections ──
   bool _showAdvanced = false;
 
-  // v19 round 5: multi-upload tip, second iteration.
-  //
-  // Previous round put up a full-screen modal on first entry — read
-  // as heavy-handed for a line of copy that's really just an
-  // affordance nudge. Now:
-  //
-  //   · The ＋ tile in the thumb row carries a small red dot while
-  //     the tip is unseen (visual anchor — "there's something new
-  //     here, look").
-  //   · After a short delay (~1.2 s) once the page settles, a slim
-  //     toast-bubble slides in below the thumb row pointing at ＋,
-  //     with a single-line hint and a close affordance. No scrim,
-  //     no route push — the rest of the page stays interactive.
-  //   · Dismissal triggers on: tapping the bubble, tapping the ＋,
-  //     scrolling further, or 6 s of idle. Any of those mark the
-  //     hint as seen in SharedPreferences, so the red dot + bubble
-  //     both disappear and never return.
-  static const _prefsKeyHintSeen = 'submission_multi_hint_seen_v1';
-
-  /// Drives both the red dot on ＋ and the pop-up bubble visibility.
-  /// Starts true assuming unseen; initState overrides with the
-  /// persisted flag.
-  bool _hintUnseen = true;
-
-  /// Only true during the short window between "page-settled delay"
-  /// and "user acknowledged" — the bubble itself is driven by this.
-  bool _hintBubbleVisible = false;
-
-  Timer? _hintShowTimer;
-  Timer? _hintAutoDismissTimer;
-
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _scheduleHint());
-  }
-
-  Future<void> _scheduleHint() async {
-    if (!mounted) return;
-    final prefs = await SharedPreferences.getInstance();
-    final seen = prefs.getBool(_prefsKeyHintSeen) == true;
-    if (!mounted) return;
-    if (seen) {
-      setState(() => _hintUnseen = false);
-      return;
-    }
-    // Unseen — delay briefly so the form has painted and the user
-    // isn't confronted with a tip the instant the page opens.
-    _hintShowTimer = Timer(const Duration(milliseconds: 1200), () {
+    // Fire the picker as soon as the page is on-screen so the user
+    // doesn't stare at a large empty card.
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
-      setState(() => _hintBubbleVisible = true);
-      // Auto-dismiss after 6 s if the user doesn't interact.
-      _hintAutoDismissTimer = Timer(const Duration(seconds: 6), _dismissHint);
+      await _pickOne();
+      // If they cancelled without picking anything, the submission
+      // flow is effectively aborted — pop back to the shell.
+      if (!mounted) return;
+      if (_picked == null && Navigator.of(context).canPop()) {
+        Navigator.of(context).pop();
+      }
     });
-  }
-
-  void _dismissHint() {
-    _hintShowTimer?.cancel();
-    _hintAutoDismissTimer?.cancel();
-    if (!mounted) return;
-    if (!_hintUnseen && !_hintBubbleVisible) return;
-    setState(() {
-      _hintUnseen = false;
-      _hintBubbleVisible = false;
-    });
-    SharedPreferences.getInstance()
-        .then((p) => p.setBool(_prefsKeyHintSeen, true));
   }
 
   @override
   void dispose() {
-    _hintShowTimer?.cancel();
-    _hintAutoDismissTimer?.cancel();
     _titleZhController.dispose();
     _titleEnController.dispose();
     _yearController.dispose();
@@ -232,197 +166,46 @@ class _SubmissionPageState extends ConsumerState<SubmissionPage> {
     );
   }
 
-  Future<void> _addImages() async {
+  /// Pick a single image (camera or gallery), compress it, stash in
+  /// `_picked`. If the user cancels the sheet, returns with `_picked`
+  /// unchanged so the caller can decide what to do (initState will
+  /// pop the route; the 更換 button will stay on the previous image).
+  Future<void> _pickOne() async {
     final picker = ImagePicker();
     final source = await _pickSource();
     if (source == null) return;
 
-    List<XFile> files;
-    if (source == ImageSource.camera) {
-      final shot = await picker.pickImage(
-        source: ImageSource.camera,
-        preferredCameraDevice: CameraDevice.rear,
-      );
-      files = shot == null ? const <XFile>[] : [shot];
-    } else {
-      files = await picker.pickMultiImage();
-    }
-    if (files.isEmpty) return;
-
-    setState(() {
-      _compressing = true;
-      _compressTotal = files.length;
-      _compressDone = 0;
-    });
-
-    final added = <_PickedImage>[];
-    final tooLarge = <String>[]; // raw filename + raw size for the dialog
-    final badFormat = <String>[];
-    final duplicates = <String>[];
-
-    // Snapshot fingerprints of already-queued images so we can dedupe
-    // both against existing and against the just-picked batch.
-    final existingFingerprints = <int>{
-      for (final img in _images) _fingerprint(img.bytes),
-    };
-
-    for (final file in files) {
-      final rawBytes = await file.readAsBytes();
-      await Future<void>.delayed(Duration.zero); // yield to repaint
-
-      final fp = _fingerprint(rawBytes);
-      if (existingFingerprints.contains(fp)) {
-        duplicates.add(file.name);
-        if (mounted) setState(() => _compressDone++);
-        continue;
-      }
-      existingFingerprints.add(fp);
-
-      final result = ImageCompressor.compress(rawBytes);
-      if (result == null) {
-        badFormat.add(file.name);
-      } else if (result.posterBytes.lengthInBytes >
-          ImageCompressor.maxPosterBytes) {
-        final mb = (rawBytes.lengthInBytes / 1024 / 1024).toStringAsFixed(1);
-        tooLarge.add('${file.name} ($mb MB)');
-      } else {
-        added.add(_PickedImage(bytes: rawBytes, compressed: result));
-      }
-      if (mounted) setState(() => _compressDone++);
-    }
-
-    if (!mounted) return;
-    setState(() {
-      _images.addAll(added);
-      // If this was the first batch, leave _primaryIdx at 0; otherwise
-      // jump to the first newly-added image so the user can see what
-      // they just picked.
-      if (added.isNotEmpty && _images.length == added.length) {
-        _primaryIdx = 0;
-      } else if (added.isNotEmpty) {
-        _primaryIdx = _images.length - added.length;
-      }
-      _compressing = false;
-      _compressTotal = 0;
-      _compressDone = 0;
-    });
-
-    // Single, clear summary instead of N stacked toasts.
-    if (tooLarge.isNotEmpty || badFormat.isNotEmpty || duplicates.isNotEmpty) {
-      _showSkipSummary(
-        added: added.length,
-        tooLarge: tooLarge,
-        badFormat: badFormat,
-        duplicates: duplicates,
-      );
-    } else if (added.isNotEmpty) {
-      AppToast.show(context,
-          added.length == 1 ? '已加入 1 張' : '已加入 ${added.length} 張');
-    }
-  }
-
-  /// Cheap content fingerprint — hashes file size and a sample of bytes
-  /// (first / mid / last 64). Same image picked twice always collides.
-  /// Different images of the same dimension *may* collide (extremely
-  /// unlikely with the offsets), but we accept the small false-positive
-  /// risk to avoid hashing the entire byte array.
-  int _fingerprint(Uint8List b) {
-    final n = b.length;
-    var h = n;
-    void mix(int i) {
-      if (i < 0 || i >= n) return;
-      h = (h * 31 + b[i]) & 0x7fffffff;
-    }
-    for (var i = 0; i < 64 && i < n; i++) {
-      mix(i);
-    }
-    final mid = n ~/ 2;
-    for (var i = 0; i < 64; i++) {
-      mix(mid + i);
-    }
-    for (var i = 1; i <= 64; i++) {
-      mix(n - i);
-    }
-    return h;
-  }
-
-  Future<void> _showSkipSummary({
-    required int added,
-    required List<String> tooLarge,
-    required List<String> badFormat,
-    required List<String> duplicates,
-  }) async {
-    if (!mounted) return;
-    Widget section(String label, List<String> names, String? hint) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          AppText.bodyBold('$label（${names.length} 張）',
-              tone: AppTextTone.muted),
-          const SizedBox(height: 4),
-          ...names.map((n) => Padding(
-                padding: const EdgeInsets.only(left: 4, top: 2),
-                child: AppText.caption('· $n', tone: AppTextTone.primary),
-              )),
-          if (hint != null) ...[
-            const SizedBox(height: 6),
-            AppText.caption(hint, tone: AppTextTone.faint),
-          ],
-        ],
-      );
-    }
-
-    await showDialog<void>(
-      context: context,
-      barrierColor: Colors.black.withValues(alpha: 0.6),
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppTheme.surfaceRaised,
-        title: AppText.title(
-          added > 0 ? '已加入 $added 張，部分跳過' : '全部跳過',
-        ),
-        content: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (duplicates.isNotEmpty)
-                section('已存在於這次的清單', duplicates,
-                    '同一張照片不能加兩次'),
-              if (tooLarge.isNotEmpty) ...[
-                if (duplicates.isNotEmpty) const SizedBox(height: 16),
-                section('超過 5 MB', tooLarge,
-                    '請先用編輯器壓縮再上傳，或選較小的圖片'),
-              ],
-              if (badFormat.isNotEmpty) ...[
-                if (duplicates.isNotEmpty || tooLarge.isNotEmpty)
-                  const SizedBox(height: 16),
-                section('格式不支援', badFormat, null),
-              ],
-            ],
-          ),
-        ),
-        actions: [
-          AppButton.text(
-            label: '知道了',
-            onPressed: () => Navigator.of(ctx).pop(),
-          ),
-        ],
-      ),
+    final XFile? file = await picker.pickImage(
+      source: source,
+      preferredCameraDevice: CameraDevice.rear,
     );
-  }
+    if (file == null) return;
 
-  void _removeImageAt(int i) {
-    setState(() {
-      _images.removeAt(i);
-      // Keep _primaryIdx valid after removal.
-      if (_primaryIdx >= _images.length) {
-        _primaryIdx = (_images.length - 1).clamp(0, 1 << 30);
+    if (!mounted) return;
+    setState(() => _compressing = true);
+    try {
+      final rawBytes = await file.readAsBytes();
+      final result = ImageCompressor.compress(rawBytes);
+      if (!mounted) return;
+      if (result == null) {
+        AppToast.show(context, '圖片格式無法辨識',
+            kind: AppToastKind.destructive);
+        return;
       }
-    });
-  }
-
-  void _setPrimary(int i) {
-    setState(() => _primaryIdx = i);
+      if (result.posterBytes.lengthInBytes >
+          ImageCompressor.maxPosterBytes) {
+        final mb =
+            (rawBytes.lengthInBytes / 1024 / 1024).toStringAsFixed(1);
+        AppToast.show(context, '圖片太大（$mb MB），請改用小一點的照片',
+            kind: AppToastKind.destructive);
+        return;
+      }
+      setState(() {
+        _picked = _PickedImage(bytes: rawBytes, compressed: result);
+      });
+    } finally {
+      if (mounted) setState(() => _compressing = false);
+    }
   }
 
   // ── Row builder ────────────────────────────────────────────────────────────
@@ -494,7 +277,7 @@ class _SubmissionPageState extends ConsumerState<SubmissionPage> {
       AppToast.show(context, '請先登入');
       return;
     }
-    if (_images.isEmpty) {
+    if (_picked == null) {
       AppToast.show(context,
           _compressing ? '圖片壓縮中，請稍候' : '請先選一張海報圖片');
       return;
@@ -512,9 +295,9 @@ class _SubmissionPageState extends ConsumerState<SubmissionPage> {
       backgroundColor: Colors.transparent,
       builder: (_) => _ConfirmSheet(
         row: row,
-        imageBytes: _primaryImageBytes!,
-        imageSizeBytes: _primaryCompressed!.posterBytes.lengthInBytes,
-        extraCount: _images.length - 1,
+        imageBytes: _picked!.bytes,
+        imageSizeBytes: _picked!.compressed.posterBytes.lengthInBytes,
+        extraCount: 0,
       ),
     );
 
@@ -522,54 +305,39 @@ class _SubmissionPageState extends ConsumerState<SubmissionPage> {
     await _doSubmit(user.id, row);
   }
 
-  /// Multi-upload: for each picked image, upload the pair + create a
-  /// submission row. All rows share the same work metadata (title,
-  /// year, director, tags, AI declaration). If any upload fails we
-  /// keep going so partial success doesn't lose uploaded work.
   Future<void> _doSubmit(String userId, Map<String, dynamic> baseRow) async {
     setState(() => _submitting = true);
     HapticFeedback.mediumImpact();
     final repo = ref.read(submissionRepositoryProvider);
-    var ok = 0;
-    final errors = <String>[];
-    for (var i = 0; i < _images.length; i++) {
-      final img = _images[i];
-      try {
-        final urls = await repo.uploadPosterPair(
-          posterBytes: img.compressed.posterBytes,
-          thumbBytes: img.compressed.thumbBytes,
-          contentType: img.compressed.contentType,
-          userId: userId,
-        );
-        final row = Map<String, dynamic>.from(baseRow);
-        row['image_url'] = urls.posterUrl;
-        row['thumbnail_url'] = urls.thumbUrl;
-        row['image_size_bytes'] = img.compressed.posterBytes.lengthInBytes;
-        await repo.createSubmission(row);
-        ok++;
-      } catch (e) {
-        errors.add('第 ${i + 1} 張失敗：$e');
-      }
-    }
-    if (!mounted) return;
-    setState(() => _submitting = false);
-    if (ok > 0 && errors.isEmpty) {
-      AppToast.show(context, '已送出 $ok 張審核，感謝投稿！',
+    try {
+      final img = _picked!;
+      final urls = await repo.uploadPosterPair(
+        posterBytes: img.compressed.posterBytes,
+        thumbBytes: img.compressed.thumbBytes,
+        contentType: img.compressed.contentType,
+        userId: userId,
+      );
+      final row = Map<String, dynamic>.from(baseRow);
+      row['image_url'] = urls.posterUrl;
+      row['thumbnail_url'] = urls.thumbUrl;
+      row['image_size_bytes'] = img.compressed.posterBytes.lengthInBytes;
+      await repo.createSubmission(row);
+      if (!mounted) return;
+      AppToast.show(context, '已送出審核，感謝投稿！',
           kind: AppToastKind.success);
       _resetForm();
-    } else if (ok > 0) {
-      AppToast.show(context, '送出 $ok 張成功 / ${errors.length} 張失敗',
+    } catch (e) {
+      if (!mounted) return;
+      AppToast.show(context, '送出失敗：$e',
           kind: AppToastKind.destructive);
-      setState(() => _images.removeRange(0, ok));
-    } else {
-      AppToast.show(context, '全部失敗：${errors.first}',
-          kind: AppToastKind.destructive);
+    } finally {
+      if (mounted) setState(() => _submitting = false);
     }
   }
 
   void _resetForm() {
     setState(() {
-      _images.clear();
+      _picked = null;
       _showAdvanced = false;
       _region = Region.tw;
       _releaseType = null;
@@ -633,7 +401,7 @@ class _SubmissionPageState extends ConsumerState<SubmissionPage> {
               actionLoading: _submitting || _compressing,
               actionEnabled: !_submitting &&
                   !_compressing &&
-                  _images.isNotEmpty &&
+                  _picked != null &&
                   _titleZhController.text.trim().isNotEmpty,
               onAction: (_submitting || _compressing) ? null : _showPreview,
             ),
@@ -652,68 +420,62 @@ class _SubmissionPageState extends ConsumerState<SubmissionPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // ── Image picker ── (v13: big 2:3 preview + thumb row)
-            // Big area:
-            //   - empty: tappable, opens picker
-            //   - has images: NOT tappable (avoids "tap → re-pick"
-            //     confusion with ＋ slot below). Adding more goes via
-            //     ＋ slot in thumb row only.
-            // Stack overlays an unmissable compression spinner.
+            // ── Single image preview ──
+            // Picker fires on page entry (see initState). If the user
+            // cancelled, initState pops the route. If they picked,
+            // _picked is set and we render the 2:3 preview. Tapping
+            // the preview opens the picker again (更換照片).
             Stack(
               children: [
-                _images.isEmpty
-                    ? GestureDetector(
-                        onTap: _submitting || _compressing ? null : _addImages,
-                        child: _EmptyPicker(compressing: _compressing),
-                      )
-                    : _ImagePreview(
-                        bytes: _primaryImageBytes!,
-                        compressing: _compressing,
-                      ),
-                if (_compressing)
-                  Positioned.fill(
-                    child: _CompressOverlay(
-                      done: _compressDone,
-                      total: _compressTotal,
+                if (_picked == null)
+                  GestureDetector(
+                    onTap: _submitting || _compressing ? null : _pickOne,
+                    child: _EmptyPicker(compressing: _compressing),
+                  )
+                else
+                  GestureDetector(
+                    onTap: _submitting || _compressing ? null : _pickOne,
+                    child: _ImagePreview(
+                      bytes: _picked!.bytes,
+                      compressing: _compressing,
                     ),
                   ),
-              ],
-            ),
-            const SizedBox(height: 10),
-
-            // Thumb row — each picked image + a trailing ＋ slot.
-            // `addSlotHasDot` is the red badge that nudges first-time
-            // users toward the multi-upload affordance; cleared on
-            // first interaction via `_dismissHint`.
-            //
-            // v19 round 10: wrap in a Stack with `clipBehavior:
-            // Clip.none` so the hint bubble — when visible — overlays
-            // BELOW the thumb row (at y=76) without consuming layout
-            // space. Without this the bubble's Padding pushed the
-            // entire form down for 6 s on first entry, felt jarring.
-            // With Clip.none the bubble floats; form stays put.
-            Stack(
-              clipBehavior: Clip.none,
-              children: [
-                _ThumbRow(
-                  images: _images,
-                  activeIdx: _primaryIdx,
-                  onRemove: _submitting ? null : _removeImageAt,
-                  onSelect: _submitting ? null : _setPrimary,
-                  onAdd: _submitting
-                      ? null
-                      : () {
-                          _dismissHint();
-                          _addImages();
-                        },
-                  addSlotHasDot: _hintUnseen,
-                ),
-                if (_hintBubbleVisible)
+                if (_compressing)
+                  const Positioned.fill(
+                    child: _CompressOverlay(),
+                  ),
+                // 更換 button overlay — bottom-right pill that explicitly
+                // offers to re-pick. Keeps the tap affordance visible
+                // without requiring the user to guess the whole preview
+                // is tappable.
+                if (_picked != null && !_submitting && !_compressing)
                   Positioned(
-                    top: 76,
-                    left: 0,
-                    right: 0,
-                    child: _MultiUploadHintBubble(onDismiss: _dismissHint),
+                    right: 10,
+                    bottom: 10,
+                    child: GestureDetector(
+                      onTap: _pickOne,
+                      behavior: HitTestBehavior.opaque,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.55),
+                          borderRadius:
+                              BorderRadius.circular(AppTheme.rPill),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: const [
+                            Icon(LucideIcons.repeat2,
+                                size: 14, color: Colors.white),
+                            SizedBox(width: 6),
+                            AppText.small('更換',
+                                color: Colors.white,
+                                weight: FontWeight.w600),
+                          ],
+                        ),
+                      ),
+                    ),
                   ),
               ],
             ),
@@ -1747,165 +1509,36 @@ class _PickedImage {
   final CompressedImages compressed;
 }
 
-/// Horizontal row of 48×64 thumbs — one per picked image + a trailing
-/// ＋ slot that opens the multi-picker again. Native-feeling multi-
-/// upload UI: main 2:3 preview above, thumb row here for overview
-/// and quick remove.
-class _ThumbRow extends StatelessWidget {
-  const _ThumbRow({
-    required this.images,
-    required this.activeIdx,
-    required this.onRemove,
-    required this.onSelect,
-    required this.onAdd,
-    this.addSlotHasDot = false,
-  });
-  final List<_PickedImage> images;
-  final int activeIdx;
-  final ValueChanged<int>? onRemove;
-  final ValueChanged<int>? onSelect;
-  final VoidCallback? onAdd;
-
-  /// When true, overlay a small red dot on the ＋ slot as a
-  /// first-run affordance nudge. Cleared the moment the user
-  /// acknowledges the companion hint bubble.
-  final bool addSlotHasDot;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      // 4dp extra so the close × bubble (top: -4) doesn't get clipped
-      // by the row bounds.
-      height: 72,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.only(top: 4),
-        itemCount: images.length + 1,
-        separatorBuilder: (_, _) => const SizedBox(width: 8),
-        itemBuilder: (context, i) {
-          if (i == images.length) {
-            return _AddSlot(onTap: onAdd, showRedDot: addSlotHasDot);
-          }
-          return _ThumbTile(
-            image: images[i],
-            active: i == activeIdx,
-            onSelect: onSelect == null ? null : () => onSelect!(i),
-            onRemove: onRemove == null ? null : () => onRemove!(i),
-          );
-        },
-      ),
-    );
-  }
-}
-
-class _ThumbTile extends StatelessWidget {
-  const _ThumbTile({
-    required this.image,
-    required this.active,
-    required this.onSelect,
-    required this.onRemove,
-  });
-  final _PickedImage image;
-  final bool active;
-  final VoidCallback? onSelect;
-  final VoidCallback? onRemove;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onSelect,
-      behavior: HitTestBehavior.opaque,
-      child: SizedBox(
-        width: 48,
-        height: 68,
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            // Tile.
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: AnimatedContainer(
-                duration: AppTheme.motionFast,
-                width: 48,
-                height: 64,
-                decoration: BoxDecoration(
-                  color: const Color(0x0FFFFFFF),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: active ? Colors.white : AppTheme.line1,
-                    width: active ? 2 : 1,
-                  ),
-                ),
-                child: Image.memory(image.bytes, fit: BoxFit.cover),
-              ),
-            ),
-            // Close × bubble.
-            if (onRemove != null)
-              Positioned(
-                top: -4,
-                right: -4,
-                child: GestureDetector(
-                  onTap: onRemove,
-                  behavior: HitTestBehavior.opaque,
-                  child: Container(
-                    width: 18,
-                    height: 18,
-                    decoration: const BoxDecoration(
-                      color: Color(0xE6000000),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.close,
-                        size: 12, color: Colors.white),
-                  ),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 /// Compression progress overlay — sits on top of the picker area
-/// during _addImages so the user has unmissable feedback that work
-/// is happening (otherwise compressing a 30MB photo on web feels
-/// like the app froze).
+/// while the single picked image is being down-scaled. Indeterminate
+/// spinner only; v19 round 10 dropped multi-upload so there's no
+/// "3 / 5" progress to show any more.
 class _CompressOverlay extends StatelessWidget {
-  const _CompressOverlay({required this.done, required this.total});
-  final int done;
-  final int total;
+  const _CompressOverlay();
 
   @override
   Widget build(BuildContext context) {
-    final pct = total == 0 ? 0.0 : done / total;
     return ClipRRect(
       borderRadius: BorderRadius.circular(14),
       child: Container(
-        // Almost-opaque so any underlying empty placeholder (when
-        // compressing the very first image) is fully hidden.
-        color: const Color(0xEB0D1116), // ink at ~92% alpha
+        color: const Color(0xEB0D1116),
         alignment: Alignment.center,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            SizedBox(
+            const SizedBox(
               width: 44,
               height: 44,
               child: CircularProgressIndicator(
-                value: total == 0 ? null : pct,
                 strokeWidth: 3,
                 color: Colors.white,
-                backgroundColor: Colors.white.withValues(alpha: 0.18),
               ),
             ),
             const SizedBox(height: 14),
-            AppText.bodyBold(
-              total > 0 ? '壓縮中… $done / $total' : '壓縮中…',
-              color: Colors.white,
-            ),
+            AppText.bodyBold('壓縮中…', color: Colors.white),
             const SizedBox(height: 4),
             AppText.small(
-              '請稍候，超過 5MB 的會自動跳過',
+              '超過 5 MB 的會自動拒絕',
               color: Colors.white.withValues(alpha: 0.7),
             ),
           ],
@@ -1915,140 +1548,3 @@ class _CompressOverlay extends StatelessWidget {
   }
 }
 
-class _AddSlot extends StatelessWidget {
-  const _AddSlot({required this.onTap, this.showRedDot = false});
-  final VoidCallback? onTap;
-
-  /// Paint a 8×8 red dot in the top-right corner. Used as a
-  /// first-run affordance nudge (see `_MultiUploadHintBubble`).
-  final bool showRedDot;
-
-  @override
-  Widget build(BuildContext context) {
-    final slot = Container(
-      width: 48,
-      height: 64,
-      decoration: BoxDecoration(
-        color: const Color(0x0AFFFFFF),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppTheme.line2),
-      ),
-      child: Icon(LucideIcons.plus, size: 18, color: AppTheme.textMute),
-    );
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          slot,
-          if (showRedDot)
-            Positioned(
-              top: -3,
-              right: -3,
-              child: Container(
-                width: 10,
-                height: 10,
-                decoration: BoxDecoration(
-                  color: AppTheme.favoriteActive,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: AppTheme.bg, width: 1.5),
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-/// First-run tip, second-iteration version. Slim horizontal bubble
-/// that renders inline below the thumb row, with a small upward
-/// caret pointing at the ＋ slot (leftmost column of the row, where
-/// ＋ lives when there are no picked images yet). Visible for 6 s
-/// or until the user taps anywhere on it.
-///
-/// Why inline instead of an Overlay-anchored popover:
-///   · Inline stays aligned to ＋ without needing a GlobalKey +
-///     RenderBox position math — the thumb row is the line above
-///     so pointing up-left lands on ＋ for the empty-state case
-///     (when ＋ is the first slot).
-///   · The scroll body isn't obstructed; the user can scroll past
-///     to dismiss naturally.
-///   · Cheap to render, cheap to dismiss.
-class _MultiUploadHintBubble extends StatelessWidget {
-  const _MultiUploadHintBubble({required this.onDismiss});
-  final VoidCallback onDismiss;
-
-  @override
-  Widget build(BuildContext context) {
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: GestureDetector(
-        onTap: onDismiss,
-        behavior: HitTestBehavior.opaque,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Upward caret anchored to the left, pointing at the ＋ slot.
-            Padding(
-              padding: const EdgeInsets.only(left: 20),
-              child: CustomPaint(
-                size: const Size(12, 6),
-                painter: _CaretPainter(AppTheme.surfaceRaised),
-              ),
-            ),
-            Container(
-              padding: const EdgeInsets.fromLTRB(14, 10, 10, 10),
-              decoration: BoxDecoration(
-                color: AppTheme.surfaceRaised,
-                borderRadius: BorderRadius.circular(AppTheme.r3),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.3),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(LucideIcons.images, size: 15, color: AppTheme.text),
-                  const SizedBox(width: 8),
-                  const Flexible(
-                    child: AppText.small(
-                      '按 ＋ 可一次加多張海報，共用同一筆資料',
-                      weight: FontWeight.w500,
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  Icon(LucideIcons.x, size: 14, color: AppTheme.textFaint),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _CaretPainter extends CustomPainter {
-  const _CaretPainter(this.color);
-  final Color color;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final p = Path()
-      ..moveTo(size.width / 2, 0)
-      ..lineTo(size.width, size.height)
-      ..lineTo(0, size.height)
-      ..close();
-    canvas.drawPath(p, Paint()..color = color);
-  }
-
-  @override
-  bool shouldRepaint(_CaretPainter old) => old.color != color;
-}
