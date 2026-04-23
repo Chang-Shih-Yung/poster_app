@@ -211,16 +211,44 @@ class HomePage extends ConsumerWidget {
                 ));
               }
 
-              // Skip re-rendering the poster we already promoted to the
-              // hero so it doesn't appear twice in a row.
+              // ── Cross-section dedup ───────────────────────────────
+              // v19 round 7: same poster can appear in multiple server
+              // sections (trending + popular + recent_approved + for_you
+              // routinely overlap in the top ~20), which was creating
+              // two problems:
+              //
+              //   1. Hero-tag collisions — two live `Hero(tag:
+              //      poster-$id)` on the same route → Flutter picked
+              //      the flight destination arbitrarily → cards
+              //      visibly "jumped to the wrong card" on pop-back.
+              //      HeroMode on IndexedStack covers cross-tab but
+              //      within-home collisions still needed client dedup.
+              //   2. UX — users scrolled past the same movie three
+              //      sections in a row, home felt smaller than it is.
+              //
+              // Fix: precompute a skip-set per section in one forward
+              // pass. Each section only sees posters NOT already shown
+              // in an earlier section (or as the hero). Sections that
+              // get emptied by dedup are dropped silently.
               final heroId = hero?.id;
+              final seenIds = <String>{?heroId};
+              final skipSets = <Set<String>>[];
               for (final s in sections) {
+                // Snapshot what was "already shown" before this section.
+                skipSets.add(Set.of(seenIds));
+                // Contribute this section's IDs so downstream sections
+                // dedup against them too.
+                seenIds.addAll(_posterIdsIn(s));
+              }
+
+              for (var i = 0; i < sections.length; i++) {
+                final s = sections[i];
                 if (s.isEmpty) continue;
                 slivers.add(SliverToBoxAdapter(
                   child: _DynamicSectionRow(
                     section: s,
                     favIds: favIds,
-                    skipPosterId: heroId,
+                    skipPosterIds: skipSets[i],
                     skipUserId: myId,
                   ),
                 ));
@@ -326,15 +354,18 @@ class _DynamicSectionRow extends StatelessWidget {
   const _DynamicSectionRow({
     required this.section,
     required this.favIds,
-    this.skipPosterId,
+    this.skipPosterIds = const <String>{},
     this.skipUserId,
   });
   final HomeSectionV2 section;
   final Set<String> favIds;
 
-  /// If set, skip any poster with this ID (used to avoid duplicating
-  /// the hero in the row below it).
-  final String? skipPosterId;
+  /// Poster IDs to drop from this section before rendering. Populated
+  /// by the parent with the cumulative set of IDs already shown
+  /// earlier on the page (hero + preceding sections). A section that
+  /// gets emptied by this filter returns SizedBox.shrink so the
+  /// section header doesn't orphan itself.
+  final Set<String> skipPosterIds;
 
   /// If set, skip any user with this ID — keeps the viewer out of
   /// "people to follow" lists, which are nonsensical when the user
@@ -350,9 +381,10 @@ class _DynamicSectionRow extends StatelessWidget {
         // as "top something" — anything past 10 is just clutter.
         final items = section
             .asTrending()
-            .where((t) => t.poster.id != skipPosterId)
+            .where((t) => !skipPosterIds.contains(t.poster.id))
             .take(10)
             .toList(growable: false);
+        if (items.isEmpty) return const SizedBox.shrink();
         return _TrendingRow(
           items: items,
           favIds: favIds,
@@ -376,8 +408,13 @@ class _DynamicSectionRow extends StatelessWidget {
           icon: _iconFromName(section.icon),
         );
       case 'follow_feed':
+        final items = section
+            .asFollowFeed()
+            .where((a) => !skipPosterIds.contains(a.poster.id))
+            .toList(growable: false);
+        if (items.isEmpty) return const SizedBox.shrink();
         return _FollowFeedRow(
-          activities: section.asFollowFeed(),
+          activities: items,
           favIds: favIds,
           title: section.titleZh,
           icon: _iconFromName(section.icon),
@@ -389,8 +426,9 @@ class _DynamicSectionRow extends StatelessWidget {
       case 'for_you_cf':
         final items = section
             .asPosters()
-            .where((p) => p.id != skipPosterId)
+            .where((p) => !skipPosterIds.contains(p.id))
             .toList(growable: false);
+        if (items.isEmpty) return const SizedBox.shrink();
         return _SectionRow(
           items: items,
           favIds: favIds,
@@ -400,6 +438,27 @@ class _DynamicSectionRow extends StatelessWidget {
       default:
         return const SizedBox.shrink();
     }
+  }
+}
+
+/// Poster IDs a section would contribute to the home page. Used by
+/// the parent render pass to build per-section skip sets so later
+/// sections dedup against earlier ones. Sections whose `sourceType`
+/// doesn't carry posters (active_collectors) return empty.
+Iterable<String> _posterIdsIn(HomeSectionV2 s) {
+  switch (s.sourceType) {
+    case 'trending_favorites':
+      return s.asTrending().map((t) => t.poster.id);
+    case 'follow_feed':
+      return s.asFollowFeed().map((a) => a.poster.id);
+    case 'popular':
+    case 'tag_slug':
+    case 'recent_approved':
+    case 'for_you':
+    case 'for_you_cf':
+      return s.asPosters().map((p) => p.id);
+    default:
+      return const <String>[];
   }
 }
 
