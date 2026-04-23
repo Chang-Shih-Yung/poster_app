@@ -2,19 +2,10 @@
 -- Write-path integration tests. Paste into Supabase Dashboard →
 -- SQL Editor to run.
 --
--- Design notes:
---   · Previous versions used a temp table, but Supabase's dashboard
---     seems to isolate each statement into its own session (not just
---     transaction), so session-scoped temp tables die between
---     statements. Fixed by wrapping all test logic in a persistent
---     plpgsql function — catalog-stored, survives statement
---     boundaries, then dropped at the bottom.
---   · No auth.uid() paths — every mutation uses explicit UUIDs, and
---     the `postgres` role the dashboard runs as bypasses RLS
---     automatically.
---   · Each test rolls back its own side-effects inside the function
---     body. The final summary query confirms post-state matches
---     pre-state (non-zero open_reports / pending_avatars = leak).
+-- The single trailing UNION ALL SELECT lands all seven rows (T1-T6
+-- verdicts + one SUMMARY row with post-state counts) in the same
+-- Results grid — Supabase's dashboard only ever shows the LAST
+-- SELECT's rows, so we collapse both into one statement.
 -- ═══════════════════════════════════════════════════════════════════
 
 drop function if exists public._write_path_tests();
@@ -57,13 +48,11 @@ declare
   t5_second int;
 
   -- T6
-  t6_payload   jsonb;
-  t6_count     int;
+  t6_payload    jsonb;
+  t6_count      int;
   t6_first_slug text;
 begin
-  -- ================================================================
-  -- T1 · avatar 3-report safety net
-  -- ================================================================
+  -- ======= T1 · avatar 3-report safety net =======
   select avatar_status into t1_before from public.users where id = t1_target;
 
   insert into public.avatar_reports (target_user_id, reporter_id, reason)
@@ -84,13 +73,10 @@ begin
   end if;
   return next;
 
-  -- Cleanup T1
   delete from public.avatar_reports where target_user_id = t1_target and reason = 'test T1';
   update public.users set avatar_status = t1_before where id = t1_target;
 
-  -- ================================================================
-  -- T2 · follow toggle (insert + delete cycle)
-  -- ================================================================
+  -- ======= T2 · follow toggle =======
   select exists (
     select 1 from public.follows
     where follower_id = t2_follower and followee_id = t2_target
@@ -124,9 +110,7 @@ begin
   end if;
   return next;
 
-  -- ================================================================
-  -- T3 · self-follow DB constraint
-  -- ================================================================
+  -- ======= T3 · self-follow CHECK =======
   begin
     insert into public.follows (follower_id, followee_id) values (t3_bot00, t3_bot00);
   exception when check_violation then
@@ -144,9 +128,7 @@ begin
   end if;
   return next;
 
-  -- ================================================================
-  -- T4 · favorite idempotency (PK)
-  -- ================================================================
+  -- ======= T4 · favorite PK idempotency =======
   select poster_id into t4_sample
   from public.favorites where user_id = t3_bot00 limit 1;
 
@@ -176,9 +158,7 @@ begin
   end if;
   return next;
 
-  -- ================================================================
-  -- T5 · avatar-report uniqueness (same reporter twice)
-  -- ================================================================
+  -- ======= T5 · avatar-report uniqueness =======
   insert into public.avatar_reports (target_user_id, reporter_id, reason)
   values (t5_target, t5_reporter, 'test T5 first')
   on conflict do nothing;
@@ -201,16 +181,13 @@ begin
   end if;
   return next;
 
-  -- Cleanup T5
   delete from public.avatar_reports
   where target_user_id = t5_target and reporter_id = t5_reporter
     and reason like 'test T5%';
   update public.users set avatar_status = 'ok'
   where id = t5_target and avatar_status = 'pending_review';
 
-  -- ================================================================
-  -- T6 · home_sections_v2 returns a real jsonb payload
-  -- ================================================================
+  -- ======= T6 · home_sections_v2 shape =======
   t6_payload := public.home_sections_v2();
   t6_count := jsonb_array_length(t6_payload);
   t6_first_slug := t6_payload -> 0 ->> 'slug';
@@ -231,19 +208,28 @@ end;
 $fn$;
 
 
--- Run the tests — these rows land in the Results grid.
-select * from public._write_path_tests() order by test_id;
-
--- Post-state sanity: both open_reports and pending_avatars should
--- be zero if the tests cleaned up after themselves.
+-- All seven rows in one grid:
+--   T1-T6 from the function
+--   one trailing SUMMARY row with the post-state counts as text,
+--   so open_reports / pending_avatars can be eyeballed for leaks.
+select test_id, status, detail
+from public._write_path_tests()
+union all
 select
-  (select count(*) from public.users where handle like 'bot%')                                as bots,
-  (select count(*) from public.follows
-     where follower_id in (select id from public.users where handle like 'bot%'))             as bot_follows,
-  (select count(*) from public.favorites
-     where user_id in (select id from public.users where handle like 'bot%'))                 as bot_favorites,
-  (select count(*) from public.avatar_reports)                                                as open_reports,
-  (select count(*) from public.users where avatar_status = 'pending_review')                  as pending_avatars;
+  'SUMMARY' as test_id,
+  case when (select count(*) from public.avatar_reports) = 0
+        and (select count(*) from public.users where avatar_status = 'pending_review') = 0
+       then 'CLEAN' else 'LEAK' end as status,
+  format(
+    'bots=%s · bot_follows=%s · bot_favorites=%s · open_reports=%s · pending_avatars=%s',
+    (select count(*) from public.users where handle like 'bot%'),
+    (select count(*) from public.follows
+       where follower_id in (select id from public.users where handle like 'bot%')),
+    (select count(*) from public.favorites
+       where user_id in (select id from public.users where handle like 'bot%')),
+    (select count(*) from public.avatar_reports),
+    (select count(*) from public.users where avatar_status = 'pending_review')
+  ) as detail
+order by test_id;
 
--- Cleanup: drop the function so nothing sits around in `public`.
 drop function public._write_path_tests();
