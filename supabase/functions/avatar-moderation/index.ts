@@ -19,15 +19,25 @@
 //   4) Front-end calls this RIGHT AFTER avatar upload finishes; the
 //      function writes back avatar_status. Front-end refetches profile.
 //
-// Model: Falconsai/nsfw_image_detection — open-source, Apache 2.0,
-// returns 5 labels with scores: porn / hentai / sexy / drawing /
-// neutral. Same five-class scheme as NSFWJS.
+// Model: Falconsai/nsfw_image_detection — open-source, Apache 2.0.
+// Returns a BINARY classification: `normal` vs `nsfw`, each with a
+// 0..1 confidence score. Earlier versions of this file assumed the
+// 5-class NSFWJS scheme (porn/hentai/sexy/drawing/neutral) — that
+// was wrong; Falconsai collapses everything into one score. The
+// classify() function was patched in v19 round 4 to match.
 
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
 const HF_MODEL = "Falconsai/nsfw_image_detection";
-const HF_URL = `https://api-inference.huggingface.co/models/${HF_MODEL}`;
+// v19 round 4: HuggingFace retired the legacy `api-inference` host in
+// early 2025 — classic requests now 404 with an Express "Cannot POST"
+// page. Serverless inference moved under the Inference Providers
+// router. Task-based classic endpoints live at:
+//   https://router.huggingface.co/hf-inference/models/{model_id}
+// Binary image body + `Authorization: Bearer <HF token>` otherwise
+// identical to the old shape.
+const HF_URL = `https://router.huggingface.co/hf-inference/models/${HF_MODEL}`;
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
@@ -47,20 +57,21 @@ interface HFLabel {
 type Status = "ok" | "pending_review" | "rejected";
 
 function classify(labels: HFLabel[]): Status {
-  const score = (k: string) =>
-    labels.find((l) => l.label.toLowerCase() === k)?.score ?? 0;
+  // Falconsai returns two rows: `normal` + `nsfw`. We only care
+  // about the nsfw confidence.
+  const nsfw = labels.find((l) => l.label.toLowerCase() === "nsfw")
+    ?.score ?? 0;
 
-  // Hard reject: porn or hentai > 0.7.
-  if (score("porn") > 0.7 || score("hentai") > 0.7) return "rejected";
+  // Hard reject when the model is very confident it's NSFW.
+  // Threshold picked so a stock portrait (~0.001) / landscape
+  // (~0.0002) never trips; an artistic-nude painting typically
+  // scores 0.85+ on this model.
+  if (nsfw > 0.75) return "rejected";
 
-  // Soft flag for admin: explicit "sexy" or borderline porn/hentai.
-  if (
-    score("sexy") > 0.5 ||
-    score("porn") > 0.4 ||
-    score("hentai") > 0.4
-  ) {
-    return "pending_review";
-  }
+  // Borderline — flag for admin review. Catches suggestive-but-
+  // not-explicit content (beach bikini, athletic wear, etc.) that
+  // we don't want to auto-reject but want a human to eyeball.
+  if (nsfw > 0.35) return "pending_review";
 
   return "ok";
 }
@@ -71,7 +82,7 @@ serve(async (req) => {
       status: 405,
     });
   }
-  let body: Body;
+  let body: Body & { debug?: boolean };
   try {
     body = await req.json();
   } catch {
@@ -87,12 +98,17 @@ serve(async (req) => {
   }
 
   let status: Status = "ok";
+  // Diagnostic fields — returned only when `debug: true` is in the
+  // POST body. Lets us trace "which branch did we hit" without
+  // having to pull Edge Function logs. Never surfaced to end users.
+  let diagnostics: Record<string, unknown> = {};
 
   try {
     // Fetch the uploaded image and forward to HF inference.
     const imgRes = await fetch(body.image_url);
     if (!imgRes.ok) throw new Error(`image fetch ${imgRes.status}`);
     const bytes = new Uint8Array(await imgRes.arrayBuffer());
+    diagnostics.image_bytes = bytes.length;
 
     const hfRes = await fetch(HF_URL, {
       method: "POST",
@@ -102,18 +118,24 @@ serve(async (req) => {
       },
       body: bytes,
     });
+    diagnostics.hf_status = hfRes.status;
 
     if (!hfRes.ok) {
       // Model load may take a few seconds on cold start — HF returns 503
       // with `estimated_time`. Treat as transient: leave status 'ok'
       // and let the user-report path catch real violators.
+      const errBody = await hfRes.text();
+      diagnostics.hf_error_body = errBody.slice(0, 500);
       console.warn(`HF returned ${hfRes.status}, defaulting to ok`);
     } else {
-      const labels = (await hfRes.json()) as HFLabel[];
+      const raw = await hfRes.json();
+      diagnostics.hf_raw = raw;
+      const labels = raw as HFLabel[];
       status = classify(labels);
     }
   } catch (err) {
     // Network error / timeout. Don't block the upload — fail open.
+    diagnostics.exception = String(err);
     console.warn("moderation failed, defaulting to ok:", err);
   }
 
@@ -129,7 +151,10 @@ serve(async (req) => {
     );
   }
 
-  return new Response(JSON.stringify({ status }), {
+  const response: Record<string, unknown> = { status };
+  if (body.debug === true) response.diagnostics = diagnostics;
+
+  return new Response(JSON.stringify(response), {
     status: 200,
     headers: { "content-type": "application/json" },
   });
