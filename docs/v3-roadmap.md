@@ -97,15 +97,23 @@ Claude 各自對照自己要負責的行動。
 | 1.C1 | Schema 定稿後：寫 migration 把新欄位加進 DB + admin 表單 | Claude | 1.A4 |
 | 1.C2 | Sheet 裡的資料**一次性匯入 DB**（Node 腳本或手動）| Claude / Henry | 1.C1 |
 
-### 🟧 Phase 2：後台功能補齊（schema 定稿後 1-2 週）
+### 🟧 Phase 2：mobile-first 後台 + 圖片上傳
 
-| # | 任務 | 誰做 | 依賴 |
+合夥人要求「手機一目瞭然樹狀 + 圖片上傳 + 批量」三大目標的拆解。
+詳細設計見 `docs/v3-phase2-mobile-admin.md`。
+
+| # | 任務 | 誰做 | 狀態 |
 |---|---|---|---|
-| 2.1 | 樹狀編輯器（drag-drop / 新增群組節點）| Claude | 1.C1 |
-| 2.2 | 圖片上傳 + 壓縮 + thumb + BlurHash | Claude | 1.B5 |
-| 2.3 | （可選）Sheet → DB 自動同步按鈕（如果累積的 Sheet 資料超過手抄的量才做）| Claude | 1.A4 |
-| 2.4 | 8 張 silhouette 占位圖上傳到 Supabase Storage | **Henry**（產圖）| 2.2 |
-| 2.5 | 使用者投稿審核佇列 UI（還沒有投稿資料、先建好殼）| Claude | 1.B5 |
+| 2.1 | Mobile-first layout + 底部 tab bar | Claude | ✅ |
+| 2.2 | `/tree` 可收合樹狀頁（Studio → Work → Group → Poster）| Claude | ✅ |
+| 2.3 | `poster_groups` CRUD（新增子群組 / 刪除）| Claude | ✅ |
+| 2.4 | 圖片上傳：客戶端壓縮 + thumb + BlurHash + Storage | Claude | ✅ |
+| 2.5 | `/upload-queue` 待補圖列表頁 | Claude | ✅ |
+| 2.6 | 多選模式（長按觸發）+ 批量動作底欄 | Claude | ⏳ 下輪 |
+| 2.7 | 批量上傳嚮導頁（一張接一張，可跳過）| Claude | ⏳ 下輪 |
+| 2.8 | 批量刪除 / 批量搬群組 | Claude | ⏳ 下輪 |
+| 2.9 | 8 張 silhouette 占位圖上傳到 Supabase Storage | **Henry**（產圖）| ⏳ |
+| 2.10 | 使用者投稿審核佇列 UI（還沒有投稿資料、先建好殼）| Claude | ⏳ |
 
 ### 🟥 Phase 3：Flutter app 改寫（2-4 週，後台穩才動）
 

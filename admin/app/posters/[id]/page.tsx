@@ -1,5 +1,6 @@
-import Nav from "@/components/Nav";
+import PageShell from "@/components/PageShell";
 import PosterForm from "../new/PosterForm";
+import PosterImageUploader from "@/components/PosterImageUploader";
 import { createClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
 
@@ -17,7 +18,7 @@ export default async function EditPosterPage({
     supabase
       .from("posters")
       .select(
-        "id, work_id, poster_name, region, poster_release_type, size_type, channel_category, channel_name, is_exclusive, exclusive_name, material_type, version_label, source_url, source_note, is_placeholder"
+        "id, work_id, poster_name, region, poster_release_type, size_type, channel_category, channel_name, is_exclusive, exclusive_name, material_type, version_label, source_url, source_note, is_placeholder, poster_url, thumbnail_url"
       )
       .eq("id", id)
       .single(),
@@ -27,14 +28,29 @@ export default async function EditPosterPage({
   if (!poster) notFound();
 
   return (
-    <>
-      <Nav />
-      <main className="px-6 py-8 max-w-2xl mx-auto">
-        <h1 className="text-2xl font-semibold mb-6">
-          編輯海報：{poster.poster_name ?? "(未命名)"}
-        </h1>
-        <PosterForm mode="edit" works={works ?? []} initial={poster} />
-      </main>
-    </>
+    <PageShell title={poster.poster_name ?? "(未命名)"} showBack>
+      <div className="md:px-0 space-y-6">
+        <section className="px-4 pt-4 md:px-0 md:pt-0">
+          <h1 className="hidden md:block text-2xl font-semibold mb-2">
+            編輯海報：{poster.poster_name ?? "(未命名)"}
+          </h1>
+          <h2 className="text-xs uppercase tracking-wider text-textMute mb-3">
+            真實圖片
+          </h2>
+          <PosterImageUploader
+            posterId={poster.id}
+            currentImageUrl={poster.thumbnail_url ?? poster.poster_url}
+            isPlaceholder={poster.is_placeholder}
+          />
+        </section>
+
+        <section className="px-4 md:px-0">
+          <h2 className="text-xs uppercase tracking-wider text-textMute mb-3">
+            Metadata
+          </h2>
+          <PosterForm mode="edit" works={works ?? []} initial={poster} />
+        </section>
+      </div>
+    </PageShell>
   );
 }

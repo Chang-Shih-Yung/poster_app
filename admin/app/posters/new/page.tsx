@@ -1,4 +1,4 @@
-import Nav from "@/components/Nav";
+import PageShell from "@/components/PageShell";
 import PosterForm from "./PosterForm";
 import { createClient } from "@/lib/supabase/server";
 
@@ -18,16 +18,18 @@ export default async function NewPosterPage({
     .order("title_zh");
 
   return (
-    <>
-      <Nav />
-      <main className="px-6 py-8 max-w-2xl mx-auto">
-        <h1 className="text-2xl font-semibold mb-6">新增海報</h1>
+    <PageShell title="新增海報" showBack>
+      <div className="px-4 py-4 md:px-0 md:py-0">
+        <h1 className="hidden md:block text-2xl font-semibold mb-6">新增海報</h1>
+        <p className="text-xs text-textFaint mb-4">
+          只填 metadata；圖片在建立後到編輯頁上傳。
+        </p>
         <PosterForm
           mode="create"
           works={works ?? []}
           defaultWorkId={work_id}
         />
-      </main>
-    </>
+      </div>
+    </PageShell>
   );
 }

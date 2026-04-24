@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { REGIONS, RELEASE_TYPES, SIZE_TYPES, CHANNEL_CATEGORIES } from "@/lib/enums";
@@ -26,6 +26,7 @@ type PosterFormProps = {
     source_url: string | null;
     source_note: string | null;
     is_placeholder: boolean;
+    parent_group_id?: string | null;
   };
   defaultWorkId?: string;
 };
@@ -33,6 +34,12 @@ type PosterFormProps = {
 export default function PosterForm({ mode, works, initial, defaultWorkId }: PosterFormProps) {
   const router = useRouter();
   const [workId, setWorkId] = useState(initial?.work_id ?? defaultWorkId ?? "");
+  const [parentGroupId, setParentGroupId] = useState<string>(
+    initial?.parent_group_id ?? ""
+  );
+  const [groupOptions, setGroupOptions] = useState<
+    { id: string; name: string; depth: number }[]
+  >([]);
   const [posterName, setPosterName] = useState(initial?.poster_name ?? "");
   const [region, setRegion] = useState(initial?.region ?? "TW");
   const [releaseType, setReleaseType] = useState(initial?.poster_release_type ?? "");
@@ -48,6 +55,26 @@ export default function PosterForm({ mode, works, initial, defaultWorkId }: Post
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Load poster_groups for the selected work whenever workId changes,
+  // and flatten the tree into an indented option list.
+  useEffect(() => {
+    if (!workId) {
+      setGroupOptions([]);
+      return;
+    }
+    const supabase = createClient();
+    (async () => {
+      const { data } = await supabase
+        .from("poster_groups")
+        .select("id, name, parent_group_id, display_order")
+        .eq("work_id", workId)
+        .order("display_order")
+        .order("name");
+      const flat = flattenTree(data ?? []);
+      setGroupOptions(flat);
+    })();
+  }, [workId]);
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -60,6 +87,7 @@ export default function PosterForm({ mode, works, initial, defaultWorkId }: Post
 
     const row: Record<string, unknown> = {
       work_id: workId,
+      parent_group_id: parentGroupId || null,
       poster_name: posterName.trim() || null,
       region: region || "TW",
       poster_release_type: releaseType || null,
@@ -120,6 +148,29 @@ export default function PosterForm({ mode, works, initial, defaultWorkId }: Post
             </option>
           ))}
         </select>
+      </Field>
+
+      <Field label="所屬群組">
+        <select
+          value={parentGroupId}
+          onChange={(e) => setParentGroupId(e.target.value)}
+          className="w-full"
+          disabled={!workId}
+        >
+          <option value="">── 不屬於任何群組 ──</option>
+          {groupOptions.map((g) => (
+            <option key={g.id} value={g.id}>
+              {"  ".repeat(g.depth)}
+              {g.depth > 0 ? "└ " : ""}
+              {g.name}
+            </option>
+          ))}
+        </select>
+        {!workId && (
+          <span className="block text-xs text-textFaint mt-1">
+            先選作品才能看到該作品的群組
+          </span>
+        )}
       </Field>
 
       <Field label="海報名稱">
@@ -267,4 +318,38 @@ function Field({ label, required, children }: { label: string; required?: boolea
       {children}
     </label>
   );
+}
+
+/**
+ * Flatten a list of poster_groups (with parent_group_id) into a depth-
+ * annotated array suitable for rendering an indented dropdown.
+ */
+type GroupRow = {
+  id: string;
+  name: string;
+  parent_group_id: string | null;
+  display_order: number;
+};
+
+function flattenTree(rows: GroupRow[]): { id: string; name: string; depth: number }[] {
+  const childrenMap = new Map<string | null, GroupRow[]>();
+  for (const r of rows) {
+    const arr = childrenMap.get(r.parent_group_id) ?? [];
+    arr.push(r);
+    childrenMap.set(r.parent_group_id, arr);
+  }
+  const out: { id: string; name: string; depth: number }[] = [];
+  function walk(parent: string | null, depth: number) {
+    const kids = (childrenMap.get(parent) ?? []).sort((a, b) =>
+      a.display_order !== b.display_order
+        ? a.display_order - b.display_order
+        : a.name.localeCompare(b.name)
+    );
+    for (const k of kids) {
+      out.push({ id: k.id, name: k.name, depth });
+      walk(k.id, depth + 1);
+    }
+  }
+  walk(null, 0);
+  return out;
 }

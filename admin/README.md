@@ -86,23 +86,43 @@ pnpm dev
 記得更新 Supabase Auth 的 Redirect URLs，把新 Vercel domain 加進
 Allow List（Dashboard → Authentication → URL Configuration）。
 
-## 目前有什麼（v0，2026-04-24）
+## 目前有什麼（v0.2，2026-04-24 晚）
 
-- [x] Google OAuth 登入
-- [x] Admin email 白名單（middleware 層）
-- [x] Dashboard 顯示 works / posters / 待補圖數量
-- [x] Works list / new / edit 頁
-- [x] Posters list（可搜尋、可篩選只看待補圖）
-- [x] Posters new / edit 頁（完整 metadata 表單）
-- [x] 夜幕 dark theme（配合 Flutter app 風格）
+**這版的重點：mobile-first（合夥人的手機是主場）**
 
-## 還沒做（Phase 2）
+- [x] Google OAuth 登入 + admin email 白名單
+- [x] **Mobile-first 設計**：底部 tab bar、手指友善觸控、安全區考量
+- [x] **Dashboard**：作品/海報/待補圖數量 + 快速入口
+- [x] **🌳 目錄樹**（`/tree`）：手機可收合樹狀瀏覽 — Studio →
+      Work → Group → Poster 可任意展開收合
+- [x] **📤 待補圖佇列**（`/upload-queue`）：所有 `is_placeholder=true`
+      的海報，點任一張進編輯頁上傳
+- [x] **群組管理**（`/works/:id`）：在作品編輯頁直接新增 / 刪除
+      poster_groups（支援子群組）
+- [x] **海報編輯**（`/posters/:id`）：上傳真實圖片自動壓縮 +
+      產 thumb + 算 BlurHash + 自動把 `is_placeholder` 翻為 false
+- [x] **海報新增**：可指定所屬群組（下拉選單顯示縮排層級）
 
-- [ ] `poster_groups` 樹狀編輯器（拖拉新增 / 重排層級）
-- [ ] 真實圖片上傳（拖拉 + 壓縮 + thumb + BlurHash）
+## 還沒做（Phase 2.1+）
+
+- [ ] 多選模式（長按進入）+ 批量上傳嚮導
+- [ ] 批量刪除 / 批量搬群組
 - [ ] 投稿審核佇列（使用者送上來的 metadata 建檔）
-- [ ] 吉卜力樣板 CSV → 一鍵 seed 匯入腳本
-- [ ] 批次操作（多選、批次刪除 / 改 studio）
+- [ ] 樹狀拖拉重排（reorder display_order）
+- [ ] 8 張 silhouette 占位圖上傳到 Storage（Henry 自製）
+
+## 圖片上傳流程
+
+點海報 → 編輯頁最上方有大塊上傳區 → 點/拖檔案進去：
+1. 客戶端壓縮主圖到長邊 ≤ 1600px、JPEG q=0.85
+2. 客戶端壓縮 thumb 到長邊 ≤ 400px、JPEG q=0.75
+3. 計算 BlurHash（6×4）
+4. 並行上傳到 Supabase Storage `posters/` bucket
+5. UPDATE posters SET poster_url, thumbnail_url, blurhash,
+   image_size_bytes, is_placeholder = false
+
+整個過程 client-side 完成（沒走 server function），所以速度快、
+頻寬省（壓縮過後上傳，不傳原檔）。
 
 ## 架構備忘
 
