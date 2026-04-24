@@ -38,9 +38,8 @@ still not cut — waiting on §7 remainder.
   sees their own photo; other viewers always see the canonical image.
   No `visibility` column; no public/community override path in v3.
 - ☑ **C — Ownership claim**: frictionless, single-tap, no proof,
-  no moderation. Optional photo earns a 📸 badge visible in the
-  uploader's own collection. AI NSFW auto-check is the only
-  safety net.
+  no moderation for owning. Optional photo can earn a 📸 badge.
+  **Badge issuance model still open** (A vs. B-lite — see §3.11).
 - ☑ **D — Silhouette count**: 8 generic silhouettes, one per
   `work_kind` enum value.
 
@@ -528,6 +527,137 @@ Lifted from School B's shipped patterns:
 crafting / dust economy, anything that simulates game-controlled
 supply. Those are School A mechanics and would ring hollow on a
 School B app.
+
+### 3.11 Photo moderation & badge issuance — two models on the table
+
+Henry raised (2026-04-24): "maybe we can cut review workload further
+since the photo is private to the uploader anyway — review only gates
+whether they earn the badge, not whether the flip lands." This is
+correct in spirit but produces two distinct engineering paths:
+
+**Model A — auto-badge, no review.**
+- Photo upload → AI NSFW gate → if it passes, user immediately has the
+  📸 badge on that card.
+- Admin workload ≈ zero (only sees flagged NSFW, maybe 1% of uploads).
+- Badge meaning: *"I bothered to attach a photo."* — commemorative,
+  not proof.
+
+**Model B — admin-verified badge.**
+- Photo upload → goes to owner's private card immediately (they see
+  their own photo).
+- Photo enters an admin review queue.
+- Admin batch-views thumbnails, taps ✓ / ✗.
+- On ✓ → user earns the ⭐ "verified collector" badge on that card.
+- Admin workload ≈ every photo that wants the badge (if 30% of flips
+  attach photos and there are 200 active users × 3 flips/day → ~180
+  reviews/day — non-trivial).
+- Badge meaning: *"official confirms the photo shows this poster."* —
+  real proof signal.
+
+**Model B-lite — AI-filtered, admin-spot-checked (Claude's
+recommendation).**
+- Photo upload → HuggingFace image classifier asks "does this look
+  like a physical poster photo?"
+- 80% clearly-yes → auto-badge.
+- 15% ambiguous → admin queue.
+- 5% clearly-not (NSFW / not a poster / screenshot of the app) →
+  auto-reject, no badge, user notified.
+- Admin workload ≈ ~27/day in the 200-user scenario above.
+- Badge meaning: *"AI + possibly a human confirmed this is a real
+  poster photo."*
+
+**Pending Henry's call.** All three models are engineering-compatible
+with Phase 1; the difference is:
+- Model A: no new tables (badge derives from `user_poster_override`
+  existence).
+- Model B / B-lite: add a `photo_moderation_state` enum column on
+  `user_poster_override` (`pending / approved / rejected`) and a
+  batch-review screen in admin.
+
+Recommendation (when Henry decides): **start with Model A**, upgrade
+to B-lite if badges turn out to be too cheap to signal anything
+meaningful. Starting with B-lite is also fine but adds ~2 days of
+admin-UI work in Phase 2.
+
+## 4. Scenario ledger — source-of-truth for what the system does
+
+This section is the human-readable check-list of every flow we've
+discussed. Henry and co-founder sign off here **before** any schema
+is cut. Anything new that comes up in migration work gets back-added
+to this list first.
+
+### 4A. Editor (non-tech) scenarios
+
+| # | Scenario | Action | Result |
+|---|---|---|---|
+| A1 | Editor writes new poster row in Sheet | Fills columns: title / kind / path / channel / … | Row saved in Sheet (nothing in DB yet) |
+| A2 | Editor clicks "Sync from Sheet" in admin | Reviews diff preview, confirms | Rows inserted into DB with silhouette placeholder |
+| A3 | New poster visible in app immediately | No admin image upload needed yet | Users see silhouette tile |
+| A4 | Editor opens "needs real image" queue in admin | Drags scanned image onto a tile | Placeholder upgraded to real image app-wide |
+| A5 | Editor corrects a typo | Edits in admin OR in Sheet + re-sync | DB updated |
+| A6 | Editor deletes a poster | Admin action | Soft-delete (`deleted_at`); hidden from app, recoverable |
+
+### 4B. Collector basic scenarios
+
+| # | Scenario | Action | Result |
+|---|---|---|---|
+| B1 | New user opens app | Sees tree browse | "Sea of silhouettes", 0/N progress everywhere |
+| B2 | Taps into a movie | Sees all posters in that work | All silhouettes, progress counter e.g. 0/12 |
+| B3 | Taps a silhouette | Poster detail page | Metadata, path breadcrumb, action buttons |
+| B4 | Taps "flip" (no photo) | Flip animation → state = owned | Silhouette becomes canonical image in self-view |
+| B5 | Taps "flip" + attaches photo | Flip animation → owned + photo stored | Private photo visible on self-view + (maybe) 📸 badge per §3.11 |
+| B6 | Flips before admin uploads real image | state = owned | Silhouette + ✓ badge + date; auto-upgrades to canonical when image lands |
+| B7 | Switches to own collection page | Sees progress bar / rarity / achievements | All public info |
+| B8 | Receives notification | e.g. "your submission approved" / "your photo earned badge" | Corresponding state updated |
+
+### 4C. Collector contribution (missing-poster) scenarios
+
+| # | Scenario | Action | Result |
+|---|---|---|---|
+| C1 | User searches, finds nothing | "Propose a missing poster" CTA appears | Opens submission form |
+| C2 | User fills form (no image!) | Submits metadata only | Submission row, pending; admin notified |
+| C3 | Admin reviews submission queue | Approves / rejects / merges into existing | Corresponding outcome |
+| C4 | Approved → poster created | Auto-attaches silhouette, enters "needs real image" queue | User notified "your proposal accepted" |
+| C5 | Rejected → user sees reason | Notification carries reason string | User can revise and resubmit |
+
+### 4D. Social / public view scenarios
+
+| # | Scenario | Action | Result |
+|---|---|---|---|
+| D1 | Visitor views Henry's profile | Sees only flipped posters | Unflipped hidden entirely; personal photos never shown |
+| D2 | Visitor views a flipped poster on Henry's profile | Shows canonical image (not Henry's personal photo) | Uniform visual across viewers |
+| D3 | Activity item: "X flipped Y poster" | Tappable → poster detail | Can 👏-react (lightweight) |
+| D4 | Follow / followers | v2 existing flow | Kept but frozen (no new social features in v3) |
+
+### 4E. Edge cases awaiting Henry's call
+
+These aren't scenarios yet — they're unanswered questions that will
+become scenarios once Henry decides.
+
+| # | Edge case | Open question |
+|---|---|---|
+| E1 | User wants to un-flip (mis-tap, or sold the poster) | Do we support un-flip? What happens to attached photo? |
+| E2 | User double-taps / mis-taps flip | Is there an undo window? |
+| E3 | User sold a poster they used to own | Do we track "once owned" vs "currently owned"? Or simplify to current-only? |
+| E4 | User owns 2 copies of the same poster | `× N` counter? Or don't bother? |
+| E5 | User wants to replace their photo | Can they re-upload? Old photo purged? |
+| E6 | Admin removes an erroneous poster that users already flipped | Do flipped users get notified? Their state becomes orphan? |
+| E7 | User deletes their account | Collection data fully purged, or de-identified and retained for rarity stats? |
+
+**Claude's default suggestions** (override freely):
+- E1: yes, un-flip is a menu option on each card; attached photo is
+  deleted along with the state row.
+- E2: no undo — flip is trivially reversible via E1 so no timer needed.
+- E3: simplify to current-only; "once owned" is out of scope for v3.
+- E4: skip — if someone owns duplicates they can track externally.
+  Revisit if requested by real users.
+- E5: yes, re-upload overwrites; old photo in Storage is soft-deleted.
+- E6: yes — users with that poster in their state get a notification
+  "this poster was removed by admin"; their state row is soft-deleted
+  with a reason.
+- E7: purge the user's personal rows (`user_poster_state`,
+  `user_poster_override`), but retain anonymized counts in rarity
+  aggregates (nobody can tell who owned what).
 
 ### 3.4 Custom admin — where does it live?
 
