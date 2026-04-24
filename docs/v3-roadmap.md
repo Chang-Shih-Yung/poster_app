@@ -1,130 +1,155 @@
 # Poster. v3 執行順序總覽（Roadmap）
 
-**Status:** 2026-04-24 產品定位已鎖定（見
-`plan-v3-collection-pivot.md` §Decisions locked），剩下的全是執行問題。
+**Status:** 2026-04-24 大翻轉 — **不再經過 Google Sheets**，一切資料
+輸入直接走自建後台。兩個 admin 帳號（Henry + 合夥人）從一開始就用後
+台進行 schema 驗證、資料建檔、圖片上傳。
 
 此文件是「**誰要做什麼、什麼順序做**」的總表，供 Henry / 合夥人 /
-編輯者 / Claude 各自對照自己要負責的行動。
+Claude 各自對照自己要負責的行動。
 
 ---
 
-## ⏱ 現在狀態（2026-04-24）
+## ⏱ 現在狀態（2026-04-24 下午）
 
 | 項目 | 狀態 |
 |---|---|
 | bot seed 清除 | ✅ 已完成 |
-| v3 技術設計 doc（`plan-v3-collection-pivot.md`）| ✅ 鎖定 |
-| v3 行為流程 doc（`v3-behavior-flows.md`）| ✅ 鎖定 |
-| 編輯者工具 README + CSV 範本 | ✅ 完成 |
-| 吉卜力 benchmark 資料（37 列）| ✅ 完成 |
-| Phase 1 DB migration | ⏳ 等合夥人定 schema |
-| admin/ Next.js 後台 | ⏳ 等 Phase 1 |
-| 收藏導向前端改寫 | ⏳ 等後台 |
+| v3 技術設計 doc | ✅ 鎖定 |
+| v3 行為流程 doc | ✅ 鎖定 |
+| 吉卜力 benchmark CSV（37 列）| ✅ 留作**資料樣板**、不再經過 Sheets |
+| **Google Sheets 中繼** | ❌ **已廢止** — 直接走後台 |
+| Phase 1 DB migration | 🔵 **Claude 進行中** |
+| admin/ Next.js 後台 | 🔵 **Claude 進行中** |
+| 收藏導向前端改寫 | ⏳ 等後台跑通第一批資料 |
 
 ---
 
-## 📋 接下來的 TODO（依賴關係排序）
+## 🔀 2026-04-24 下午的架構翻轉
 
-### 🟩 Phase 0：本週 / 下週就能做（不被任何東西擋）
+**原計畫**：編輯者用 Google Sheets 填資料 → 後台同步按鈕拉進 DB →
+後台做圖片上傳、審核、樹狀編輯。
 
-| # | 任務 | 誰做 | 產出 |
+**新計畫**：完全跳過 Sheets。所有人直接用後台。後台一開始就包含：
+- Google OAuth（只白名單 admin email 能進）
+- works / poster_groups / posters 的 CRUD
+- 樹狀編輯器（visual tree of posters）
+- 圖片上傳 + 壓縮 + thumb 產生
+- 編輯者 = admin、合夥人 = admin，沒有第三類使用者進這裡
+
+**為什麼翻轉好**：
+
+1. 一個工具從頭到尾，不用在匯入邏輯上花工
+2. 圖片可以跟 metadata 一起即時上傳（不用「先灌文字再補圖」兩段）
+3. Schema 變動時直接改後台 UI 跟 DB 同步，不用同時改 Sheet 欄位、
+   CSV template、import script、UI
+4. 編輯者學一個工具就好（後台）而不是兩個（Sheets + 後台）
+
+**留下的代價**：
+
+- 後台要**更早上線**（本來可以慢慢做，現在變緊迫）
+- 編輯者第一天沒東西用，要等到後台最小可用版本
+- 吉卜力 benchmark CSV 留作**資料樣板**（給我寫 seed script 用），
+  不給人工填了
+
+---
+
+## 📋 新版 TODO（依賴排序）
+
+### 🟩 Phase 0：這輪 session 就做完
+
+| # | 任務 | 誰做 | 狀態 |
 |---|---|---|---|
-| 0.1 | 把吉卜力 CSV 匯入一份新的 Google Sheets | **Henry** | 官方海報目錄 Sheet（第一個分頁叫「Ghibli 範例」、唯讀）|
-| 0.2 | 在同一 Sheet 開第二分頁「正式資料」 | **Henry** | 編輯者工作區 |
-| 0.3 | 分享 Sheet 給編輯者 | **Henry** | 編輯者開始擴充吉卜力外的電影 |
-| 0.4 | 分享 `plan-v3-collection-pivot.md` + `v3-behavior-flows.md` + 吉卜力 CSV 給合夥人 | **Henry** | 合夥人開始驗證 schema |
-| 0.5 | 合夥人回饋 schema 欄位夠不夠、關聯正不正確 | **合夥人** | schema 定稿（label / value / 關聯）|
-| 0.6 | 產 8 張 `work_kind` silhouette 占位圖 | **Henry**（找 AI 或設計師）| 電影 / 演唱會 / 戲劇 / 展覽 / 活動 / 原創 / 廣告 / 其他 通用剪影 |
-| 0.7 | 編輯者填吉卜力外的其他電影 | **編輯者** | 目錄從 37 列擴充到 ~500+ 列 |
+| 0.1 | 更新 roadmap 反映翻轉 | Claude | ✅ 本檔 |
+| 0.2 | 寫 Phase 1 migration SQL（基於 19 欄 schema 草稿）| Claude | 🔵 進行中 |
+| 0.3 | Bootstrap `admin/` Next.js 15 專案 | Claude | 🔵 進行中 |
+| 0.4 | 實作 Google OAuth + admin email 白名單 | Claude | 🔵 進行中 |
+| 0.5 | 基本 CRUD：works / posters 的 list / new / edit 頁面 | Claude | 🔵 進行中 |
 
-### 🟨 Phase 1：合夥人 schema 定稿後（工程 ~1 週）
+### 🟨 Phase 1：後台 v0 可用之後（這兩三天）
 
 | # | 任務 | 誰做 | 依賴 |
 |---|---|---|---|
-| 1.1 | 寫 Phase 1 migration SQL（`poster_groups`, `user_poster_state`, `user_poster_override`, etc.）| **Claude** | 0.5 schema 定稿 |
-| 1.2 | 遷移現有 `posters` 表：加 `parent_group_id`, `is_placeholder`| **Claude** | 1.1 |
-| 1.3 | apply migrations 到 Supabase production | **Henry**（貼 Supabase Dashboard）| 1.1/1.2 審過 |
-| 1.4 | 跑 `bot_write_paths.sql` 驗證 DB 沒壞 | **Henry** | 1.3 |
-| 1.5 | 凍結 v2 的 feed / 追蹤 / 通知功能，加「freeze」註記 | **Claude** | 並行 |
+| 1.1 | Apply migration 到 Supabase production | **Henry** | 0.2 完 |
+| 1.2 | 設定 Supabase Auth Google provider + admin email 白名單到環境變數 | **Henry** | 0.4 完 |
+| 1.3 | 本地跑後台 `pnpm dev` 確認能進 | **Henry** | 0.5 完 |
+| 1.4 | 部署 admin 到 Vercel（新專案）| Henry / Claude | 1.3 |
+| 1.5 | 合夥人登入後台 → **對著真資料驗證 schema 夠不夠**| **合夥人 + Henry** | 1.4 |
+| 1.6 | 根據 1.5 回饋調整 schema + 後台 UI | Claude | 1.5 |
 
-### 🟧 Phase 2：Migration 完 → 後台上線（工程 ~2-4 週）
-
-| # | 任務 | 誰做 | 依賴 |
-|---|---|---|---|
-| 2.1 | `admin/` Next.js sub-app 骨架（auth、router、role gate）| **Claude** | 1.3 |
-| 2.2 | Google Sheets API 整合（service account、讀取範圍）| **Claude** | 2.1 |
-| 2.3 | 「從 Sheet 同步」按鈕 + diff preview + 匯入邏輯 | **Claude** | 2.2 |
-| 2.4 | 後台「待補圖」佇列 + 拖拉上傳 + 自動壓縮 | **Claude** | 2.1 |
-| 2.5 | 後台「投稿審核」佇列 | **Claude** | 2.1 |
-| 2.6 | 官方跑第一次大 sync — 把 Google Sheets 正式資料全部灌進 DB | **Henry** | 2.3 跑通 |
-| 2.7 | 8 張 silhouette 圖上傳到 Supabase Storage | **Henry** | 0.6 完成 |
-| 2.8 | 部署 admin 到 Vercel（新專案、新網址 `admin.poster.app`）| **Claude / Henry** | 2.1-2.5 |
-
-### 🟥 Phase 3：後台上線 → Flutter app 改寫（工程 ~3-5 週）
+### 🟧 Phase 2：後台功能補齊（1-2 週）
 
 | # | 任務 | 誰做 | 依賴 |
 |---|---|---|---|
-| 3.1 | 新的樹狀瀏覽頁（取代目前 home）| **Claude** | 2.6（有資料）|
-| 3.2 | 翻牌互動（flip 動畫 + state 寫入）| **Claude** | 3.1 |
-| 3.3 | 個人卡夾頁（進度 / 完成度 / 貢獻徽章）| **Claude** | 3.2 |
-| 3.4 | 「提交建檔申請」flow（取代目前上傳流程）| **Claude** | 3.1 |
-| 3.5 | 自拍覆寫（private only）| **Claude** | 3.2 |
-| 3.6 | 活動 feed 改寫（contribution-first）| **Claude** | 3.2 |
-| 3.7 | 凍結的 v2 功能放到次要 tab | **Claude** | 並行 |
-| 3.8 | 端到端測試（重寫 `bot_flows_test.py` 對新 schema）| **Claude** | 3.1-3.7 |
+| 2.1 | 樹狀編輯器（drag-drop / 新增群組節點）| Claude | Phase 1 穩 |
+| 2.2 | 圖片上傳 + 壓縮 + thumb + BlurHash | Claude | Phase 1 穩 |
+| 2.3 | 把吉卜力 37 列樣板寫成 seed script 一次灌入（當作 smoke test）| Claude | 2.1 + 2.2 |
+| 2.4 | 8 張 silhouette 占位圖上傳到 Supabase Storage | **Henry**（產圖）| 2.2 |
+| 2.5 | 使用者投稿審核佇列 UI（還沒有投稿資料、先建好殼）| Claude | Phase 1 |
 
-### ⚪ Phase 4：未來（v3 外、不排期）
+### 🟥 Phase 3：Flutter app 改寫（2-4 週，後台穩才動）
+
+| # | 任務 | 誰做 | 依賴 |
+|---|---|---|---|
+| 3.1 | 樹狀瀏覽頁 | Claude | Phase 2 有資料 |
+| 3.2 | 翻牌互動 + state 寫入 | Claude | 3.1 |
+| 3.3 | 個人卡夾頁 | Claude | 3.2 |
+| 3.4 | 提交建檔申請流 | Claude | 3.1 |
+| 3.5 | 自拍覆寫（private）| Claude | 3.2 |
+| 3.6 | 活動 feed 改寫 | Claude | 3.2 |
+| 3.7 | 凍結的 v2 功能移到次要 tab | Claude | 並行 |
+| 3.8 | 端到端測試 | Claude | 3.1-3.7 |
+
+### ⚪ Phase 4：未來選項（不排期）
 
 - 線下活動 QR 簽到徽章
 - 官方限定海報編號驗證
-- 戲院 loyalty API 整合（極度推測性）
+- 戲院 loyalty API 整合
 - 使用者投稿變「信任編輯者」升級路徑
 
 ---
 
 ## 🔒 已明確**不做**的事（v3 範圍外）
 
-避免 scope drift，這些已經討論過並排除：
-
-- ❌ 翻牌數量徽章（點幾下就破解）
-- ❌ 集滿徽章（同上）
-- ❌ 速度 / 首位成就（偏袒早期使用者）
-- ❌ 稀有度 tier（Common / Rare / Legendary）
-- ❌ 照片審查驗證徽章（盜圖秒破、審核成本高）
+- ❌ **Google Sheets 中繼**（今天廢止）
+- ❌ **Sheets API 同步按鈕**（不需要了）
+- ❌ **CSV 匯入工具**（CSV 只留作 seed script 的資料來源）
+- ❌ 翻牌數量徽章、集滿徽章、速度徽章、稀有度徽章
+- ❌ 照片審查驗證徽章
 - ❌ 自拍公開 / community override
 - ❌ 付費 / gacha / 戰鬥機制
-- ❌ Schema designer（像 Supabase Studio 那種元層）——後台只管一個固定 schema 的 CRUD
-- ❌ Flutter web 做後台（改為 Next.js 獨立 app）
-- ❌ iframe 嵌入 Google Sheets（改為 API 拉取同步）
+- ❌ Schema designer 元層
+- ❌ Flutter web 做後台
+- ❌ iframe 嵌入 Google Sheets
 - ❌ 使用者上傳 canonical 圖（只能上傳個人私密自拍）
-- ❌ 稀有度全域統計（反正統計不準）
+- ❌ 稀有度全域統計
 
 ---
 
-## 🆘 阻塞排除清單（卡關時看這裡）
+## 🆘 阻塞排除清單
 
-| 如果卡在這 | 該催誰 / 做啥 |
+| 如果卡在這 | 該做啥 |
 |---|---|
-| Phase 1 遲遲開不了工 | 催合夥人定 schema（0.5）|
-| Sheet 同步失敗 | 檢查 Google Cloud service account + Sheets API 有沒有啟用 |
-| 後台無法部署 | 檢查 Vercel 新專案建好、環境變數 `SUPABASE_SERVICE_ROLE_KEY` 有設 |
-| 使用者反應「app 變了很多」 | 預期的，v3 是 pivot 不是 iteration；做好溝通文案 |
-| 編輯者填到一半 schema 改了 | 保留 Sheet 原樣，寫 migration 把 CSV 欄位 map 到新 schema |
+| 後台跑不起來 | 檢查 `.env.local` 有沒有 `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `ADMIN_EMAILS` |
+| Google OAuth 登入不能 | Supabase Dashboard → Auth → Providers → Google 要開啟並填 OAuth client id / secret |
+| Login 成功但被擋 | 登入的 email 不在 `ADMIN_EMAILS` 裡、或大小寫不符 |
+| 後台部署 Vercel 失敗 | 新專案的 Root Directory 要設 `admin/`、環境變數要重貼 |
 
 ---
 
-## 📬 Claude 的停手狀態
+## 📬 Claude 的工作狀態
 
-**現在我不動 code**。Auto mode 期間依然等以下任一項解鎖：
+**Auto mode 下：持續推進 Phase 0 和 Phase 1**。這輪 session 會交付：
 
-1. 合夥人定 schema（解鎖 Phase 1）
-2. Henry 提出新的設計問題想討論
-3. Henry 發現現有 doc 需要調整
+- Phase 1 migration SQL（寫好但 Henry 決定何時 apply）
+- `admin/` Next.js 專案骨架 + Google OAuth + admin 白名單
+- works / posters 基本 CRUD
 
-在那之前 Claude 只做：
-- 更新 docs 反映新討論
-- 產更多示範資料（如吉卜力範例已完成，若需要可擴展）
-- 不動 Flutter、不動 Supabase、不動 Next.js。
+**需要 Henry 做的事**（同 Phase 1 表格）：
+1. 拿 migration SQL 貼到 Supabase Dashboard 執行
+2. 設定 Supabase Google OAuth provider
+3. 設定 admin email 白名單（環境變數）
+4. 本地跑後台、再部署 Vercel
+5. 跟合夥人一起驗證 schema
 
 ---
 
