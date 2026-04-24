@@ -38,10 +38,32 @@ still not cut — waiting on §7 remainder.
   sees their own photo; other viewers always see the canonical image.
   No `visibility` column; no public/community override path in v3.
 - ☑ **C — Ownership claim**: frictionless, single-tap, no proof,
-  no moderation for owning. Optional photo can earn a 📸 badge.
-  **Badge issuance model still open** (A vs. B-lite — see §3.11).
+  no moderation. Optional photo stays strictly private (owner-only
+  view). **No badge tied to photo presence.** See §3.11 for why.
 - ☑ **D — Silhouette count**: 8 generic silhouettes, one per
   `work_kind` enum value.
+- ☑ **2026-04-24 third refinement — product positioning**: Poster. is
+  a **collector's utility tool**, not a game. No consumption-based
+  achievement system (flipped-N, set-complete, speed, rarity tier).
+  The only badge kind that survives is **contribution-based** (posters
+  submitted and approved). See §3.12 for the first-principles
+  reasoning.
+- ☑ **B6 editor workflow correction**: in practice editors upload the
+  real image at sync time or shortly after; the generic silhouette is
+  the **rare fallback** for historic posters where no official image
+  exists, not the default path. See §4A refinements.
+- ☑ **E1**: un-flip is supported; the attached personal photo is
+  deleted along with the state row.
+- ☑ **E2**: single tap flips, second tap un-flips. No animation
+  gating, no undo timer.
+- ☑ **E3**: no "once owned" history tracking — current-only.
+- ☑ **E4**: binary owned / not owned. No duplicate counters.
+- ☑ **E5**: user can re-upload / delete their personal photo freely.
+- ☑ **E7**: account deletion fully purges personal state +
+  override rows. No anonymized retention (Henry's call — rarity stats
+  were dropped in §3.12 anyway).
+- ⏳ **E6**: admin-removes-a-poster edge case deferred, pending badge
+  / audit decision above (now resolved — revisit in §4E).
 
 ---
 
@@ -509,75 +531,153 @@ shaming). This aligns Q4 (public default) with Henry's B-answer
 (photos stay private): **collection membership is public, collection
 photography is private.**
 
-### 3.10 Gamification hooks (what to build in Phase 3)
+### 3.10 Retained UX hooks (what to build in Phase 3)
 
-Lifted from School B's shipped patterns:
+**Warning — this section was heavily cut after §3.12's product
+positioning lock-in (2026-04-24 third refinement). Most of the
+original "gamification hooks" were consumption-based and got dropped.
+Only hooks that survive the "can you trivially game it?" test remain.**
 
 | Hook | Inspiration | Implementation sketch |
 |---|---|---|
-| **Set completion %** | Hearthstone set bars, Pokédex | `(flipped_in_set / total_in_set)` per Work / Group / Tag |
-| **Rarity tiers** | 神魔之塔 N/R/SR/SSR | Daily cron: `Common/Uncommon/Rare/Legendary` based on `global_flipped_count` percentile |
-| **Seen vs Owned** | Pokédex silhouette → seen → caught | We already have `state='seen'` in the enum; add a lightweight "I saw this at [cinema]" tap |
-| **Flip animation** | physical TCGs | Flutter `AnimatedBuilder` + `Matrix4.rotationY` (0.5s) |
-| **Activity journal** | Letterboxd log, Strava feed | Replace v2 social feed: "Henry flipped 千與千尋 IMAX 威秀" with optional photo + kudos reactions |
-| **Milestone badges** | 神魔之塔 集滿獎勵 | "First Ghibli complete", "10 Legendary flipped", "📸 Collector (>70% photographed)" |
-| **Optional: real-world check-in** | Pikmin Bloom GPS | Near a listed cinema chain → one-tap "seen at 威秀 信義"; strictly opt-in, never required |
+| **Personal completion %** (self-view only) | Pokédex, Discogs collection stats | `(flipped_in_set / total_in_set)`, shown ONLY on owner's own collection page. No public leaderboards, no global percent competition. |
+| **Seen vs Owned** | Pokédex silhouette → seen → caught | We already have `state='seen'` in the enum. "I saw this at [cinema]" is a lightweight tap, doesn't affect any score. |
+| **Flip animation** | physical TCGs | Flutter `AnimatedBuilder` + `Matrix4.rotationY` (0.5s). Second tap reverses (see E2). Pure UX polish. |
+| **Activity journal** | Letterboxd log, Discogs contributor feed | Replace v2 social feed. Focus is on **contribution events** ("X added N posters to the catalogue") and **set completions** ("X finished the Ghibli set"). Flip events are visible but not highlighted — they're low-signal. |
+| **Contribution badge** (the only badge) | Wikipedia's barnstar, Stack Overflow badges | `count(submissions where status='approved')` tiers: 10 / 100 / 1000 contributions. Real work, real gate. |
 
-**Out of scope for v3 (explicit)**: gacha / pack-opening mechanics,
-crafting / dust economy, anything that simulates game-controlled
-supply. Those are School A mechanics and would ring hollow on a
-School B app.
+**Explicitly dropped** (see §3.12 for why):
+- ~~Flip-count badges~~ (any flavour: quantity, speed, "first to")
+- ~~Set-completion *badges*~~ (the completion % stays as personal
+  self-info; the badge layer on top was gameable and got cut)
+- ~~Rarity tiers~~ (Common / Rare / Legendary) — global flip counts
+  can't be trusted so the tier was fiction
+- ~~Photo badge~~ (📸 "attached a photo") — gameable by auto-uploading
+  any image; replaced with "photo is private, badge-free"
+- ~~Leaderboards of any flipped-quantity metric~~
 
-### 3.11 Photo moderation & badge issuance — two models on the table
+**Future hooks that would actually work** (post-v3):
+- Real-world event check-ins with on-site QR (cheap, verifiable, real)
+- Official limited-edition poster runs with per-copy NFC / serial (if
+  Poster. ever prints its own physical limited posters — this is
+  the Sorare-equivalent: we control supply, we can verify)
+- Cinema chain partnership for "actually watched" badges (speculative)
 
-Henry raised (2026-04-24): "maybe we can cut review workload further
-since the photo is private to the uploader anyway — review only gates
-whether they earn the badge, not whether the flip lands." This is
-correct in spirit but produces two distinct engineering paths:
+### 3.11 Photo moderation — the honest answer: don't bother
 
-**Model A — auto-badge, no review.**
-- Photo upload → AI NSFW gate → if it passes, user immediately has the
-  📸 badge on that card.
-- Admin workload ≈ zero (only sees flagged NSFW, maybe 1% of uploads).
-- Badge meaning: *"I bothered to attach a photo."* — commemorative,
-  not proof.
+Henry's 2026-04-24 insight: any photo-based verification is theatre.
+Someone can grab a Google-image-search result in 10 seconds, crop it,
+and upload — no free AI pipeline catches this reliably (Lens-style
+reverse-image works only on the most naive copies; any user that
+understands the game can get around it).
 
-**Model B — admin-verified badge.**
-- Photo upload → goes to owner's private card immediately (they see
-  their own photo).
-- Photo enters an admin review queue.
-- Admin batch-views thumbnails, taps ✓ / ✗.
-- On ✓ → user earns the ⭐ "verified collector" badge on that card.
-- Admin workload ≈ every photo that wants the badge (if 30% of flips
-  attach photos and there are 200 active users × 3 flips/day → ~180
-  reviews/day — non-trivial).
-- Badge meaning: *"official confirms the photo shows this poster."* —
-  real proof signal.
+So we drop photo verification entirely:
 
-**Model B-lite — AI-filtered, admin-spot-checked (Claude's
-recommendation).**
-- Photo upload → HuggingFace image classifier asks "does this look
-  like a physical poster photo?"
-- 80% clearly-yes → auto-badge.
-- 15% ambiguous → admin queue.
-- 5% clearly-not (NSFW / not a poster / screenshot of the app) →
-  auto-reject, no badge, user notified.
-- Admin workload ≈ ~27/day in the 200-user scenario above.
-- Badge meaning: *"AI + possibly a human confirmed this is a real
-  poster photo."*
+- **No review of uploaded photos** (beyond a single NSFW AI check as
+  a standard content-safety measure, same pipeline avatars already go
+  through).
+- **No badge tied to photo upload.** The photo is purely a **private
+  personal-collection record**; it has no social or game meaning.
+- `user_poster_override` table has no `moderation_state` column.
+  Photos exist or don't.
+- Admin never looks at user photos in the normal course of operation.
+  The only time a user photo surfaces in the admin is via an explicit
+  abuse report — which goes through the same NSFW-review path as
+  avatar reports.
 
-**Pending Henry's call.** All three models are engineering-compatible
-with Phase 1; the difference is:
-- Model A: no new tables (badge derives from `user_poster_override`
-  existence).
-- Model B / B-lite: add a `photo_moderation_state` enum column on
-  `user_poster_override` (`pending / approved / rejected`) and a
-  batch-review screen in admin.
+This is the Discogs / Letterboxd model: upload if you want, it's for
+you, nobody's policing it, nobody's rewarding you for it.
 
-Recommendation (when Henry decides): **start with Model A**, upgrade
-to B-lite if badges turn out to be too cheap to signal anything
-meaningful. Starting with B-lite is also fine but adds ~2 days of
-admin-UI work in Phase 2.
+### 3.12 Why badges (and consumption-based gamification) got dropped
+
+Henry asked the deepest question (2026-04-24): "if I can just open the
+app, flip every card, and collect every badge, then uninstall — what's
+the point of the badges?" He's right. This section records why
+consumption-based gamification got cut and what stayed.
+
+**The problem with the original four-category badge system:**
+
+| Category | Claimed purpose | Why it fails |
+|---|---|---|
+| Quantity (flipped 100) | Reward milestone | Mass-flip in one sitting; instant trophy |
+| Set completion (all Ghibli) | Reward dedication | Same — flip everything in a category |
+| Speed (first to flip X) | Reward early engagement | Purely favours early signups; late joiners locked out; still gameable by anyone who finds the poster first via mass-flip |
+| Rarity tier (Legendary) | Signal rare ownership | Global flip counts include fake flips; rarity becomes fiction |
+
+The common weakness: **flipping has no natural gate**. Anyone can flip
+anything. So any metric derived from flip counts is noise.
+
+**The one category that survived: contribution.**
+
+Submissions have a natural gate — the admin review queue. A user can't
+"contribute 100 posters" without actually writing 100 rows of valid
+metadata that pass a human check. That signal is real.
+
+**Why we don't try to gate flipping.**
+
+Four paths were considered:
+1. Photo verification → theatre (see §3.11).
+2. GPS / time-of-release verification → only works for future posters;
+   useless for a historic catalogue.
+3. NFC / QR on physical posters → requires IP-holder cooperation.
+4. Paid flip unlocks → turns Poster. into a pay-to-play on top of
+   already-paid-for physical posters. Absurd.
+
+None work for a free app tracking a historic catalogue of mass-produced
+objects. This is a fundamental physics problem with physical poster
+ownership, not a design oversight.
+
+**The resulting product positioning (locked 2026-04-24):**
+
+Poster. is a **utility** for collectors, not a **game** disguised as
+one. Cosmetic gamification on a utility is empty calories — it
+attracts the wrong audience (grind-for-trophies) and fails the right
+audience (real collectors don't care about fake trophies).
+
+Compare:
+
+| Metric | Discogs (utility) | Sorare (game) |
+|---|---|---|
+| Badges for consumption | None | Yes, but gated by paid packs |
+| Ownership verification | Trust + community | Blockchain-backed |
+| Retention driver | Catalogue quality + marketplace | Game loop + speculation |
+| User count | ~8M | ~2M, higher ARPU |
+
+Discogs proves a utility-first collector's app scales without any
+gamification at all. That's the path.
+
+**What we keep from the game-style UX without the game-style trap:**
+
+- **Flip interaction** — satisfying UX, private self-tracking, no
+  prestige attached.
+- **Personal collection progress bar** — *"you have 42 of 680"* shown
+  ONLY on your own collection page. No leaderboards, no public
+  percentage.
+- **Contribution badge** — earned through real work (submissions that
+  pass review). Persistent, meaningful, unfakeable.
+- **Activity feed** — Letterboxd-style "X contributed N posters today"
+  or "X completed their Ghibli set" (the latter is visible but isn't
+  a badge, just a shareable moment).
+
+**What we throw away:**
+
+- All flip-count badges (quantity / set / speed).
+- All rarity tier displays (Common / Rare / Legendary).
+- Global flip-count competition displays.
+- Any "first to" achievement.
+- The idea that photos earn you anything.
+
+**Future doors we leave open (out of scope for v3):**
+
+- Offline events: in-person meetup QR code = real verification of a
+  real action = real badge. Cheap when the event is cheap.
+- Official limited-edition runs: if Poster. (the team) someday prints
+  and numbers its own limited posters, those *can* be cryptographically
+  verified — because we control the supply, like Sorare does. Future
+  product, not v3.
+- Cinema partnerships: if a cinema chain provides API access to
+  movie-watching history, "seen this movie" badges become real.
+  Entirely speculative.
 
 ## 4. Scenario ledger — source-of-truth for what the system does
 
@@ -588,14 +688,20 @@ to this list first.
 
 ### 4A. Editor (non-tech) scenarios
 
+**Note (B6 correction, 2026-04-24):** in practice the editor usually
+has the real image at sync time — posters get released with press
+images, so "official image exists" is the default case. Silhouettes
+are a **fallback for historic posters with no surviving image**, not
+the normal path.
+
 | # | Scenario | Action | Result |
 |---|---|---|---|
-| A1 | Editor writes new poster row in Sheet | Fills columns: title / kind / path / channel / … | Row saved in Sheet (nothing in DB yet) |
-| A2 | Editor clicks "Sync from Sheet" in admin | Reviews diff preview, confirms | Rows inserted into DB with silhouette placeholder |
-| A3 | New poster visible in app immediately | No admin image upload needed yet | Users see silhouette tile |
-| A4 | Editor opens "needs real image" queue in admin | Drags scanned image onto a tile | Placeholder upgraded to real image app-wide |
+| A1 | Editor writes new poster row in Sheet | Fills metadata columns | Row saved in Sheet (nothing in DB yet) |
+| A2 | Editor clicks "Sync from Sheet" in admin | Reviews diff preview, confirms | Rows inserted with `is_placeholder = true`; display-image is silhouette for `work_kind` |
+| A3 | Editor immediately goes to "needs real image" queue | Drags scanned images onto tiles (usually in the same session as A2) | Placeholder upgraded to real image app-wide |
+| A4 | Historic poster with no known image | Editor deliberately leaves as silhouette | `is_placeholder = true` persists; tile shows silhouette indefinitely |
 | A5 | Editor corrects a typo | Edits in admin OR in Sheet + re-sync | DB updated |
-| A6 | Editor deletes a poster | Admin action | Soft-delete (`deleted_at`); hidden from app, recoverable |
+| A6 | Editor deletes a poster | Admin action | Soft-delete (`deleted_at`); hidden from app, recoverable; affected users notified (see E6) |
 
 ### 4B. Collector basic scenarios
 
@@ -629,35 +735,17 @@ to this list first.
 | D3 | Activity item: "X flipped Y poster" | Tappable → poster detail | Can 👏-react (lightweight) |
 | D4 | Follow / followers | v2 existing flow | Kept but frozen (no new social features in v3) |
 
-### 4E. Edge cases awaiting Henry's call
+### 4E. Edge cases — resolved 2026-04-24
 
-These aren't scenarios yet — they're unanswered questions that will
-become scenarios once Henry decides.
-
-| # | Edge case | Open question |
+| # | Edge case | Resolution |
 |---|---|---|
-| E1 | User wants to un-flip (mis-tap, or sold the poster) | Do we support un-flip? What happens to attached photo? |
-| E2 | User double-taps / mis-taps flip | Is there an undo window? |
-| E3 | User sold a poster they used to own | Do we track "once owned" vs "currently owned"? Or simplify to current-only? |
-| E4 | User owns 2 copies of the same poster | `× N` counter? Or don't bother? |
-| E5 | User wants to replace their photo | Can they re-upload? Old photo purged? |
-| E6 | Admin removes an erroneous poster that users already flipped | Do flipped users get notified? Their state becomes orphan? |
-| E7 | User deletes their account | Collection data fully purged, or de-identified and retained for rarity stats? |
-
-**Claude's default suggestions** (override freely):
-- E1: yes, un-flip is a menu option on each card; attached photo is
-  deleted along with the state row.
-- E2: no undo — flip is trivially reversible via E1 so no timer needed.
-- E3: simplify to current-only; "once owned" is out of scope for v3.
-- E4: skip — if someone owns duplicates they can track externally.
-  Revisit if requested by real users.
-- E5: yes, re-upload overwrites; old photo in Storage is soft-deleted.
-- E6: yes — users with that poster in their state get a notification
-  "this poster was removed by admin"; their state row is soft-deleted
-  with a reason.
-- E7: purge the user's personal rows (`user_poster_state`,
-  `user_poster_override`), but retain anonymized counts in rarity
-  aggregates (nobody can tell who owned what).
+| E1 | User un-flips | Supported. Second tap on a flipped card un-flips. Attached personal photo is deleted from Storage + DB. |
+| E2 | User double-tap / mis-tap | Not a special case. Flip is a tap toggle; un-flip is symmetric. No undo timer needed. |
+| E3 | Sold a poster, used to own it | Not tracked. Current-only model. Self-declared; user's own concern. |
+| E4 | Owns multiple copies of same poster | Not tracked. Binary owned / not owned. |
+| E5 | Re-uploads / deletes personal photo | Supported. New upload overwrites old file in Storage (hard-delete, not soft). |
+| E6 | Admin removes a poster that users have flipped | Admin-triggered removal is rare; when it happens, soft-delete the `poster` row; cascade soft-delete `user_poster_state` + `user_poster_override` rows referencing it; notify affected users with the reason string supplied by admin. |
+| E7 | User deletes account | Hard-purge `user_poster_state`, `user_poster_override`, uploaded photos in Storage. No retention. (Rarity tier stats were removed in §3.12, so nothing depends on anonymized retention.) |
 
 ### 3.4 Custom admin — where does it live?
 
