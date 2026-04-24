@@ -11,10 +11,20 @@ still not cut — waiting on §7 remainder.
 - ☑ **Q3 — Editor's first-month tool**: Google Sheets, synced via the
   Sheets API into the admin (no manual CSV download).
 - ☑ **Q4 — Collection privacy default**: public (OpenSea-style).
-- ☑ **New — Sheets ↔ admin link**: API pull-sync with preview/diff, not
+- ☑ **Sheets ↔ admin link**: API pull-sync with preview/diff, not
   iframe embed (see §3.5).
-- ☑ **New — Image pipeline split**: Sheets carries text only; image
+- ☑ **Image pipeline split**: Sheets carries text only; image
   upload + processing lives exclusively in the admin (see §3.6).
+- ☑ **Canonical poster rule (2026-04-24 refinement)**: every poster
+  row **always has an image**, starting as a work-kind-specific
+  silhouette placeholder and upgraded to a real scan by the official
+  team over time. No `NULL` poster_url ever. See §3.7.
+- ☑ **User contribution scope**: users contribute **metadata only**,
+  never images. Images are 100% an official-team responsibility. See
+  §3.7.
+- ☑ **Per-user image override**: users can replace the displayed image
+  for posters they collect with their own photo, visible on their own
+  profile. Global canonical image is unaffected. See §3.7.
 
 ---
 
@@ -307,25 +317,137 @@ the pipeline:
 
 - **Sheets rows**: no image column, or an optional `source_url`
   (reference only — not the canonical asset).
-- **On sync**: every new/updated poster row lands in Supabase with
-  `poster_url = NULL` and a flag `needs_image = true`.
-- **Admin UI has a "needs image" queue**: editor opens the queue, sees
-  the text metadata, drops a file in → admin uploads to
-  `posters` storage bucket, generates thumb + BlurHash, sets
-  `poster_url`, clears `needs_image`.
+- **On sync**: every new poster row lands in Supabase with
+  `poster_url = placeholder_by_kind(work_kind)` (see §3.7) and a flag
+  `is_placeholder = true`.
+- **Admin UI has a "needs real image" queue**: editor opens the queue,
+  sees the text metadata, drops a file in → admin uploads to the
+  `posters` storage bucket, generates thumb + BlurHash, replaces
+  `poster_url`, sets `is_placeholder = false`.
 - Images also go through the usual compression pipeline
   (`ImageCompressor.compress`) we already have.
 
-Why this split is cleaner:
+Why this split is cleaner than the original "NULL until uploaded"
+draft:
 
-- Editors who are filling data in bulk (from public references / books)
-  often don't have the image handy at that moment anyway.
-- Separating text from image means a bad image upload doesn't block a
-  whole row — the text is already live and can start showing up in
-  collection tree views as "this poster exists but no image yet"
-  (grey-out rendering).
-- Image work (compress, thumb, BlurHash, moderation) can be
-  server-side background-queued without coupling to the sync flow.
+- **No `NULL` state in the DB** — every query that renders a poster
+  tile can assume `poster_url` is non-null. No branches, no "is this
+  row ready yet" logic scattered through UI code.
+- Text-only rows are still shipped to the live app the moment they
+  sync — users see a silhouette / locked-slot tile immediately, which
+  is the whole point of a collector's app (empty slots drive the
+  hunt).
+- Image work (compress, thumb, BlurHash, moderation) is decoupled
+  from the sync flow and can be a proper admin workflow.
+
+### 3.7 Image state machine — four-tier display model
+
+Every poster has ONE canonical image (never null), plus an optional
+per-user override. What the user actually sees is resolved at read
+time in this order:
+
+```
+  ┌────────────────────────────────────────────────────────────┐
+  │         Display-image resolution for a (user, poster)       │
+  ├────────────────────────────────────────────────────────────┤
+  │                                                              │
+  │  1. User has uploaded an override?                           │
+  │     YES → show user_poster_override.image_url                │
+  │           (PERSONALIZED)                                     │
+  │     NO  → 2                                                  │
+  │                                                              │
+  │  2. User's state for this poster is 'owned'?                 │
+  │     YES → show posters.poster_url in full colour             │
+  │           (UNLOCKED)                                         │
+  │     NO  → 3                                                  │
+  │                                                              │
+  │  3. posters.is_placeholder is FALSE?                         │
+  │     (i.e. official team has uploaded the real image)         │
+  │     YES → show posters.poster_url blurred + 🔒 badge         │
+  │           (LOCKED — "real image exists, you don't own it")   │
+  │     NO  → 4                                                  │
+  │                                                              │
+  │  4. Default: show the generic silhouette for work_kind       │
+  │           (SILHOUETTE — "this poster exists but we don't     │
+  │           have the real image yet either")                   │
+  │                                                              │
+  └────────────────────────────────────────────────────────────┘
+```
+
+**Four tiers, in the order a collector progresses through them:**
+
+| Tier | What they see | Means |
+|---|---|---|
+| **Silhouette** | Generic `work_kind` silhouette | "Canonical record exists, no real image yet" |
+| **Locked** | Real image blurred + 🔒 | "Official has it, you don't own it" |
+| **Unlocked** | Real image, full colour, ✓ badge | "You own this" |
+| **Personalized** | User's own photo | "You replaced the image with your own scan" |
+
+**Tables needed:**
+
+- `posters.poster_url` — always non-null. Starts as the silhouette, gets
+  replaced by a real scan.
+- `posters.is_placeholder` — boolean. TRUE while `poster_url` is still
+  the silhouette; FALSE once admin uploads the real scan.
+- `user_poster_state (user_id, poster_id, state, …)` — see §2.3 for
+  the full shape; `state = 'owned'` drives the Locked → Unlocked jump.
+- `user_poster_override (user_id, poster_id, image_url, thumb_url,
+  uploaded_at, visibility)` — new table; one row per user per poster
+  when the user uploads their own photo.
+
+**Silhouette assets:**
+
+- One image per `work_kind` enum value → 8 images total.
+- Stored in a public Supabase bucket `placeholders/` (or committed
+  into the repo as static assets — probably cleaner).
+- Referenced by `poster_url` as a stable URL so no special-case
+  rendering is needed.
+
+**What users CAN contribute (confirmed 2026-04-24):**
+- Metadata for missing posters (title, year, channel, etc.)
+- Their own photo as a per-user override
+
+**What users CAN'T contribute:**
+- The canonical image of a poster — always official team's job.
+- Edits to other users' overrides — strictly per-user.
+
+### 3.8 Open sub-questions inside the image model
+
+Flagged for Henry (see also §7):
+
+**A. Does "owned" unlock require the real image to exist?**
+- Strict: you can only transition Silhouette → Unlocked *after* admin
+  uploads the real image. Before that, you're stuck at Silhouette even
+  if you own one in real life.
+- Lenient *(Claude recommends)*: "owned" state is independent of image
+  availability. You can flag Silhouette as "owned"; you'll see the
+  silhouette with a ✓ badge and your collection date until the real
+  image lands, then it smoothly becomes Unlocked.
+
+**B. Scope of `user_poster_override.visibility`:**
+- Private only: override is visible to the uploader, period.
+- Profile-scoped *(Claude recommends)*: when viewer X looks at
+  uploader Y's profile, X sees Y's override. When X looks at the
+  canonical poster page, X sees the official image.
+- Community: any user can "upvote" an override to promote it to the
+  canonical community photo for that poster. Rich but needs moderation.
+
+**C. Ownership claim proof:**
+- Frictionless: one-tap "I own this" → state = owned.
+- Strict: must upload a photo of your copy to count.
+- Hybrid *(Claude recommends)*: one-tap flags it owned; attaching a
+  photo earns a `verified` badge on your profile entry for that row.
+
+**D. Silhouette count:**
+- Minimal *(Claude recommends)*: 8 silhouettes, one per `work_kind`.
+- Regional: `work_kind × region` = ~40 silhouettes.
+- Per-work custom silhouettes: too expensive for v3.
+
+**E. Can a `poster_group` have its own cover image?**
+- Claude's call: yes. A group row can optionally carry a `cover_url`
+  (e.g. "2014 重映" shows a representative image on the tree node), but
+  groups don't participate in the four-tier user-state model — they
+  are always public browsing metadata.
 
 ### 3.4 Custom admin — where does it live?
 
@@ -559,9 +681,19 @@ Surfaced as:
 5. **Current upload flow fate**: keep as "contribute" with the same
    2-stage UI? Or redesign entirely around "check-in I own this
    canonical poster"?
-   → *Leaning toward: keep the 2-stage UI but rewire the form's fields
-   so it says "propose a missing poster" when the matched work exists,
-   and "I own this" when the user lands from a canonical poster page.*
+   → *Claude's call (given the 2026-04-24 refinement that users never
+   upload the canonical image): drop stage 1 (pick image) entirely.
+   The "propose a missing poster" flow is now metadata-only, so stage
+   2 is the whole flow. The 2-stage UI we just finished building gets
+   collapsed into a single metadata form. Separate from this, there's
+   a new "upload my own photo for an owned poster" flow which only
+   makes sense on a Work detail page, not from the main ＋ button.*
+
+5b. **New sub-questions from §3.8** — please answer A / B / C / D:
+   - A. Unlock-before-real-image — strict or lenient?
+   - B. Override visibility — private / profile-scoped / community?
+   - C. Ownership claim — frictionless / strict / hybrid?
+   - D. Silhouette count — 8 / 40 / per-work?
 
 6. **Rarity model**: show global owner counts (like NFT platforms)?
    This reveals every user's collection size — even with Q4 public, we
@@ -627,23 +759,90 @@ Now that Q2/Q3/Q4 + Sheets-sync + image-split are locked:
 
 ---
 
-## 9. Shared mental model — what goes where
+## 9. Data flow diagram (2026-04-24 revision)
+
+For showing the co-founder — this is the picture of how data moves
+through the v3 system.
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                             POSTER. v3 DATA FLOW                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+ 官方編輯端                      Next.js 後台                    使用者端 (Flutter)
+ ─────────                      ───────────                     ──────────────────
+
+ Google Sheets ──API 拉取同步─▶ [目錄同步面板]                    [探索頁]
+ (文字 only)                     ├─ diff preview                     ├─ 樹狀瀏覽 works
+                                 ├─ 一鍵匯入                          ├─ 看到 Silhouette /
+                                 └─ 每列 insert poster 時              │  Locked tiles
+                                    poster_url = 通用占位圖             └─ 公開收藏 (Q4 locked)
+                                    is_placeholder = true
+                                           │
+                                           ▼
+                                 [待補真圖佇列]                       [收藏互動]
+                                  ├─ 按熱度 / 建立日期 排序             ├─ 按「我已收藏」
+                                  ├─ 拖真圖上傳                         │    → user_poster_state
+                                  ├─ 自動壓縮 / thumb / BlurHash        ├─ 上傳自拍蓋過官方圖
+                                  └─ 設 is_placeholder = false          │    → user_poster_override
+                                           │                            │      (個人 profile 可見)
+                                           │                            └─ 分享 / 追蹤 / 進度條
+                                           │
+ 使用者投稿 ──metadata only──▶ [投稿審核佇列]                              │
+ (在 app 按 ＋，不附圖)           ├─ 看 metadata                           │
+                                  ├─ 通過 = 新 poster                      │
+                                  │    (同樣用占位圖起跳)                   │
+                                  └─ 之後進入「待補真圖佇列」                │
+                                           │                               │
+                                           ▼                               │
+                                  ┌───────────────────────────────────┐   │
+                                  │          Supabase DB              │◀──┘
+                                  │                                   │
+                                  │  works (IP 層級)                    │
+                                  │  poster_groups (遞迴樹狀)            │
+                                  │  posters (poster_url 永遠 non-null) │
+                                  │  user_poster_state (收藏狀態)        │
+                                  │  user_poster_override (個人覆寫圖)   │
+                                  │  submissions (使用者投稿審核)         │
+                                  └───────────────────────────────────┘
+                                           │
+                                           ▼
+                                   Flutter app 讀取並依下列順序解析圖片：
+                                   1. Personalized (use override)
+                                   2. Unlocked    (owned → full real image)
+                                   3. Locked      (real exists, not owned → blurred)
+                                   4. Silhouette  (no real image → generic)
+```
+
+**Three write-paths, one canonical DB:**
+
+1. Sheet sync (bulk text from editor) → occasional batch imports
+2. Admin direct edit (image uploads, corrections, reviews) → ongoing
+3. User submissions (metadata only, via Flutter app) → queue-reviewed
+
+**One read-path:** Flutter app reads whatever's canonical, resolves
+image at render-time per the four-tier model. Never sees a `NULL`
+image.
+
+## 10. Shared mental model — what goes where
 
 Quick reference card for "should this feature live in Sheets, admin,
 or the Flutter app?":
 
 | Feature | Sheets | Admin (Next.js) | Flutter app |
 |---|---|---|---|
-| Add a new work (1 row) | ✅ easy | ✅ | 🚫 read-only |
+| Add a new work (1 row) | ✅ easy | ✅ | 🚫 text-only submission |
 | Add 200 works (bulk) | ✅ paste-friendly | ✅ csv drop | 🚫 |
 | Build parent/child tree | ❌ path-string hack | ✅ drag-drop | 🚫 |
-| Upload the image file | ❌ | ✅ | ✅ (as contribution) |
-| Compress / thumb / BlurHash | 🚫 | ✅ auto | 🚫 server does it |
+| Upload the **canonical** image | 🚫 | ✅ exclusive | 🚫 forbidden |
+| Upload **my own** override image | 🚫 | 🚫 | ✅ |
+| Compress / thumb / BlurHash | 🚫 | ✅ auto | ⚠️ client-side for override only |
 | Approve a user submission | 🚫 | ✅ | 🚫 |
 | Mark "I own this" | 🚫 | 🚫 | ✅ |
 | Browse tree / search / feed | 🚫 | 🔍 read-only | ✅ |
 | Edit my profile | 🚫 | 🚫 | ✅ |
 | Rarity / global owner counts | 🚫 | ✅ (dashboard) | ✅ (per-poster pill) |
+| Silhouette assets (8 generic) | 🚫 | ✅ one-time upload | 🚫 read-only |
 
 The two "official" pipelines (Sheets → admin, user → admin review) both
 converge on the same Supabase tables. Flutter app is downstream
