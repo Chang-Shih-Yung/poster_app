@@ -25,6 +25,24 @@ still not cut — waiting on §7 remainder.
 - ☑ **Per-user image override**: users can replace the displayed image
   for posters they collect with their own photo, visible on their own
   profile. Global canonical image is unaffected. See §3.7.
+- ☑ **Collection mechanic (2026-04-24 second refinement)**:
+  trust-based "flip" — user taps a Silhouette to flip the card to
+  `owned`. No photo required, no admin review, no image verification.
+  Photo upload is voluntary and produces only a visual 📸 badge for
+  the user's own card. Canonical image remains official-only. This
+  drops the "Locked (blurred)" tier — see §3.9.
+- ☑ **A — Unlock timing**: lenient. User can flip before official has
+  uploaded the real image; Silhouette carries a ✓ owned badge until
+  real image lands, then upgrades automatically.
+- ☑ **B — Override visibility**: strictly private. Only the uploader
+  sees their own photo; other viewers always see the canonical image.
+  No `visibility` column; no public/community override path in v3.
+- ☑ **C — Ownership claim**: frictionless, single-tap, no proof,
+  no moderation. Optional photo earns a 📸 badge visible in the
+  uploader's own collection. AI NSFW auto-check is the only
+  safety net.
+- ☑ **D — Silhouette count**: 8 generic silhouettes, one per
+  `work_kind` enum value.
 
 ---
 
@@ -411,43 +429,105 @@ time in this order:
 - The canonical image of a poster — always official team's job.
 - Edits to other users' overrides — strictly per-user.
 
-### 3.8 Open sub-questions inside the image model
+### 3.8 ~~Open sub-questions~~ — all resolved 2026-04-24
 
-Flagged for Henry (see also §7):
+A (unlock timing), B (override visibility), C (proof), D (silhouette
+count) are now all locked in the Decisions section. See §3.9 for the
+game-mechanic rationale that drove these into trust-based territory.
 
-**A. Does "owned" unlock require the real image to exist?**
-- Strict: you can only transition Silhouette → Unlocked *after* admin
-  uploads the real image. Before that, you're stuck at Silhouette even
-  if you own one in real life.
-- Lenient *(Claude recommends)*: "owned" state is independent of image
-  availability. You can flag Silhouette as "owned"; you'll see the
-  silhouette with a ✓ badge and your collection date until the real
-  image lands, then it smoothly becomes Unlocked.
+**E (poster_group cover image)**: Claude's call accepted: group rows
+may optionally carry a `cover_url` for tree-node visuals, but do not
+participate in the user-state model.
 
-**B. Scope of `user_poster_override.visibility`:**
-- Private only: override is visible to the uploader, period.
-- Profile-scoped *(Claude recommends)*: when viewer X looks at
-  uploader Y's profile, X sees Y's override. When X looks at the
-  canonical poster page, X sees the official image.
-- Community: any user can "upvote" an override to promote it to the
-  canonical community photo for that poster. Rich but needs moderation.
+### 3.9 Collection mechanic — why trust-based "flip" wins
 
-**C. Ownership claim proof:**
-- Frictionless: one-tap "I own this" → state = owned.
-- Strict: must upload a photo of your copy to count.
-- Hybrid *(Claude recommends)*: one-tap flags it owned; attaching a
-  photo earns a `verified` badge on your profile entry for that row.
+**The problem with strict proof-based claims.** Poster collectors
+routinely own 50–500+ posters. A model that makes them upload a photo
+for every single one — and then wait on admin review — turns collection
+into unpaid labour. They will quit.
 
-**D. Silhouette count:**
-- Minimal *(Claude recommends)*: 8 silhouettes, one per `work_kind`.
-- Regional: `work_kind × region` = ~40 silhouettes.
-- Per-work custom silhouettes: too expensive for v3.
+**Two schools of collection apps** (look at what shipped, not what's
+theoretically elegant):
 
-**E. Can a `poster_group` have its own cover image?**
-- Claude's call: yes. A group row can optionally carry a `cover_url`
-  (e.g. "2014 重映" shows a representative image on the tree node), but
-  groups don't participate in the four-tier user-state model — they
-  are always public browsing metadata.
+| School | Examples | Supply controlled by | Proof model |
+|---|---|---|---|
+| **A — Game-controlled supply** | Hearthstone, 神魔之塔, Genshin | The game | No proof needed (game gave it to you) |
+| **B — Real-world supply** | Pokémon Go, Pikmin Bloom, Letterboxd, Discogs, MyAnimeList | The real world | **Trust-based. No proof required.** |
+
+Poster. is unambiguously School B. The posters exist in the physical
+world; we do not control who bought what. Every shipped School B app
+has converged on **trust-based entry with social/aesthetic incentives
+to add evidence**, not forced moderation. Letterboxd never asked for
+ticket stubs. Discogs never asked for vinyl scans. MyAnimeList never
+asked for screenshots. They all ship; they all have millions of users.
+
+**The "flip" interaction.** Every poster tile starts face-down
+(Silhouette). The user taps a tile → a quick flip animation → they can
+optionally attach their own photo → the tile settles into the
+`owned` state on their profile.
+
+- No review.
+- No verification beyond an AI NSFW check on any attached photo.
+- Attaching a photo is purely a **voluntary flex** — it earns a 📸
+  badge on that card in the user's own collection view, and a
+  "collector's quality" meta-badge when >70% of their collection
+  has photos. Nothing else.
+
+**What this drops vs. the earlier four-tier model.** The "Locked
+(blurred real image)" tier disappears. Reasoning: once entry is
+trust-based, there's no need to let viewers peek at a blurred real
+image for posters they haven't flipped — it just generates a weird
+"here's what you could have" envy. Cleaner model:
+
+| Tier | What viewer sees | When |
+|---|---|---|
+| **Silhouette** | Generic `work_kind` silhouette | Not flipped OR no real image yet |
+| **Unlocked (canonical)** | Real image, full colour | Flipped AND real image exists |
+| **Unlocked (silhouette)** | Silhouette + ✓ owned + date | Flipped BUT no real image yet — auto-upgrades when admin uploads the real one |
+| **Personalized** | Owner's own photo | Only visible to the owner themselves |
+
+**Public vs private view of the same user's collection page:**
+
+```
+You (own)  vs  Visitor
+
+Unlocked + photo attached:
+  You    →  Personalized (your own photo) + 📸 badge
+  Visitor →  Unlocked canonical (official image)    ← same as any other viewer
+
+Unlocked + no photo:
+  You    →  Unlocked canonical
+  Visitor →  Unlocked canonical
+
+Not yet flipped:
+  You    →  Silhouette (tappable → flip)
+  Visitor →  hidden from your profile entirely (you haven't claimed it)
+```
+
+Visitors never see another user's private photos. Visitors never see
+posters the owner hasn't flipped (no "this is what they don't have"
+shaming). This aligns Q4 (public default) with Henry's B-answer
+(photos stay private): **collection membership is public, collection
+photography is private.**
+
+### 3.10 Gamification hooks (what to build in Phase 3)
+
+Lifted from School B's shipped patterns:
+
+| Hook | Inspiration | Implementation sketch |
+|---|---|---|
+| **Set completion %** | Hearthstone set bars, Pokédex | `(flipped_in_set / total_in_set)` per Work / Group / Tag |
+| **Rarity tiers** | 神魔之塔 N/R/SR/SSR | Daily cron: `Common/Uncommon/Rare/Legendary` based on `global_flipped_count` percentile |
+| **Seen vs Owned** | Pokédex silhouette → seen → caught | We already have `state='seen'` in the enum; add a lightweight "I saw this at [cinema]" tap |
+| **Flip animation** | physical TCGs | Flutter `AnimatedBuilder` + `Matrix4.rotationY` (0.5s) |
+| **Activity journal** | Letterboxd log, Strava feed | Replace v2 social feed: "Henry flipped 千與千尋 IMAX 威秀" with optional photo + kudos reactions |
+| **Milestone badges** | 神魔之塔 集滿獎勵 | "First Ghibli complete", "10 Legendary flipped", "📸 Collector (>70% photographed)" |
+| **Optional: real-world check-in** | Pikmin Bloom GPS | Near a listed cinema chain → one-tap "seen at 威秀 信義"; strictly opt-in, never required |
+
+**Out of scope for v3 (explicit)**: gacha / pack-opening mechanics,
+crafting / dust economy, anything that simulates game-controlled
+supply. Those are School A mechanics and would ring hollow on a
+School B app.
 
 ### 3.4 Custom admin — where does it live?
 
@@ -678,22 +758,14 @@ Surfaced as:
 
 ### ⏳ Still open — please answer next
 
-5. **Current upload flow fate**: keep as "contribute" with the same
-   2-stage UI? Or redesign entirely around "check-in I own this
-   canonical poster"?
-   → *Claude's call (given the 2026-04-24 refinement that users never
-   upload the canonical image): drop stage 1 (pick image) entirely.
-   The "propose a missing poster" flow is now metadata-only, so stage
-   2 is the whole flow. The 2-stage UI we just finished building gets
-   collapsed into a single metadata form. Separate from this, there's
-   a new "upload my own photo for an owned poster" flow which only
-   makes sense on a Work detail page, not from the main ＋ button.*
+5. **Current upload flow fate**: confirmed direction — drop stage 1
+   (pick image) entirely. The ＋ button leads to a metadata-only
+   "propose a missing poster" form. A separate flow ("attach my photo
+   to this flipped poster") lives on each poster's detail page inside
+   the owner's collection view. ✅ Direction locked by the §3.9
+   refinement.
 
-5b. **New sub-questions from §3.8** — please answer A / B / C / D:
-   - A. Unlock-before-real-image — strict or lenient?
-   - B. Override visibility — private / profile-scoped / community?
-   - C. Ownership claim — frictionless / strict / hybrid?
-   - D. Silhouette count — 8 / 40 / per-work?
+5b. ~~§3.8 sub-questions~~ → all resolved.
 
 6. **Rarity model**: show global owner counts (like NFT platforms)?
    This reveals every user's collection size — even with Q4 public, we
@@ -759,70 +831,77 @@ Now that Q2/Q3/Q4 + Sheets-sync + image-split are locked:
 
 ---
 
-## 9. Data flow diagram (2026-04-24 revision)
+## 9. Data flow diagram (2026-04-24 revision, post-trust-based-flip)
 
-For showing the co-founder — this is the picture of how data moves
-through the v3 system.
+For showing the co-founder — this is the current picture of how data
+moves through v3.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                             POSTER. v3 DATA FLOW                              │
+│              POSTER. v3 DATA FLOW — trust-based flip edition                  │
 └─────────────────────────────────────────────────────────────────────────────┘
 
- 官方編輯端                      Next.js 後台                    使用者端 (Flutter)
- ─────────                      ───────────                     ──────────────────
+ 官方編輯端                  Next.js 後台                    使用者端 (Flutter)
+ ─────────                   ───────────                    ──────────────────
 
- Google Sheets ──API 拉取同步─▶ [目錄同步面板]                    [探索頁]
- (文字 only)                     ├─ diff preview                     ├─ 樹狀瀏覽 works
-                                 ├─ 一鍵匯入                          ├─ 看到 Silhouette /
-                                 └─ 每列 insert poster 時              │  Locked tiles
-                                    poster_url = 通用占位圖             └─ 公開收藏 (Q4 locked)
-                                    is_placeholder = true
-                                           │
-                                           ▼
-                                 [待補真圖佇列]                       [收藏互動]
-                                  ├─ 按熱度 / 建立日期 排序             ├─ 按「我已收藏」
-                                  ├─ 拖真圖上傳                         │    → user_poster_state
-                                  ├─ 自動壓縮 / thumb / BlurHash        ├─ 上傳自拍蓋過官方圖
-                                  └─ 設 is_placeholder = false          │    → user_poster_override
-                                           │                            │      (個人 profile 可見)
-                                           │                            └─ 分享 / 追蹤 / 進度條
-                                           │
- 使用者投稿 ──metadata only──▶ [投稿審核佇列]                              │
- (在 app 按 ＋，不附圖)           ├─ 看 metadata                           │
-                                  ├─ 通過 = 新 poster                      │
-                                  │    (同樣用占位圖起跳)                   │
-                                  └─ 之後進入「待補真圖佇列」                │
-                                           │                               │
-                                           ▼                               │
-                                  ┌───────────────────────────────────┐   │
-                                  │          Supabase DB              │◀──┘
-                                  │                                   │
-                                  │  works (IP 層級)                    │
-                                  │  poster_groups (遞迴樹狀)            │
-                                  │  posters (poster_url 永遠 non-null) │
-                                  │  user_poster_state (收藏狀態)        │
-                                  │  user_poster_override (個人覆寫圖)   │
-                                  │  submissions (使用者投稿審核)         │
-                                  └───────────────────────────────────┘
-                                           │
-                                           ▼
-                                   Flutter app 讀取並依下列順序解析圖片：
-                                   1. Personalized (use override)
-                                   2. Unlocked    (owned → full real image)
-                                   3. Locked      (real exists, not owned → blurred)
-                                   4. Silhouette  (no real image → generic)
+ Google Sheets              [目錄同步面板]                    [樹狀瀏覽]
+ (文字 only)    ──API──▶    ├─ Sheet diff preview             ├─ 所有海報按樹狀分類
+                            ├─ 一鍵 import                     ├─ 未翻牌 = Silhouette
+                            ├─ 自動掛 silhouette               └─ 已翻牌 = Unlocked /
+                            └─ is_placeholder = true              Personalized
+                                    │                              │
+                                    ▼                              ▼
+                            [待補真圖佇列]                      [翻牌互動]
+                            ├─ 按熱度排序                        ├─ tap → 翻面動畫
+                            ├─ 拖真圖上傳                        ├─ 可選上傳自拍 (+📸)
+                            ├─ 自動壓縮 + thumb + BlurHash       ├─ 寫 user_poster_state
+                            └─ is_placeholder = false            │    (state = 'owned')
+                                    │                            └─ 自拍寫 user_poster_
+                                    │                                 override (永遠 private)
+ 使用者投稿 ──metadata only──▶ [投稿審核佇列]                       │
+ (在 app 按 ＋，不附圖)         ├─ 只審 metadata                  │
+                                ├─ 通過 = 新 poster + silhouette │ (無審核、信任制)
+                                └─ 進入「待補真圖佇列」            │
+                                         │                        ▼
+                                         ▼                  [個人卡夾]
+                                ┌───────────────────┐      ├─ 看到已翻牌全部
+                                │   Supabase DB     │◀─────┤  (自己 = Personalized
+                                │                   │      │   + 未翻牌 silhouette)
+                                │  works            │      ├─ set 進度條
+                                │  poster_groups    │      ├─ 稀有度徽章
+                                │  posters          │      └─ 成就 / 活動 feed
+                                │  user_poster_     │
+                                │    state          │      [公開 profile (別人看你)]
+                                │  user_poster_     │      ├─ 只看到已翻牌
+                                │    override       │      ├─ 全部顯示官方圖
+                                │    (private only) │      └─ 看不到未翻牌 / 自拍
+                                │  submissions      │
+                                └───────────────────┘
+```
+
+**渲染邏輯（讀取時）**:
+
+```
+                 Is viewer the owner?
+                  ├── YES (self-view)
+                  │     ├── 已 flip + 有自拍 → Personalized (自拍)
+                  │     ├── 已 flip + 無自拍 → Unlocked canonical / silhouette
+                  │     └── 未 flip        → Silhouette (可點擊翻牌)
+                  │
+                  └── NO  (public view of someone else's profile)
+                        ├── 已 flip → Unlocked canonical / silhouette
+                        └── 未 flip → 不顯示 (不秀「他還沒收到」)
 ```
 
 **Three write-paths, one canonical DB:**
 
 1. Sheet sync (bulk text from editor) → occasional batch imports
-2. Admin direct edit (image uploads, corrections, reviews) → ongoing
-3. User submissions (metadata only, via Flutter app) → queue-reviewed
+2. Admin direct edit (image uploads, corrections, submission review)
+3. User submissions (metadata only, via app ＋) → admin queue-reviewed
 
-**One read-path:** Flutter app reads whatever's canonical, resolves
-image at render-time per the four-tier model. Never sees a `NULL`
-image.
+**One read-path, two render modes:** self-view sees everything
+including unflipped tiles (to tempt the hunt); public-view only sees
+what's been flipped (no envy, no shaming).
 
 ## 10. Shared mental model — what goes where
 
