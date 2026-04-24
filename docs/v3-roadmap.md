@@ -1,8 +1,13 @@
 # Poster. v3 執行順序總覽（Roadmap）
 
-**Status:** 2026-04-24 大翻轉 — **不再經過 Google Sheets**，一切資料
-輸入直接走自建後台。兩個 admin 帳號（Henry + 合夥人）從一開始就用後
-台進行 schema 驗證、資料建檔、圖片上傳。
+**Status:** 2026-04-24 雙軌並行。
+
+- **Google 試算表**：Henry 前期跟合夥人共編用（免費、共編方便、誰
+  都會用）。主要拿來討論 schema 長什麼樣、欄位合不合用。
+- **admin 後台**：Claude 已經做好 v0，Henry 架好環境就能登入。正式
+  大量建檔走後台，Sheet 上的討論結論定稿後同步進 DB。
+
+兩個工具並不衝突：Sheet 是**會議桌**、admin 是**資料庫**。
 
 此文件是「**誰要做什麼、什麼順序做**」的總表，供 Henry / 合夥人 /
 Claude 各自對照自己要負責的行動。
@@ -16,75 +21,91 @@ Claude 各自對照自己要負責的行動。
 | bot seed 清除 | ✅ 已完成 |
 | v3 技術設計 doc | ✅ 鎖定 |
 | v3 行為流程 doc | ✅ 鎖定 |
-| 吉卜力 benchmark CSV（37 列）| ✅ 留作**資料樣板**、不再經過 Sheets |
-| **Google Sheets 中繼** | ❌ **已廢止** — 直接走後台 |
-| Phase 1 DB migration | 🔵 **Claude 進行中** |
-| admin/ Next.js 後台 | 🔵 **Claude 進行中** |
+| 吉卜力 benchmark CSV（37 列）| ✅ 拿來匯入 Google 試算表，跟合夥人共編討論 |
+| Google 試算表（共編用）| 🔵 Henry 這週設好、分享合夥人 |
+| Phase 1 DB migration | ✅ 寫好（`20260424120000_v3_phase1_*.sql`），待 Henry apply |
+| admin/ Next.js 後台 v0 | ✅ 寫好，待 Henry 本地設環境變數跑起來 |
 | 收藏導向前端改寫 | ⏳ 等後台跑通第一批資料 |
 
 ---
 
-## 🔀 2026-04-24 下午的架構翻轉
+## 🔀 2026-04-24 工具分工（雙軌並行）
 
-**原計畫**：編輯者用 Google Sheets 填資料 → 後台同步按鈕拉進 DB →
-後台做圖片上傳、審核、樹狀編輯。
+**Google 試算表的角色（前期、短期）**：
+- Henry + 合夥人**討論 schema** 的共編白板
+- 匯入吉卜力 37 列 benchmark → 合夥人邊看邊回饋「欄位夠不夠」「關
+  聯對不對」
+- Henry 想改欄位結構時馬上能改（不需要 migration）
+- 用到 **schema 定稿為止**
 
-**新計畫**：完全跳過 Sheets。所有人直接用後台。後台一開始就包含：
-- Google OAuth（只白名單 admin email 能進）
-- works / poster_groups / posters 的 CRUD
-- 樹狀編輯器（visual tree of posters）
-- 圖片上傳 + 壓縮 + thumb 產生
-- 編輯者 = admin、合夥人 = admin，沒有第三類使用者進這裡
+**admin 後台的角色（長期、主力）**：
+- 正式資料的**唯一真相**
+- Google OAuth 擋住非 admin 的人
+- works / posters CRUD（v0 已完成）
+- 未來加：樹狀編輯、圖片上傳、投稿審核
 
-**為什麼翻轉好**：
+**Schema 定稿後怎麼從 Sheet 搬到 DB**：
 
-1. 一個工具從頭到尾，不用在匯入邏輯上花工
-2. 圖片可以跟 metadata 一起即時上傳（不用「先灌文字再補圖」兩段）
-3. Schema 變動時直接改後台 UI 跟 DB 同步，不用同時改 Sheet 欄位、
-   CSV template、import script、UI
-4. 編輯者學一個工具就好（後台）而不是兩個（Sheets + 後台）
+- 簡單版：一次性匯入 — 寫個 Node 腳本讀 Sheet API 把現有列轉成
+  INSERT 進 DB（2 小時工作）
+- 或者：乾脆手動把 Sheet 資料**抄進 admin 後台**（如果 Sheet 只有
+  50-200 列，手動兩三小時搞定）
 
-**留下的代價**：
-
-- 後台要**更早上線**（本來可以慢慢做，現在變緊迫）
-- 編輯者第一天沒東西用，要等到後台最小可用版本
-- 吉卜力 benchmark CSV 留作**資料樣板**（給我寫 seed script 用），
-  不給人工填了
+兩條路都可行，看 Sheet 累積多少資料來決定。
 
 ---
 
 ## 📋 新版 TODO（依賴排序）
 
-### 🟩 Phase 0：這輪 session 就做完
+### 🟩 Phase 0：這輪 session 已完成
 
 | # | 任務 | 誰做 | 狀態 |
 |---|---|---|---|
-| 0.1 | 更新 roadmap 反映翻轉 | Claude | ✅ 本檔 |
-| 0.2 | 寫 Phase 1 migration SQL（基於 19 欄 schema 草稿）| Claude | 🔵 進行中 |
-| 0.3 | Bootstrap `admin/` Next.js 15 專案 | Claude | 🔵 進行中 |
-| 0.4 | 實作 Google OAuth + admin email 白名單 | Claude | 🔵 進行中 |
-| 0.5 | 基本 CRUD：works / posters 的 list / new / edit 頁面 | Claude | 🔵 進行中 |
+| 0.1 | 更新 roadmap | Claude | ✅ |
+| 0.2 | Phase 1 migration SQL（基於 19 欄 schema 草稿）| Claude | ✅ |
+| 0.3 | Bootstrap `admin/` Next.js 15 專案 | Claude | ✅ |
+| 0.4 | Google OAuth + admin email 白名單 | Claude | ✅ |
+| 0.5 | works / posters 基本 CRUD（list / new / edit）| Claude | ✅ |
+| 0.6 | 更新 roadmap 反映 Sheet + admin 雙軌 | Claude | ✅ 本次 |
 
-### 🟨 Phase 1：後台 v0 可用之後（這兩三天）
+### 🟨 Phase 1：本週該做的（雙軌並行）
+
+**🅰 Google 試算表那軌（Henry + 合夥人前期討論）**
+
+| # | 任務 | 誰做 |
+|---|---|---|
+| 1.A1 | 匯入吉卜力 benchmark CSV 到新建的 Google 試算表 | **Henry** |
+| 1.A2 | 依 `scripts/editor_tooling/ghibli_benchmark_README.md` 設 3 個視覺化（凍結首列首欄、條件式底色、群組收合）| **Henry** |
+| 1.A3 | 分享給合夥人、請他邊看邊回饋欄位 | **Henry** |
+| 1.A4 | 收回饋 → 決定要加 / 改哪些欄位 | **Henry + 合夥人** |
+
+**🅱 後台那軌（Henry 本地跑 + Claude 補功能）**
+
+| # | 任務 | 誰做 |
+|---|---|---|
+| 1.B1 | Apply Phase 1 migration 到 Supabase production | **Henry**（貼 Dashboard）|
+| 1.B2 | 啟用 Supabase Auth Google provider（建 Google Cloud OAuth client）| **Henry** |
+| 1.B3 | 把你跟合夥人的 `users.role` 設成 `admin` | **Henry**（跑 SQL）|
+| 1.B4 | `cd admin && pnpm install`，建 `.env.local`，`pnpm dev` | **Henry** |
+| 1.B5 | 確認登入 → Dashboard 跑起來 | **Henry** |
+| 1.B6 | （可選）部署後台到 Vercel（新專案、Root Directory = `admin`）| Henry / Claude |
+
+**🅲 合流點**
 
 | # | 任務 | 誰做 | 依賴 |
 |---|---|---|---|
-| 1.1 | Apply migration 到 Supabase production | **Henry** | 0.2 完 |
-| 1.2 | 設定 Supabase Auth Google provider + admin email 白名單到環境變數 | **Henry** | 0.4 完 |
-| 1.3 | 本地跑後台 `pnpm dev` 確認能進 | **Henry** | 0.5 完 |
-| 1.4 | 部署 admin 到 Vercel（新專案）| Henry / Claude | 1.3 |
-| 1.5 | 合夥人登入後台 → **對著真資料驗證 schema 夠不夠**| **合夥人 + Henry** | 1.4 |
-| 1.6 | 根據 1.5 回饋調整 schema + 後台 UI | Claude | 1.5 |
+| 1.C1 | Schema 定稿後：寫 migration 把新欄位加進 DB + admin 表單 | Claude | 1.A4 |
+| 1.C2 | Sheet 裡的資料**一次性匯入 DB**（Node 腳本或手動）| Claude / Henry | 1.C1 |
 
-### 🟧 Phase 2：後台功能補齊（1-2 週）
+### 🟧 Phase 2：後台功能補齊（schema 定稿後 1-2 週）
 
 | # | 任務 | 誰做 | 依賴 |
 |---|---|---|---|
-| 2.1 | 樹狀編輯器（drag-drop / 新增群組節點）| Claude | Phase 1 穩 |
-| 2.2 | 圖片上傳 + 壓縮 + thumb + BlurHash | Claude | Phase 1 穩 |
-| 2.3 | 把吉卜力 37 列樣板寫成 seed script 一次灌入（當作 smoke test）| Claude | 2.1 + 2.2 |
+| 2.1 | 樹狀編輯器（drag-drop / 新增群組節點）| Claude | 1.C1 |
+| 2.2 | 圖片上傳 + 壓縮 + thumb + BlurHash | Claude | 1.B5 |
+| 2.3 | （可選）Sheet → DB 自動同步按鈕（如果累積的 Sheet 資料超過手抄的量才做）| Claude | 1.A4 |
 | 2.4 | 8 張 silhouette 占位圖上傳到 Supabase Storage | **Henry**（產圖）| 2.2 |
-| 2.5 | 使用者投稿審核佇列 UI（還沒有投稿資料、先建好殼）| Claude | Phase 1 |
+| 2.5 | 使用者投稿審核佇列 UI（還沒有投稿資料、先建好殼）| Claude | 1.B5 |
 
 ### 🟥 Phase 3：Flutter app 改寫（2-4 週，後台穩才動）
 
@@ -110,9 +131,8 @@ Claude 各自對照自己要負責的行動。
 
 ## 🔒 已明確**不做**的事（v3 範圍外）
 
-- ❌ **Google Sheets 中繼**（今天廢止）
-- ❌ **Sheets API 同步按鈕**（不需要了）
-- ❌ **CSV 匯入工具**（CSV 只留作 seed script 的資料來源）
+- ❌ **強制用 Google 試算表做 scale 資料輸入**（只用來合夥人共編討
+  論；超過幾百列以後轉進後台）
 - ❌ 翻牌數量徽章、集滿徽章、速度徽章、稀有度徽章
 - ❌ 照片審查驗證徽章
 - ❌ 自拍公開 / community override
@@ -138,18 +158,29 @@ Claude 各自對照自己要負責的行動。
 
 ## 📬 Claude 的工作狀態
 
-**Auto mode 下：持續推進 Phase 0 和 Phase 1**。這輪 session 會交付：
-
-- Phase 1 migration SQL（寫好但 Henry 決定何時 apply）
+**Phase 0 已全部交付**：
+- Phase 1 migration SQL（`supabase/migrations/20260424120000_v3_phase1_*.sql`）
 - `admin/` Next.js 專案骨架 + Google OAuth + admin 白名單
-- works / posters 基本 CRUD
+- Dashboard + works/posters 基本 CRUD
+- 三份主要 docs 同步到最新狀態
 
-**需要 Henry 做的事**（同 Phase 1 表格）：
+**等 Henry / 合夥人動的事**（同 Phase 1 表格）：
+
+**Sheet 那軌**：
+1. 匯入吉卜力 CSV 到 Google 試算表
+2. 分享合夥人共編、討論 schema
+
+**後台那軌**：
 1. 拿 migration SQL 貼到 Supabase Dashboard 執行
 2. 設定 Supabase Google OAuth provider
-3. 設定 admin email 白名單（環境變數）
-4. 本地跑後台、再部署 Vercel
-5. 跟合夥人一起驗證 schema
+3. 跑 SQL 把自己 + 合夥人 `users.role` 設成 `admin`
+4. 本地 `cd admin && pnpm install && pnpm dev`
+5. 登入 → Dashboard 跑起來
+6. （可選）部署 Vercel
+
+**Claude 下一輪會做什麼**：等 Henry 回饋「schema 要加什麼 / 哪裡不
+順 / 哪個 feature 優先」，然後進 Phase 2（樹狀編輯 / 圖片上傳 / 合
+流 Sheet）。
 
 ---
 
