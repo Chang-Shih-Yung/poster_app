@@ -1,0 +1,5 @@
+work_title_zh,work_title_en,work_kind,path,poster_name,region,release_year,release_type,size,channel_category,channel_name,is_exclusive,exclusive_of,material,version_label,source_url,notes
+千與千尋,Spirited Away,movie,2001 日本首映 > 正式版,B1 原版,jp,2001,theatrical,b1,cinema,Toho,FALSE,,光面紙,,https://example.com/ref,
+千與千尋,Spirited Away,movie,2001 日本首映 > 前売券,前売券附贈版,jp,2001,theatrical,a4,cinema,Toho,FALSE,,一般紙,,https://example.com/ref,
+千與千尋,Spirited Away,movie,2014 重映 > IMAX,IMAX 威秀獨家,tw,2014,theatrical,b2,cinema,威秀,TRUE,威秀影城,霧面紙,v1,https://example.com/ref,
+千與千尋,Spirited Away,movie,2024 25週年 > 台灣版,25 週年 Final,tw,2024,theatrical,b2,cinema,Vie Show,FALSE,,金箔紙,25週年紀念,https://example.com/ref,範例列
