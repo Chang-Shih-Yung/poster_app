@@ -1,38 +1,43 @@
-work_title_zh,work_title_en,work_kind,path,poster_name,region,release_year,release_type,size,channel_category,channel_name,is_exclusive,exclusive_of,material,version_label,source_url,notes
-風之谷,Nausicaä of the Valley of the Wind,movie,1984 日本首映 > 正式版,正式版主視覺,jp,1984,theatrical,b1,cinema,東映,FALSE,,一般紙,,,"娜烏西卡騎王蟲經典構圖"
-風之谷,Nausicaä of the Valley of the Wind,movie,1984 日本首映 > 前売券,前売券附贈版,jp,1984,theatrical,a4,cinema,東映,FALSE,,一般紙,,,
-風之谷,Nausicaä of the Valley of the Wind,movie,2005 台灣首映 > 正式版,台灣正式版,tw,2005,theatrical,b1,cinema,,FALSE,,一般紙,,,"首映晚了 21 年"
-龍貓,My Neighbor Totoro,movie,1988 日本首映 > 正式版,日版主視覺,jp,1988,theatrical,b1,cinema,東寶,FALSE,,一般紙,,,"雙特映與《螢火蟲之墓》同場"
-龍貓,My Neighbor Totoro,movie,1988 日本首映 > 角色版,龍貓等公車,jp,1988,character,b2,cinema,東寶,FALSE,,一般紙,,,
-龍貓,My Neighbor Totoro,movie,2008 台灣首映 > 正式版,台灣正式版,tw,2008,theatrical,b1,cinema,,FALSE,,一般紙,,,"台灣 2008 正式院線上映"
-龍貓,My Neighbor Totoro,movie,2018 30週年 > 日版重映,30 週年紀念版,jp,2018,re_release,b2,cinema,東寶,FALSE,,霧面紙,30 週年,,
-龍貓,My Neighbor Totoro,movie,2018 30週年 > 台版重映,30 週年台版,tw,2018,re_release,b2,cinema,,FALSE,,霧面紙,30 週年,,
-魔法公主,Princess Mononoke,movie,1997 日本首映 > 正式版,小桑與山獸神,jp,1997,theatrical,b1,cinema,東寶,FALSE,,一般紙,,,
-魔法公主,Princess Mononoke,movie,1997 日本首映 > 角色版,阿席達卡角色版,jp,1997,character,b2,cinema,東寶,FALSE,,一般紙,,,
-魔法公主,Princess Mononoke,movie,1997 日本首映 > teaser,前導預告版,jp,1997,teaser,b2,cinema,東寶,FALSE,,一般紙,,,
-魔法公主,Princess Mononoke,movie,1999 美國首映 > 正式版,Miramax 英文版,us,1999,theatrical,custom,cinema,Miramax,FALSE,,,,,
-魔法公主,Princess Mononoke,movie,2013 台灣首映 > 正式版,台灣首映版,tw,2013,theatrical,b1,cinema,,FALSE,,一般紙,,,"台灣首映晚 16 年"
-魔法公主,Princess Mononoke,movie,2023 4K 重映 > 日版,4K 修復版,jp,2023,re_release,b2,cinema,,FALSE,,霧面紙,4K 修復,,
-神隱少女,Spirited Away,movie,2001 日本首映 > 正式版,千尋穿越隧道版,jp,2001,theatrical,b1,cinema,東寶,FALSE,,一般紙,,,"最經典構圖"
-神隱少女,Spirited Away,movie,2001 日本首映 > 角色版,千尋與白龍,jp,2001,character,b2,cinema,東寶,FALSE,,一般紙,,,
-神隱少女,Spirited Away,movie,2001 日本首映 > 角色版,湯婆婆版,jp,2001,character,b2,cinema,東寶,FALSE,,一般紙,,,
-神隱少女,Spirited Away,movie,2001 日本首映 > 前売券,前売券附贈迷你版,jp,2001,theatrical,a4,cinema,東寶,FALSE,,一般紙,迷你版,,
-神隱少女,Spirited Away,movie,2002 台灣首映 > 正式版,台灣正式版,tw,2002,theatrical,b1,cinema,,FALSE,,一般紙,,,
-神隱少女,Spirited Away,movie,2014 日本重映 > IMAX,IMAX 重映版,jp,2014,re_release,b2,cinema,IMAX,TRUE,IMAX 影城,霧面紙,IMAX 版,,
-神隱少女,Spirited Away,movie,2017 台灣重映 > 數位版,台灣數位重映版,tw,2017,re_release,b2,cinema,,FALSE,,一般紙,,,
-神隱少女,Spirited Away,movie,2026 25週年 > 日版,25 週年紀念日版,jp,2026,re_release,b1,cinema,東寶,FALSE,,金箔紙,25 週年,,"25 週年紀念紙材升級"
-神隱少女,Spirited Away,movie,2026 25週年 > 台版,25 週年紀念台版,tw,2026,re_release,b1,cinema,,FALSE,,金箔紙,25 週年,,
-神隱少女,Spirited Away,movie,2026 25週年 > 台版 IMAX,25 週年 IMAX 威秀獨家,tw,2026,re_release,b2,cinema,威秀影城,TRUE,威秀影城,霧面紙,25 週年 IMAX,,"代表編輯者要確認是否真有獨家"
-霍爾的移動城堡,Howl's Moving Castle,movie,2004 日本首映 > 正式版,蘇菲與哈爾城堡,jp,2004,theatrical,b1,cinema,東寶,FALSE,,一般紙,,,
-霍爾的移動城堡,Howl's Moving Castle,movie,2004 日本首映 > 角色版,哈爾單人版,jp,2004,character,b2,cinema,東寶,FALSE,,一般紙,,,
-霍爾的移動城堡,Howl's Moving Castle,movie,2004 日本首映 > 角色版,蘇菲老年版,jp,2004,character,b2,cinema,東寶,FALSE,,一般紙,,,
-霍爾的移動城堡,Howl's Moving Castle,movie,2004 日本首映 > 角色版,卡西法版,jp,2004,character,b2,cinema,東寶,FALSE,,一般紙,,,
-霍爾的移動城堡,Howl's Moving Castle,movie,2005 台灣首映 > 正式版,台灣正式版,tw,2005,theatrical,b1,cinema,,FALSE,,一般紙,,,
-霍爾的移動城堡,Howl's Moving Castle,movie,2019 重映 > 日版,重映紀念版,jp,2019,re_release,b2,cinema,東寶,FALSE,,霧面紙,重映版,,
-蒼鷺與少年,The Boy and the Heron,movie,2023 日本首映 > teaser,蒼鷺神祕版,jp,2023,teaser,b1,cinema,東寶,FALSE,,一般紙,teaser,,"宣傳期刻意保密無劇透"
-蒼鷺與少年,The Boy and the Heron,movie,2023 日本首映 > 正式版,正式主視覺,jp,2023,theatrical,b1,cinema,東寶,FALSE,,一般紙,,,
-蒼鷺與少年,The Boy and the Heron,movie,2023 日本首映 > 前売券,前売券小冊版,jp,2023,theatrical,a4,cinema,東寶,FALSE,,一般紙,,,
-蒼鷺與少年,The Boy and the Heron,movie,2024 台灣首映 > 正式版,台灣正式版,tw,2024,theatrical,b1,cinema,,FALSE,,一般紙,,,
-蒼鷺與少年,The Boy and the Heron,movie,2024 台灣首映 > IMAX,IMAX 版,tw,2024,theatrical,b2,cinema,IMAX,TRUE,IMAX 影城,霧面紙,IMAX,,"代表編輯者要確認是否真有獨家"
-蒼鷺與少年,The Boy and the Heron,movie,2024 國際版 > 英文主視覺,國際英文版,us,2024,theatrical,custom,cinema,GKIDS,FALSE,,一般紙,,,
-蒼鷺與少年,The Boy and the Heron,movie,2024 國際版 > 韓文主視覺,韓國版,kr,2024,theatrical,b1,cinema,,FALSE,,一般紙,,,
+studio,work_title_zh,work_title_en,work_kind,release_era,variant_group,poster_name,region,release_year,release_type,size,channel_category,channel_name,is_exclusive,exclusive_of,material,version_label,source_url,notes
+吉卜力,風之谷,Nausicaä of the Valley of the Wind,movie,1984 日本首映,正式版,主視覺娜烏西卡騎王蟲,jp,1984,theatrical,b1,cinema,東映,FALSE,,一般紙,,,經典構圖
+吉卜力,風之谷,Nausicaä of the Valley of the Wind,movie,1984 日本首映,前売券,前売券附贈版,jp,1984,theatrical,a4,cinema,東映,FALSE,,一般紙,,,
+吉卜力,風之谷,Nausicaä of the Valley of the Wind,movie,2005 台灣首映,正式版,台灣正式版,tw,2005,theatrical,b1,cinema,,FALSE,,一般紙,,,首映晚 21 年
+,,,,,,,,,,,,,,,,,,
+吉卜力,龍貓,My Neighbor Totoro,movie,1988 日本首映,正式版,日版主視覺,jp,1988,theatrical,b1,cinema,東寶,FALSE,,一般紙,,,雙特映同場《螢火蟲之墓》
+吉卜力,龍貓,My Neighbor Totoro,movie,1988 日本首映,角色版,龍貓等公車,jp,1988,character,b2,cinema,東寶,FALSE,,一般紙,,,
+吉卜力,龍貓,My Neighbor Totoro,movie,2008 台灣首映,正式版,台灣正式版,tw,2008,theatrical,b1,cinema,,FALSE,,一般紙,,,台灣 2008 正式院線
+吉卜力,龍貓,My Neighbor Totoro,movie,2018 30 週年,日版重映,30 週年紀念日版,jp,2018,re_release,b2,cinema,東寶,FALSE,,霧面紙,30 週年,,
+吉卜力,龍貓,My Neighbor Totoro,movie,2018 30 週年,台版重映,30 週年紀念台版,tw,2018,re_release,b2,cinema,,FALSE,,霧面紙,30 週年,,
+,,,,,,,,,,,,,,,,,,
+吉卜力,魔法公主,Princess Mononoke,movie,1997 日本首映,正式版,小桑與山獸神,jp,1997,theatrical,b1,cinema,東寶,FALSE,,一般紙,,,
+吉卜力,魔法公主,Princess Mononoke,movie,1997 日本首映,角色版,阿席達卡角色版,jp,1997,character,b2,cinema,東寶,FALSE,,一般紙,,,
+吉卜力,魔法公主,Princess Mononoke,movie,1997 日本首映,teaser,前導預告版,jp,1997,teaser,b2,cinema,東寶,FALSE,,一般紙,,,
+吉卜力,魔法公主,Princess Mononoke,movie,1999 美國首映,Miramax 英文版,Miramax 英文主視覺,us,1999,theatrical,custom,cinema,Miramax,FALSE,,,,,
+吉卜力,魔法公主,Princess Mononoke,movie,2013 台灣首映,正式版,台灣正式版,tw,2013,theatrical,b1,cinema,,FALSE,,一般紙,,,首映晚 16 年
+吉卜力,魔法公主,Princess Mononoke,movie,2023 4K 重映,日版,4K 修復版,jp,2023,re_release,b2,cinema,,FALSE,,霧面紙,4K 修復,,
+,,,,,,,,,,,,,,,,,,
+吉卜力,神隱少女,Spirited Away,movie,2001 日本首映,正式版,千尋穿越隧道版,jp,2001,theatrical,b1,cinema,東寶,FALSE,,一般紙,,,最經典構圖
+吉卜力,神隱少女,Spirited Away,movie,2001 日本首映,角色版,千尋與白龍,jp,2001,character,b2,cinema,東寶,FALSE,,一般紙,,,
+吉卜力,神隱少女,Spirited Away,movie,2001 日本首映,角色版,湯婆婆單人版,jp,2001,character,b2,cinema,東寶,FALSE,,一般紙,,,
+吉卜力,神隱少女,Spirited Away,movie,2001 日本首映,前売券,前売券附贈迷你版,jp,2001,theatrical,a4,cinema,東寶,FALSE,,一般紙,迷你版,,
+吉卜力,神隱少女,Spirited Away,movie,2002 台灣首映,正式版,台灣正式版,tw,2002,theatrical,b1,cinema,,FALSE,,一般紙,,,
+吉卜力,神隱少女,Spirited Away,movie,2014 日本重映,IMAX,IMAX 重映版,jp,2014,re_release,b2,cinema,IMAX,TRUE,IMAX 影城,霧面紙,IMAX 版,,
+吉卜力,神隱少女,Spirited Away,movie,2017 台灣重映,數位版,台灣數位重映版,tw,2017,re_release,b2,cinema,,FALSE,,一般紙,,,
+吉卜力,神隱少女,Spirited Away,movie,2026 25 週年,日版,25 週年紀念日版,jp,2026,re_release,b1,cinema,東寶,FALSE,,金箔紙,25 週年,,紀念紙材升級
+吉卜力,神隱少女,Spirited Away,movie,2026 25 週年,台版,25 週年紀念台版,tw,2026,re_release,b1,cinema,,FALSE,,金箔紙,25 週年,,
+吉卜力,神隱少女,Spirited Away,movie,2026 25 週年,台版 IMAX,25 週年 IMAX 威秀獨家,tw,2026,re_release,b2,cinema,威秀影城,TRUE,威秀影城,霧面紙,25 週年 IMAX,,待編輯者確認是否真有獨家
+,,,,,,,,,,,,,,,,,,
+吉卜力,霍爾的移動城堡,Howl's Moving Castle,movie,2004 日本首映,正式版,蘇菲與哈爾城堡,jp,2004,theatrical,b1,cinema,東寶,FALSE,,一般紙,,,
+吉卜力,霍爾的移動城堡,Howl's Moving Castle,movie,2004 日本首映,角色版,哈爾單人版,jp,2004,character,b2,cinema,東寶,FALSE,,一般紙,,,
+吉卜力,霍爾的移動城堡,Howl's Moving Castle,movie,2004 日本首映,角色版,蘇菲老年版,jp,2004,character,b2,cinema,東寶,FALSE,,一般紙,,,
+吉卜力,霍爾的移動城堡,Howl's Moving Castle,movie,2004 日本首映,角色版,卡西法版,jp,2004,character,b2,cinema,東寶,FALSE,,一般紙,,,
+吉卜力,霍爾的移動城堡,Howl's Moving Castle,movie,2005 台灣首映,正式版,台灣正式版,tw,2005,theatrical,b1,cinema,,FALSE,,一般紙,,,
+吉卜力,霍爾的移動城堡,Howl's Moving Castle,movie,2019 日本重映,正式版,重映紀念版,jp,2019,re_release,b2,cinema,東寶,FALSE,,霧面紙,重映版,,
+,,,,,,,,,,,,,,,,,,
+吉卜力,蒼鷺與少年,The Boy and the Heron,movie,2023 日本首映,teaser,蒼鷺神祕版,jp,2023,teaser,b1,cinema,東寶,FALSE,,一般紙,teaser,,刻意保密無劇透
+吉卜力,蒼鷺與少年,The Boy and the Heron,movie,2023 日本首映,正式版,正式主視覺,jp,2023,theatrical,b1,cinema,東寶,FALSE,,一般紙,,,
+吉卜力,蒼鷺與少年,The Boy and the Heron,movie,2023 日本首映,前売券,前売券小冊版,jp,2023,theatrical,a4,cinema,東寶,FALSE,,一般紙,,,
+吉卜力,蒼鷺與少年,The Boy and the Heron,movie,2024 台灣首映,正式版,台灣正式版,tw,2024,theatrical,b1,cinema,,FALSE,,一般紙,,,
+吉卜力,蒼鷺與少年,The Boy and the Heron,movie,2024 台灣首映,IMAX,IMAX 威秀獨家,tw,2024,theatrical,b2,cinema,威秀影城,TRUE,威秀影城,霧面紙,IMAX,,待編輯者確認是否真有獨家
+吉卜力,蒼鷺與少年,The Boy and the Heron,movie,2024 國際版,英文版,英文主視覺,us,2024,theatrical,custom,cinema,GKIDS,FALSE,,一般紙,,,
+吉卜力,蒼鷺與少年,The Boy and the Heron,movie,2024 國際版,韓文版,韓國版,kr,2024,theatrical,b1,cinema,,FALSE,,一般紙,,,
