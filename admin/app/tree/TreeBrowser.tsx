@@ -746,7 +746,7 @@ export default function TreeBrowser({ studios: initialStudios }: { studios: Stud
                   onClick={() => toggleStudio(s.studio)}
                   chevron={s.works > 0 ? (open ? "down" : "right") : "none"}
                   title={s.studio}
-                  subtitle={`${s.works} 作品 · ${s.posters} 海報`}
+                  count={s.posters}
                   onRenameInline={() => setEditing(editKey)}
                   actions={
                     <RowActions
@@ -861,7 +861,8 @@ function WorkRow(props: {
           onClick={props.onToggle}
           chevron={props.open ? "down" : "right"}
           title={w.title_zh}
-          subtitle={`${w.poster_count} 張海報${w.title_en ? ` · ${w.title_en}` : ""}`}
+          count={w.poster_count}
+          subtitle={w.title_en ?? undefined}
           onRenameInline={() => props.onSetEditing(editKey)}
           actions={
             <RowActions
@@ -1011,6 +1012,11 @@ function GroupNodeRow(props: {
           onClick={() => props.onToggleGroup(g.id)}
           chevron={props.open ? "down" : "right"}
           title={g.name}
+          count={
+            props.children
+              ? props.children.groups.length + props.children.posters.length
+              : undefined
+          }
           subtitle={g.group_type ?? undefined}
           onRenameInline={() => props.onSetEditing(editKey)}
           actions={
@@ -1242,6 +1248,7 @@ function TreeRow({
   icon,
   index,
   title,
+  count,
   subtitle,
   subtitleColor,
   thumbnailUrl,
@@ -1255,6 +1262,7 @@ function TreeRow({
   icon?: "folder" | "poster";
   index?: number;
   title: string;
+  count?: number;
   subtitle?: string;
   subtitleColor?: "amber";
   thumbnailUrl?: string | null;
@@ -1298,6 +1306,11 @@ function TreeRow({
             </span>
           )}
           <span className="text-sm text-text truncate">{title}</span>
+          {count != null && count > 0 && (
+            <span className="text-xs text-textFaint tabular-nums shrink-0">
+              ({count})
+            </span>
+          )}
           {onRenameInline && (
             <button
               onClick={(e) => {
