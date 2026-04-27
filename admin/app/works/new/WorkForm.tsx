@@ -28,6 +28,7 @@ export default function WorkForm({ mode, initial }: WorkFormProps) {
   const router = useRouter();
   const [studio, setStudio] = useState(initial?.studio ?? "");
   const [titleZh, setTitleZh] = useState(initial?.title_zh ?? "");
+  const [titleEn, setTitleEn] = useState(initial?.title_en ?? "");
   const [workKind, setWorkKind] = useState(initial?.work_kind ?? "movie");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -45,6 +46,7 @@ export default function WorkForm({ mode, initial }: WorkFormProps) {
     const row = {
       studio: studio.trim() || null,
       title_zh: titleZh.trim(),
+      title_en: titleEn.trim() || null,
       work_kind: workKind,
     };
 
@@ -88,6 +90,15 @@ export default function WorkForm({ mode, initial }: WorkFormProps) {
           placeholder="例：復仇者系列 / 神隱少女"
           className="w-full"
           required
+        />
+      </Field>
+
+      <Field label="英文名">
+        <input
+          value={titleEn}
+          onChange={(e) => setTitleEn(e.target.value)}
+          placeholder="例：Avengers / Spirited Away"
+          className="w-full"
         />
       </Field>
 
