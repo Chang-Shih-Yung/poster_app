@@ -9,6 +9,9 @@ export const dynamic = "force-dynamic";
  * and poster counts aggregated). Each studio node is expanded
  * client-side on tap, which triggers a fetch of its works via the
  * client Supabase helper.
+ *
+ * The header "+ 新增 studio" button lives inside TreeBrowser (client
+ * component) because it shares state with the rest of the tree.
  */
 export default async function TreePage() {
   const supabase = await createClient();
@@ -42,9 +45,9 @@ export default async function TreePage() {
   return (
     <PageShell title="目錄樹">
       <div className="px-0 md:px-0">
-        <h1 className="hidden md:block text-2xl font-semibold mb-6 px-4 md:px-0">
-          目錄樹
-        </h1>
+        <div className="hidden md:flex items-center justify-between mb-6 px-4 md:px-0">
+          <h1 className="text-2xl font-semibold">目錄樹</h1>
+        </div>
         <TreeBrowser studios={studios} />
       </div>
     </PageShell>

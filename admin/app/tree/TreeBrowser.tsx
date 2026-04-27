@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -11,8 +11,12 @@ import {
   Plus,
   Trash2,
   ImagePlus,
+  FolderPlus,
+  FilePlus2,
   AlertTriangle,
+  Loader2,
 } from "lucide-react";
+import { uploadPosterImage } from "@/lib/imageUpload";
 import { createClient } from "@/lib/supabase/client";
 
 /**
@@ -63,11 +67,43 @@ type ChildrenData = {
 
 const NULL_STUDIO_KEY = "(未分類)";
 
+/**
+ * Supabase / Postgrest errors are NOT Error instances — they're plain
+ * objects with `.message`, `.code`, `.details`, `.hint`. Naively calling
+ * String() on them produces "[object Object]". This pulls out the most
+ * useful human-readable string we can find.
+ */
+function describeError(e: unknown): string {
+  if (e instanceof Error) return e.message;
+  if (typeof e === "string") return e;
+  if (e && typeof e === "object") {
+    const obj = e as Record<string, unknown>;
+    const parts: string[] = [];
+    if (typeof obj.message === "string") parts.push(obj.message);
+    if (typeof obj.details === "string") parts.push(obj.details);
+    if (typeof obj.hint === "string") parts.push(`hint: ${obj.hint}`);
+    if (typeof obj.code === "string") parts.push(`code: ${obj.code}`);
+    if (parts.length > 0) return parts.join(" · ");
+    try {
+      return JSON.stringify(e);
+    } catch {
+      return "(unknown error)";
+    }
+  }
+  return String(e);
+}
+
 export default function TreeBrowser({ studios: initialStudios }: { studios: Studio[] }) {
   const router = useRouter();
   const [studios, setStudios] = useState<Studio[]>(initialStudios);
 
-  const [openStudios, setOpenStudios] = useState<Set<string>>(new Set());
+  // Default: all studios start expanded so user lands on a useful tree
+  // instead of an empty viewport. Children of studios (works) load
+  // lazily on first expand and then stay open until the user collapses
+  // them manually.
+  const [openStudios, setOpenStudios] = useState<Set<string>>(
+    () => new Set(initialStudios.map((s) => s.studio))
+  );
   const [worksByStudio, setWorksByStudio] = useState<Record<string, WorkNode[]>>({});
 
   const [openWorks, setOpenWorks] = useState<Set<string>>(new Set());
@@ -113,6 +149,19 @@ export default function TreeBrowser({ studios: initialStudios }: { studios: Stud
     [openStudios, worksByStudio, loadStudioWorks]
   );
 
+  // On first mount, prefetch works for every studio that's already
+  // expanded by the default-open initialiser. Without this, the rows
+  // render but their children area is empty until the user manually
+  // toggles each studio (defeating the auto-expand).
+  useEffect(() => {
+    for (const s of initialStudios) {
+      if (!worksByStudio[s.studio]) {
+        loadStudioWorks(s.studio);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   async function renameStudio(oldName: string, newName: string) {
     if (newName.trim() === "") return;
     if (newName === oldName) return;
@@ -141,7 +190,7 @@ export default function TreeBrowser({ studios: initialStudios }: { studios: Stud
       });
       setEditing(null);
     } catch (e) {
-      setErrorMsg(e instanceof Error ? e.message : String(e));
+      setErrorMsg(describeError(e));
     } finally {
       setBusy(false);
     }
@@ -166,7 +215,7 @@ export default function TreeBrowser({ studios: initialStudios }: { studios: Stud
       router.refresh();
       setStudios((list) => list.filter((s) => s.studio !== studio));
     } catch (e) {
-      setErrorMsg(e instanceof Error ? e.message : String(e));
+      setErrorMsg(describeError(e));
     } finally {
       setBusy(false);
     }
@@ -196,7 +245,7 @@ export default function TreeBrowser({ studios: initialStudios }: { studios: Stud
       setAdding(null);
       router.refresh();
     } catch (e) {
-      setErrorMsg(e instanceof Error ? e.message : String(e));
+      setErrorMsg(describeError(e));
     } finally {
       setBusy(false);
     }
@@ -271,7 +320,7 @@ export default function TreeBrowser({ studios: initialStudios }: { studios: Stud
       setEditing(null);
       router.refresh();
     } catch (e) {
-      setErrorMsg(e instanceof Error ? e.message : String(e));
+      setErrorMsg(describeError(e));
     } finally {
       setBusy(false);
     }
@@ -303,7 +352,7 @@ export default function TreeBrowser({ studios: initialStudios }: { studios: Stud
       );
       router.refresh();
     } catch (e) {
-      setErrorMsg(e instanceof Error ? e.message : String(e));
+      setErrorMsg(describeError(e));
     } finally {
       setBusy(false);
     }
@@ -336,7 +385,7 @@ export default function TreeBrowser({ studios: initialStudios }: { studios: Stud
       setAdding(null);
       router.refresh();
     } catch (e) {
-      setErrorMsg(e instanceof Error ? e.message : String(e));
+      setErrorMsg(describeError(e));
     } finally {
       setBusy(false);
     }
@@ -401,7 +450,7 @@ export default function TreeBrowser({ studios: initialStudios }: { studios: Stud
       if (group.parent_group_id) await loadGroupChildren(group.parent_group_id);
       else await loadWorkChildren(group.work_id);
     } catch (e) {
-      setErrorMsg(e instanceof Error ? e.message : String(e));
+      setErrorMsg(describeError(e));
     } finally {
       setBusy(false);
     }
@@ -423,7 +472,7 @@ export default function TreeBrowser({ studios: initialStudios }: { studios: Stud
       if (group.parent_group_id) await loadGroupChildren(group.parent_group_id);
       else await loadWorkChildren(group.work_id);
     } catch (e) {
-      setErrorMsg(e instanceof Error ? e.message : String(e));
+      setErrorMsg(describeError(e));
     } finally {
       setBusy(false);
     }
@@ -460,7 +509,7 @@ export default function TreeBrowser({ studios: initialStudios }: { studios: Stud
       if (opts.groupId) await loadGroupChildren(opts.groupId);
       else if (opts.workId) await loadWorkChildren(opts.workId);
     } catch (e) {
-      setErrorMsg(e instanceof Error ? e.message : String(e));
+      setErrorMsg(describeError(e));
     } finally {
       setBusy(false);
     }
@@ -483,7 +532,7 @@ export default function TreeBrowser({ studios: initialStudios }: { studios: Stud
       if (poster.parent_group_id) await loadGroupChildren(poster.parent_group_id);
       else if (poster.work_id) await loadWorkChildren(poster.work_id);
     } catch (e) {
-      setErrorMsg(e instanceof Error ? e.message : String(e));
+      setErrorMsg(describeError(e));
     } finally {
       setBusy(false);
     }
@@ -500,13 +549,45 @@ export default function TreeBrowser({ studios: initialStudios }: { studios: Stud
       if (poster.parent_group_id) await loadGroupChildren(poster.parent_group_id);
       else if (poster.work_id) await loadWorkChildren(poster.work_id);
     } catch (e) {
-      setErrorMsg(e instanceof Error ? e.message : String(e));
+      setErrorMsg(describeError(e));
     } finally {
       setBusy(false);
     }
   }
 
   /* ──────────────────────────── render ───────────────────────────────── */
+
+  // Add a brand new studio bucket. Studios are derived from
+  // works.studio so we have to create at least one work to make the
+  // bucket "appear". The flow asks for studio name + first work title
+  // back-to-back.
+  const [newStudioName, setNewStudioName] = useState("");
+
+  async function createNewStudio(studio: string, firstWorkTitle: string) {
+    if (!studio.trim() || !firstWorkTitle.trim()) return;
+    setBusy(true);
+    setErrorMsg(null);
+    try {
+      const { error } = await supabase.from("works").insert({
+        title_zh: firstWorkTitle.trim(),
+        studio: studio.trim(),
+        work_kind: "movie",
+      });
+      if (error) throw error;
+      // Optimistically prepend the new studio.
+      setStudios((list) => [
+        ...list,
+        { studio: studio.trim(), works: 1, posters: 0 },
+      ]);
+      setAdding(null);
+      setNewStudioName("");
+      router.refresh();
+    } catch (e) {
+      setErrorMsg(describeError(e));
+    } finally {
+      setBusy(false);
+    }
+  }
 
   if (studios.length === 0) {
     return (
@@ -515,23 +596,21 @@ export default function TreeBrowser({ studios: initialStudios }: { studios: Stud
         <br />
         <button
           onClick={() => setAdding("__root__")}
-          className="text-accent"
+          className="text-accent inline-flex items-center gap-1 mt-2"
         >
-          新增第一個 studio
+          <Plus className="w-4 h-4" /> 新增第一個 studio
         </button>
         {adding === "__root__" && (
-          <div className="mt-3 px-4">
-            <InlineInput
-              placeholder="新 studio 名稱（例：吉卜力）"
-              onSubmit={async (val) => {
-                if (!val.trim()) return;
-                setStudios([{ studio: val.trim(), works: 0, posters: 0 }]);
-                setAdding(null);
-              }}
-              onCancel={() => setAdding(null)}
-              busy={busy}
-            />
-          </div>
+          <NewStudioForm
+            studioName={newStudioName}
+            onStudioName={setNewStudioName}
+            onSubmit={(workTitle) => createNewStudio(newStudioName, workTitle)}
+            onCancel={() => {
+              setAdding(null);
+              setNewStudioName("");
+            }}
+            busy={busy}
+          />
         )}
       </div>
     );
@@ -539,6 +618,39 @@ export default function TreeBrowser({ studios: initialStudios }: { studios: Stud
 
   return (
     <>
+      {/* Sticky top-level toolbar. On mobile this rests just below the
+       * MobileHeader (52px); on desktop it pins to the top of the
+       * scroll container. The bg-bg + backdrop-blur prevents tree rows
+       * from showing through. */}
+      <div
+        className="sticky z-30 bg-bg/95 backdrop-blur-sm flex items-center justify-between px-4 md:px-0 py-2.5 mb-1 top-[calc(env(safe-area-inset-top,0px)+52px)] md:top-0"
+      >
+        <span className="text-xs text-textMute">
+          {studios.length} 個 studio
+        </span>
+        <button
+          onClick={() => setAdding("__root__")}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md bg-accent text-bg font-medium"
+        >
+          <Plus className="w-4 h-4" /> 新增 studio
+        </button>
+      </div>
+
+      {adding === "__root__" && (
+        <div className="mx-4 md:mx-0 mb-3 p-3 rounded-md bg-surfaceRaised border border-line2">
+          <NewStudioForm
+            studioName={newStudioName}
+            onStudioName={setNewStudioName}
+            onSubmit={(workTitle) => createNewStudio(newStudioName, workTitle)}
+            onCancel={() => {
+              setAdding(null);
+              setNewStudioName("");
+            }}
+            busy={busy}
+          />
+        </div>
+      )}
+
       {errorMsg && (
         <div className="mx-4 my-2 p-3 rounded-md bg-red-900/40 border border-red-700 text-sm flex items-start gap-2">
           <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-red-400" />
@@ -578,9 +690,9 @@ export default function TreeBrowser({ studios: initialStudios }: { studios: Stud
                   chevron={s.works > 0 ? (open ? "down" : "right") : "none"}
                   title={s.studio}
                   subtitle={`${s.works} 作品 · ${s.posters} 海報`}
+                  onRenameInline={() => setEditing(editKey)}
                   actions={
                     <RowActions
-                      onRename={() => setEditing(editKey)}
                       onAddChild={() => {
                         setAdding(addKey);
                         if (!open) toggleStudio(s.studio);
@@ -690,14 +802,16 @@ function WorkRow(props: {
           chevron={props.open ? "down" : "right"}
           title={w.title_zh}
           subtitle={`${w.poster_count} 張海報${w.title_en ? ` · ${w.title_en}` : ""}`}
+          onRenameInline={() => props.onSetEditing(editKey)}
           actions={
             <RowActions
-              onRename={() => props.onSetEditing(editKey)}
               onAddChild={() => {
                 props.onSetAdding(addGroupKey);
                 if (!props.open) props.onToggle();
               }}
               onDelete={() => props.onDeleteWork(w)}
+              addLabel="新增群組（資料夾）"
+              addIcon={<FolderPlus className="w-4 h-4 text-accent" />}
               extra={
                 <IconButton
                   onClick={(e) => {
@@ -707,10 +821,9 @@ function WorkRow(props: {
                   }}
                   title="新增海報"
                 >
-                  <ImagePlus className="w-4 h-4 text-accent" />
+                  <FilePlus2 className="w-4 h-4 text-accent" />
                 </IconButton>
               }
-              addLabel="新增群組"
             />
           }
           rightAfterActions={
@@ -844,14 +957,15 @@ function GroupNodeRow(props: {
           chevron={props.open ? "down" : "right"}
           title={g.name}
           subtitle={g.group_type ?? undefined}
+          onRenameInline={() => props.onSetEditing(editKey)}
           actions={
             <RowActions
-              onRename={() => props.onSetEditing(editKey)}
               onAddChild={() => {
                 props.onSetAdding(addGroupKey);
               }}
               onDelete={() => props.onDeleteGroup(g)}
               addLabel="子群組"
+              addIcon={<FolderPlus className="w-4 h-4 text-accent" />}
               extra={
                 <IconButton
                   onClick={(e) => {
@@ -860,7 +974,7 @@ function GroupNodeRow(props: {
                   }}
                   title="新增海報"
                 >
-                  <ImagePlus className="w-4 h-4 text-accent" />
+                  <FilePlus2 className="w-4 h-4 text-accent" />
                 </IconButton>
               }
             />
@@ -949,6 +1063,11 @@ function PosterRow(props: {
 }) {
   const p = props.poster;
   const editKey = `poster:${p.id}`;
+  const router = useRouter();
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const supabase = createClient();
 
   if (props.editing === editKey) {
     return (
@@ -963,35 +1082,94 @@ function PosterRow(props: {
     );
   }
 
+  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadError(null);
+    setUploading(true);
+    try {
+      const result = await uploadPosterImage(file, p.id);
+      const { error } = await supabase
+        .from("posters")
+        .update({
+          poster_url: result.posterUrl,
+          thumbnail_url: result.thumbnailUrl,
+          blurhash: result.blurhash,
+          image_size_bytes: result.imageSizeBytes,
+          is_placeholder: false,
+        })
+        .eq("id", p.id);
+      if (error) throw error;
+      router.refresh();
+    } catch (err) {
+      setUploadError(describeError(err));
+    } finally {
+      setUploading(false);
+      if (inputRef.current) inputRef.current.value = "";
+    }
+  }
+
   return (
-    <Link
-      href={`/posters/${p.id}`}
-      className="block hover:bg-surfaceRaised hover:no-underline"
-    >
-      <TreeRow
-        depth={props.depth}
-        chevron="none"
-        icon="poster"
-        thumbnailUrl={p.thumbnail_url}
-        title={p.poster_name ?? "(未命名)"}
-        subtitle={p.is_placeholder ? "待補真圖" : undefined}
-        subtitleColor={p.is_placeholder ? "amber" : undefined}
-        actions={
-          <RowActions
-            onRename={(e) => {
-              e?.stopPropagation();
-              e?.preventDefault();
-              props.onSetEditing(editKey);
-            }}
-            onDelete={(e) => {
-              e?.stopPropagation();
-              e?.preventDefault();
-              props.onDelete(p);
-            }}
-          />
-        }
+    <>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handleFile}
+        disabled={uploading || props.busy}
       />
-    </Link>
+      <Link
+        href={`/posters/${p.id}`}
+        className="block hover:bg-surfaceRaised hover:no-underline"
+      >
+        <TreeRow
+          depth={props.depth}
+          chevron="none"
+          icon="poster"
+          thumbnailUrl={p.thumbnail_url}
+          title={p.poster_name ?? "(未命名)"}
+          subtitle={uploading ? "上傳中…" : p.is_placeholder ? "待補真圖" : undefined}
+          subtitleColor={p.is_placeholder ? "amber" : undefined}
+          onRenameInline={(e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            props.onSetEditing(editKey);
+          }}
+          actions={
+            <RowActions
+              onDelete={(e) => {
+                e?.stopPropagation();
+                e?.preventDefault();
+                props.onDelete(p);
+              }}
+              extra={
+                <IconButton
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    inputRef.current?.click();
+                  }}
+                  title={p.is_placeholder ? "上傳真實圖片" : "更換圖片"}
+                >
+                  {uploading ? (
+                    <Loader2 className="w-4 h-4 animate-spin text-accent" />
+                  ) : (
+                    <ImagePlus className={`w-4 h-4 ${p.is_placeholder ? "text-amber-400" : "text-accent"}`} />
+                  )}
+                </IconButton>
+              }
+            />
+          }
+        />
+      </Link>
+      {uploadError && (
+        <div className="px-4 py-2 text-xs text-red-400 bg-red-900/20 border-y border-red-700/40">
+          上傳失敗：{uploadError}
+          <button onClick={() => setUploadError(null)} className="ml-2 underline">關閉</button>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -1005,6 +1183,7 @@ function TreeRow({
   subtitle,
   subtitleColor,
   thumbnailUrl,
+  onRenameInline,
   actions,
   rightAfterActions,
   onClick,
@@ -1016,6 +1195,7 @@ function TreeRow({
   subtitle?: string;
   subtitleColor?: "amber";
   thumbnailUrl?: string | null;
+  onRenameInline?: (e: React.MouseEvent) => void;
   actions?: React.ReactNode;
   rightAfterActions?: React.ReactNode;
   onClick?: () => void;
@@ -1048,7 +1228,23 @@ function TreeRow({
       )}
 
       <span className="flex-1 min-w-0">
-        <span className="block text-sm text-text truncate">{title}</span>
+        <span className="flex items-center gap-1.5">
+          <span className="text-sm text-text truncate">{title}</span>
+          {onRenameInline && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                onRenameInline(e);
+              }}
+              className="shrink-0 text-textFaint hover:text-text p-1 -m-1"
+              title="重新命名"
+              aria-label="重新命名"
+            >
+              <Pencil className="w-3 h-3" />
+            </button>
+          )}
+        </span>
         {subtitle && (
           <span
             className={`block text-xs truncate ${
@@ -1067,16 +1263,16 @@ function TreeRow({
 }
 
 function RowActions({
-  onRename,
   onAddChild,
   onDelete,
   addLabel,
+  addIcon,
   extra,
 }: {
-  onRename?: (e?: React.MouseEvent) => void;
   onAddChild?: () => void;
   onDelete?: (e?: React.MouseEvent) => void;
   addLabel?: string;
+  addIcon?: React.ReactNode;
   extra?: React.ReactNode;
 }) {
   return (
@@ -1090,19 +1286,7 @@ function RowActions({
           }}
           title={addLabel ?? "新增子項"}
         >
-          <Plus className="w-4 h-4 text-accent" />
-        </IconButton>
-      )}
-      {onRename && (
-        <IconButton
-          onClick={(e) => {
-            e.stopPropagation();
-            onRename(e);
-          }}
-          title="重新命名"
-          hoverColor="text"
-        >
-          <Pencil className="w-4 h-4" />
+          {addIcon ?? <Plus className="w-4 h-4 text-accent" />}
         </IconButton>
       )}
       {onDelete && (
@@ -1231,6 +1415,69 @@ function InlineInput({
         </button>
       </div>
       {helper && <div className="text-[11px] text-textFaint mt-1.5">{helper}</div>}
+    </div>
+  );
+}
+
+/* ───────────────────────────── new studio form ─────────────────────── */
+
+function NewStudioForm({
+  studioName,
+  onStudioName,
+  onSubmit,
+  onCancel,
+  busy,
+}: {
+  studioName: string;
+  onStudioName: (v: string) => void;
+  onSubmit: (firstWorkTitle: string) => void;
+  onCancel: () => void;
+  busy: boolean;
+}) {
+  const [workTitle, setWorkTitle] = useState("");
+  return (
+    <div className="space-y-2">
+      <input
+        autoFocus
+        value={studioName}
+        onChange={(e) => onStudioName(e.target.value)}
+        placeholder="Studio 名稱（例：吉卜力 / 新海誠 作品）"
+        className="w-full"
+        disabled={busy}
+      />
+      <input
+        value={workTitle}
+        onChange={(e) => setWorkTitle(e.target.value)}
+        placeholder="第一個作品名稱（例：神隱少女）"
+        className="w-full"
+        disabled={busy}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && studioName.trim() && workTitle.trim()) {
+            onSubmit(workTitle);
+          }
+          if (e.key === "Escape") onCancel();
+        }}
+      />
+      <div className="flex gap-2">
+        <button
+          onClick={() => onSubmit(workTitle)}
+          disabled={busy || !studioName.trim() || !workTitle.trim()}
+          className="px-3 py-1.5 text-xs rounded-md bg-accent text-bg font-medium disabled:opacity-50 inline-flex items-center gap-1"
+        >
+          {busy && <Loader2 className="w-3 h-3 animate-spin" />}
+          {busy ? "建立中" : "建立 studio + 作品"}
+        </button>
+        <button
+          onClick={onCancel}
+          disabled={busy}
+          className="px-3 py-1.5 text-xs rounded-md border border-line2 text-textMute"
+        >
+          取消
+        </button>
+      </div>
+      <div className="text-[11px] text-textFaint">
+        Studio 是「以作品的 studio 欄位歸納出來的群組」——所以新建 studio 時必須同時建第一個作品。之後可以用每列的 + 按鈕繼續加。
+      </div>
     </div>
   );
 }
