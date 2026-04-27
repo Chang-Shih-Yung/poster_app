@@ -512,6 +512,31 @@ export default function TreeBrowser({ studios: initialStudios }: { studios: Stud
           uploader_id: uid,
         });
         if (error) throw error;
+
+        // Optimistically bump poster_count on the parent work so the UI
+        // shows the new count immediately. The DB trigger
+        // (refresh_work_poster_count) keeps the column accurate; this is
+        // just to avoid waiting for router.refresh() to re-fetch.
+        const targetWorkId = opts.workId!;
+        setStudios((list) =>
+          list.map((s) => {
+            const works = worksByStudio[s.studio];
+            if (!works) return s;
+            const has = works.some((w) => w.id === targetWorkId);
+            return has ? { ...s, posters: s.posters + 1 } : s;
+          })
+        );
+        setWorksByStudio((map) => {
+          const out: Record<string, WorkNode[]> = {};
+          for (const studio of Object.keys(map)) {
+            out[studio] = map[studio].map((w) =>
+              w.id === targetWorkId
+                ? { ...w, poster_count: w.poster_count + 1 }
+                : w
+            );
+          }
+          return out;
+        });
       }
       setAdding(null);
       router.refresh();
@@ -554,6 +579,28 @@ export default function TreeBrowser({ studios: initialStudios }: { studios: Stud
     try {
       const { error } = await supabase.from("posters").delete().eq("id", poster.id);
       if (error) throw error;
+      // Mirror the DB trigger client-side so the UI reflects the new count
+      // without waiting for the next refetch.
+      const targetWorkId = poster.work_id;
+      setStudios((list) =>
+        list.map((s) => {
+          const works = worksByStudio[s.studio];
+          if (!works) return s;
+          const has = works.some((w) => w.id === targetWorkId);
+          return has ? { ...s, posters: Math.max(s.posters - 1, 0) } : s;
+        })
+      );
+      setWorksByStudio((map) => {
+        const out: Record<string, WorkNode[]> = {};
+        for (const studio of Object.keys(map)) {
+          out[studio] = map[studio].map((w) =>
+            w.id === targetWorkId
+              ? { ...w, poster_count: Math.max(w.poster_count - 1, 0) }
+              : w
+          );
+        }
+        return out;
+      });
       router.refresh();
       if (poster.parent_group_id) await loadGroupChildren(poster.parent_group_id);
       else if (poster.work_id) await loadWorkChildren(poster.work_id);
