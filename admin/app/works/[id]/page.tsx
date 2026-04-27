@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { FolderTree } from "lucide-react";
 import PageShell from "@/components/PageShell";
 import WorkForm from "../new/WorkForm";
 import { createClient } from "@/lib/supabase/server";
@@ -28,10 +29,9 @@ export default async function EditWorkPage({
       .order("created_at", { ascending: false }),
     supabase
       .from("poster_groups")
-      .select("id, name, group_type, parent_group_id, display_order")
+      .select("id, name, parent_group_id, display_order")
       .eq("work_id", id)
-      .order("display_order")
-      .order("name"),
+      .order("created_at", { ascending: false }),
   ]);
 
   if (!work) notFound();
@@ -45,6 +45,17 @@ export default async function EditWorkPage({
           </h1>
           <WorkForm mode="edit" initial={work} />
         </section>
+
+        <Link
+          href="/tree"
+          className="mx-4 md:mx-0 flex items-center gap-2 px-3 py-2 rounded-md bg-surface border border-line1 text-sm text-textMute hover:text-text hover:bg-surfaceRaised hover:no-underline"
+        >
+          <FolderTree className="w-4 h-4 shrink-0" />
+          <span className="flex-1">
+            管理整棵樹結構（拖拉、群組關聯）建議在「目錄樹」頁
+          </span>
+          <span className="text-accent">→</span>
+        </Link>
 
         <section>
           <div className="flex items-center justify-between mb-2 px-4 md:px-0">

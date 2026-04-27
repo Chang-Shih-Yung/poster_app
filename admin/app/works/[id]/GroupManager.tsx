@@ -7,7 +7,6 @@ import { createClient } from "@/lib/supabase/client";
 type GroupRow = {
   id: string;
   name: string;
-  group_type: string | null;
   parent_group_id: string | null;
   display_order: number;
 };
@@ -15,8 +14,12 @@ type GroupRow = {
 /**
  * Mobile-friendly group manager for one work. Lists groups in a flat
  * indented view (depth resolved client-side), with inline rename + add
- * + delete. Bigger drag-drop tree editor lands in a future iteration —
- * for v0 the editor adds and renames, no reordering yet.
+ * + delete. Mirrors the tree's group UX — name only, no `group_type`
+ * field, sorted newest-first.
+ *
+ * NOTE: this is a secondary surface — the canonical place to manage
+ * groups is the tree (`/tree`). This page exists for direct access
+ * when you've already navigated to a work's detail.
  */
 export default function GroupManager({
   workId,
@@ -29,7 +32,6 @@ export default function GroupManager({
   const [groups, setGroups] = useState<GroupRow[]>(initialGroups);
   const [adding, setAdding] = useState<{ parentId: string | null } | null>(null);
   const [newName, setNewName] = useState("");
-  const [newType, setNewType] = useState("");
   const [busy, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -53,10 +55,9 @@ export default function GroupManager({
         work_id: workId,
         parent_group_id: parentId,
         name: newName.trim(),
-        group_type: newType.trim() || null,
         display_order: childrenOf(parentId).length,
       })
-      .select("id, name, group_type, parent_group_id, display_order")
+      .select("id, name, parent_group_id, display_order")
       .single();
     if (error) {
       setError(error.message);
@@ -64,7 +65,6 @@ export default function GroupManager({
     }
     setGroups((g) => [...g, data as GroupRow]);
     setNewName("");
-    setNewType("");
     setAdding(null);
     startTransition(() => router.refresh());
   }
@@ -94,9 +94,6 @@ export default function GroupManager({
         >
           <div className="min-w-0 flex-1">
             <div className="text-sm truncate">{g.name}</div>
-            {g.group_type && (
-              <div className="text-xs text-textFaint truncate">{g.group_type}</div>
-            )}
           </div>
           <button
             onClick={() => setAdding({ parentId: g.id })}
@@ -115,14 +112,11 @@ export default function GroupManager({
           <AddRow
             depth={depth + 1}
             name={newName}
-            type={newType}
             onName={setNewName}
-            onType={setNewType}
             onSubmit={() => addGroup(g.id)}
             onCancel={() => {
               setAdding(null);
               setNewName("");
-              setNewType("");
             }}
             busy={busy}
           />
@@ -148,14 +142,11 @@ export default function GroupManager({
         <AddRow
           depth={0}
           name={newName}
-          type={newType}
           onName={setNewName}
-          onType={setNewType}
           onSubmit={() => addGroup(null)}
           onCancel={() => {
             setAdding(null);
             setNewName("");
-            setNewType("");
           }}
           busy={busy}
         />
@@ -180,18 +171,14 @@ export default function GroupManager({
 function AddRow({
   depth,
   name,
-  type,
   onName,
-  onType,
   onSubmit,
   onCancel,
   busy,
 }: {
   depth: number;
   name: string;
-  type: string;
   onName: (v: string) => void;
-  onType: (v: string) => void;
   onSubmit: () => void;
   onCancel: () => void;
   busy: boolean;
@@ -211,12 +198,6 @@ function AddRow({
           if (e.key === "Enter") onSubmit();
           if (e.key === "Escape") onCancel();
         }}
-      />
-      <input
-        value={type}
-        onChange={(e) => onType(e.target.value)}
-        placeholder="（選填）類型 e.g. release_era / variant"
-        className="w-full"
       />
       <div className="flex gap-2">
         <button
