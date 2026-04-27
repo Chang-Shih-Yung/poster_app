@@ -126,7 +126,8 @@ export default function TreeBrowser({ studios: initialStudios }: { studios: Stud
       const q = supabase
         .from("works")
         .select("id, title_zh, title_en, work_kind, poster_count, studio")
-        .order("title_zh");
+        // Newest-first so freshly-added works appear at the top.
+        .order("created_at", { ascending: false });
       const { data } =
         studio === NULL_STUDIO_KEY ? await q.is("studio", null) : await q.eq("studio", studio);
       setWorksByStudio((s) => ({ ...s, [studio]: (data ?? []) as WorkNode[] }));
@@ -238,7 +239,8 @@ export default function TreeBrowser({ studios: initialStudios }: { studios: Stud
         .single();
       if (error) throw error;
       const newWork = data as WorkNode;
-      setWorksByStudio((s) => ({ ...s, [studio]: [...(s[studio] ?? []), newWork] }));
+      // Prepend — newest-first display order.
+      setWorksByStudio((s) => ({ ...s, [studio]: [newWork, ...(s[studio] ?? [])] }));
       setStudios((list) =>
         list.map((s) => (s.studio === studio ? { ...s, works: s.works + 1 } : s))
       );
@@ -261,8 +263,8 @@ export default function TreeBrowser({ studios: initialStudios }: { studios: Stud
           .select("id, name, group_type, work_id, parent_group_id")
           .eq("work_id", workId)
           .is("parent_group_id", null)
-          .order("display_order")
-          .order("name"),
+          // Newest-first so user sees just-added groups at the top.
+          .order("created_at", { ascending: false }),
         supabase
           .from("posters")
           .select("id, poster_name, is_placeholder, thumbnail_url, work_id, parent_group_id")
@@ -378,7 +380,8 @@ export default function TreeBrowser({ studios: initialStudios }: { studios: Stud
       setChildrenByWork((c) => ({
         ...c,
         [workId]: {
-          groups: [...(c[workId]?.groups ?? []), data as GroupNode],
+          // Prepend — newest-first display order.
+          groups: [data as GroupNode, ...(c[workId]?.groups ?? [])],
           posters: c[workId]?.posters ?? [],
         },
       }));
@@ -400,8 +403,7 @@ export default function TreeBrowser({ studios: initialStudios }: { studios: Stud
           .from("poster_groups")
           .select("id, name, group_type, work_id, parent_group_id")
           .eq("parent_group_id", groupId)
-          .order("display_order")
-          .order("name"),
+          .order("created_at", { ascending: false }),
         supabase
           .from("posters")
           .select("id, poster_name, is_placeholder, thumbnail_url, work_id, parent_group_id")
@@ -662,7 +664,7 @@ export default function TreeBrowser({ studios: initialStudios }: { studios: Stud
       )}
 
       <ul className="divide-y divide-line1 border-y border-line1 md:border md:rounded-lg md:bg-surface">
-        {studios.map((s) => {
+        {studios.map((s, sIdx) => {
           const open = openStudios.has(s.studio);
           const works = worksByStudio[s.studio];
           const editKey = `studio:${s.studio}`;
@@ -686,6 +688,7 @@ export default function TreeBrowser({ studios: initialStudios }: { studios: Stud
               ) : (
                 <TreeRow
                   depth={0}
+                  index={sIdx + 1}
                   onClick={() => toggleStudio(s.studio)}
                   chevron={s.works > 0 ? (open ? "down" : "right") : "none"}
                   title={s.studio}
@@ -705,10 +708,11 @@ export default function TreeBrowser({ studios: initialStudios }: { studios: Stud
               )}
               {open && works && (
                 <ul>
-                  {works.map((w) => (
+                  {works.map((w, wIdx) => (
                     <WorkRow
                       key={w.id}
                       work={w}
+                      index={wIdx + 1}
                       open={openWorks.has(w.id)}
                       children={childrenByWork[w.id]}
                       openGroups={openGroups}
@@ -756,6 +760,7 @@ export default function TreeBrowser({ studios: initialStudios }: { studios: Stud
 
 function WorkRow(props: {
   work: WorkNode;
+  index?: number;
   open: boolean;
   children: ChildrenData | undefined;
   openGroups: Set<string>;
@@ -798,6 +803,7 @@ function WorkRow(props: {
       ) : (
         <TreeRow
           depth={1}
+          index={props.index}
           onClick={props.onToggle}
           chevron={props.open ? "down" : "right"}
           title={w.title_zh}
@@ -840,10 +846,11 @@ function WorkRow(props: {
 
       {props.open && props.children && (
         <ul>
-          {props.children.groups.map((g) => (
+          {props.children.groups.map((g, gIdx) => (
             <GroupNodeRow
               key={g.id}
               group={g}
+              index={gIdx + 1}
               depth={2}
               open={props.openGroups.has(g.id)}
               children={props.childrenByGroup[g.id]}
@@ -862,10 +869,11 @@ function WorkRow(props: {
               busy={props.busy}
             />
           ))}
-          {props.children.posters.map((p) => (
+          {props.children.posters.map((p, pIdx) => (
             <PosterRow
               key={p.id}
               poster={p}
+              index={(props.children?.groups.length ?? 0) + pIdx + 1}
               depth={2}
               editing={props.editing}
               onSetEditing={props.onSetEditing}
@@ -913,6 +921,7 @@ function WorkRow(props: {
 
 function GroupNodeRow(props: {
   group: GroupNode;
+  index?: number;
   depth: number;
   open: boolean;
   children: ChildrenData | undefined;
@@ -952,6 +961,7 @@ function GroupNodeRow(props: {
       ) : (
         <TreeRow
           depth={props.depth}
+          index={props.index}
           icon="folder"
           onClick={() => props.onToggleGroup(g.id)}
           chevron={props.open ? "down" : "right"}
@@ -984,10 +994,11 @@ function GroupNodeRow(props: {
 
       {props.open && props.children && (
         <ul>
-          {props.children.groups.map((sub) => (
+          {props.children.groups.map((sub, sIdx) => (
             <GroupNodeRow
               key={sub.id}
               group={sub}
+              index={sIdx + 1}
               depth={props.depth + 1}
               open={props.openGroups.has(sub.id)}
               children={props.childrenByGroup[sub.id]}
@@ -1006,10 +1017,11 @@ function GroupNodeRow(props: {
               busy={props.busy}
             />
           ))}
-          {props.children.posters.map((p) => (
+          {props.children.posters.map((p, pIdx) => (
             <PosterRow
               key={p.id}
               poster={p}
+              index={(props.children?.groups.length ?? 0) + pIdx + 1}
               depth={props.depth + 1}
               editing={props.editing}
               onSetEditing={props.onSetEditing}
@@ -1054,6 +1066,7 @@ function GroupNodeRow(props: {
 
 function PosterRow(props: {
   poster: PosterLeaf;
+  index?: number;
   depth: number;
   editing: string | null;
   onSetEditing: (k: string | null) => void;
@@ -1125,6 +1138,7 @@ function PosterRow(props: {
       >
         <TreeRow
           depth={props.depth}
+          index={props.index}
           chevron="none"
           icon="poster"
           thumbnailUrl={p.thumbnail_url}
@@ -1179,6 +1193,7 @@ function TreeRow({
   depth,
   chevron,
   icon,
+  index,
   title,
   subtitle,
   subtitleColor,
@@ -1191,6 +1206,7 @@ function TreeRow({
   depth: number;
   chevron: "right" | "down" | "none";
   icon?: "folder" | "poster";
+  index?: number;
   title: string;
   subtitle?: string;
   subtitleColor?: "amber";
@@ -1229,6 +1245,11 @@ function TreeRow({
 
       <span className="flex-1 min-w-0">
         <span className="flex items-center gap-1.5">
+          {index != null && (
+            <span className="text-xs text-textFaint tabular-nums shrink-0 w-5 text-right">
+              {index}.
+            </span>
+          )}
           <span className="text-sm text-text truncate">{title}</span>
           {onRenameInline && (
             <button
