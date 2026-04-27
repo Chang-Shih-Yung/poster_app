@@ -43,10 +43,10 @@ export default async function TreePage() {
   const studios = Array.from(studioMap.values());
 
   return (
-    <PageShell title="目錄樹">
+    <PageShell title="目錄">
       <div className="px-0 md:px-0">
         <div className="hidden md:flex items-center justify-between mb-6 px-4 md:px-0">
-          <h1 className="text-2xl font-semibold">目錄樹</h1>
+          <h1 className="text-2xl font-semibold">目錄</h1>
         </div>
         <TreeBrowser studios={studios} />
       </div>

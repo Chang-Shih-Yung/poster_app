@@ -40,7 +40,7 @@ export default async function Dashboard() {
             快速操作
           </div>
           <ul className="divide-y divide-line1">
-            <ActionRow href="/tree" label="瀏覽目錄樹" icon={FolderTree} />
+            <ActionRow href="/tree" label="瀏覽海報目錄" icon={FolderTree} />
             <ActionRow href="/works/new" label="新增作品" icon={Plus} />
             <ActionRow href="/posters/new" label="新增海報" icon={Plus} />
             <ActionRow href="/upload-queue" label="待補真圖佇列" icon={Upload} />

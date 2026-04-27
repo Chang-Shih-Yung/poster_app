@@ -15,7 +15,7 @@ export default function BottomTabBar() {
 
   const tabs: { href: string; label: string; icon: LucideIcon }[] = [
     { href: "/", label: "總覽", icon: Home },
-    { href: "/tree", label: "目錄樹", icon: FolderTree },
+    { href: "/tree", label: "目錄", icon: FolderTree },
     { href: "/upload-queue", label: "待補圖", icon: Upload },
     { href: "/more", label: "更多", icon: MoreHorizontal },
   ];

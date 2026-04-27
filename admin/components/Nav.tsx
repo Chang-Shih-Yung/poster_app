@@ -12,7 +12,7 @@ export default async function Nav() {
         <Link href="/" className="font-semibold text-text hover:no-underline">
           Poster. Admin
         </Link>
-        <Link href="/tree">目錄樹</Link>
+        <Link href="/tree">目錄</Link>
         <Link href="/works">所有作品</Link>
         <Link href="/posters">所有海報</Link>
         <Link href="/upload-queue">待補圖</Link>
