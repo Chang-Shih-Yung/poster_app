@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ChevronRight } from "lucide-react";
 import PageShell from "@/components/PageShell";
 import { createClient } from "@/lib/supabase/server";
 
@@ -51,26 +52,14 @@ export default async function UploadQueuePage() {
                     </div>
                   </div>
                   <span className="text-xs text-amber-400 mr-2">待補</span>
-                  <svg
-                    className="text-textFaint shrink-0"
-                    width={16}
-                    height={16}
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth={2}
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <polyline points="9 18 15 12 9 6" />
-                  </svg>
+                  <ChevronRight className="w-4 h-4 text-textFaint shrink-0" />
                 </Link>
               </li>
             );
           })}
           {(!posters || posters.length === 0) && (
             <li className="px-4 py-10 text-center text-textFaint text-sm">
-              🎉 沒有待補圖的海報。
+              所有海報都已上傳真實圖片
             </li>
           )}
         </ul>

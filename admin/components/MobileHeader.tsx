@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { ChevronLeft } from "lucide-react";
 
 /**
  * Mobile-only top header. Larger touch targets, single title, optional
@@ -31,9 +32,7 @@ export default function MobileHeader({
             className="p-2 -ml-2 min-w-[44px] min-h-[44px] flex items-center justify-center text-text"
             aria-label="返回"
           >
-            <svg viewBox="0 0 24 24" width={24} height={24} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="15 18 9 12 15 6" />
-            </svg>
+            <ChevronLeft className="w-6 h-6" />
           </button>
         ) : (
           <Link href="/" className="p-2 -ml-2 min-w-[44px] min-h-[44px] flex items-center font-semibold text-text hover:no-underline">

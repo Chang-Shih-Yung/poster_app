@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { ImagePlus } from "lucide-react";
 import { uploadPosterImage } from "@/lib/imageUpload";
 import { createClient } from "@/lib/supabase/client";
 
@@ -81,21 +82,7 @@ export default function PosterImageUploader({
           />
         ) : (
           <div className="absolute inset-0 flex flex-col items-center justify-center text-textMute p-4 text-center">
-            <svg
-              width={42}
-              height={42}
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={1.5}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="mb-3"
-            >
-              <rect x="3" y="3" width="18" height="18" rx="2" />
-              <circle cx="8.5" cy="8.5" r="1.5" />
-              <polyline points="21 15 16 10 5 21" />
-            </svg>
+            <ImagePlus className="w-10 h-10 mb-3" strokeWidth={1.5} />
             <div className="text-sm font-medium">點此上傳真實海報圖</div>
             <div className="text-xs text-textFaint mt-1">
               支援 JPG / PNG / HEIC，自動壓縮與產生縮圖

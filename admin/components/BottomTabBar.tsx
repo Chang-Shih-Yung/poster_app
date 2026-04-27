@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { Home, FolderTree, Upload, MoreHorizontal } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
 /**
  * Mobile-only bottom tab bar. Hidden on md+ (desktop uses the top
@@ -11,11 +13,11 @@ import { usePathname } from "next/navigation";
 export default function BottomTabBar() {
   const pathname = usePathname();
 
-  const tabs = [
-    { href: "/", label: "總覽", icon: IconHome },
-    { href: "/tree", label: "目錄樹", icon: IconTree },
-    { href: "/upload-queue", label: "待補圖", icon: IconUpload },
-    { href: "/more", label: "更多", icon: IconMore },
+  const tabs: { href: string; label: string; icon: LucideIcon }[] = [
+    { href: "/", label: "總覽", icon: Home },
+    { href: "/tree", label: "目錄樹", icon: FolderTree },
+    { href: "/upload-queue", label: "待補圖", icon: Upload },
+    { href: "/more", label: "更多", icon: MoreHorizontal },
   ];
 
   return (
@@ -26,9 +28,8 @@ export default function BottomTabBar() {
       <div className="flex justify-around">
         {tabs.map((t) => {
           const active =
-            t.href === "/"
-              ? pathname === "/"
-              : pathname.startsWith(t.href);
+            t.href === "/" ? pathname === "/" : pathname.startsWith(t.href);
+          const Icon = t.icon;
           return (
             <Link
               key={t.href}
@@ -37,49 +38,12 @@ export default function BottomTabBar() {
                 active ? "text-accent" : "text-textMute"
               }`}
             >
-              <t.icon className="w-5 h-5 mb-0.5" />
+              <Icon className="w-5 h-5 mb-0.5" />
               <span className="text-[10px] font-medium">{t.label}</span>
             </Link>
           );
         })}
       </div>
     </nav>
-  );
-}
-
-function IconHome({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-      <path d="M3 12l9-9 9 9" />
-      <path d="M5 10v10a1 1 0 001 1h3v-6h6v6h3a1 1 0 001-1V10" />
-    </svg>
-  );
-}
-function IconTree({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="3" width="6" height="6" rx="1" />
-      <rect x="15" y="3" width="6" height="6" rx="1" />
-      <rect x="9" y="15" width="6" height="6" rx="1" />
-      <path d="M12 9v3M6 9v6h12V9" />
-    </svg>
-  );
-}
-function IconUpload({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-      <path d="M4 16v4a2 2 0 002 2h12a2 2 0 002-2v-4" />
-      <polyline points="16 8 12 4 8 8" />
-      <line x1="12" y1="4" x2="12" y2="16" />
-    </svg>
-  );
-}
-function IconMore({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="5" cy="12" r="1.5" />
-      <circle cx="12" cy="12" r="1.5" />
-      <circle cx="19" cy="12" r="1.5" />
-    </svg>
   );
 }

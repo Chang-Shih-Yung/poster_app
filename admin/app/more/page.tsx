@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { Layers, Image as ImageIcon, ChevronRight } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import PageShell from "@/components/PageShell";
 import { createClient } from "@/lib/supabase/server";
 import LogoutButton from "@/components/LogoutButton";
@@ -31,8 +33,8 @@ export default async function MorePage() {
             資料管理
           </div>
           <ul className="divide-y divide-line1 border-y border-line1 md:border md:rounded-lg md:bg-surface">
-            <Row href="/works" label="📚 管理所有作品" />
-            <Row href="/posters" label="🖼️ 管理所有海報" />
+            <Row href="/works" label="管理所有作品" icon={Layers} />
+            <Row href="/posters" label="管理所有海報" icon={ImageIcon} />
           </ul>
         </section>
 
@@ -44,27 +46,24 @@ export default async function MorePage() {
   );
 }
 
-function Row({ href, label }: { href: string; label: string }) {
+function Row({
+  href,
+  label,
+  icon: Icon,
+}: {
+  href: string;
+  label: string;
+  icon: LucideIcon;
+}) {
   return (
     <li>
       <Link
         href={href}
-        className="flex items-center justify-between px-4 py-3.5 min-h-[52px] hover:bg-surfaceRaised hover:no-underline"
+        className="flex items-center px-4 py-3.5 min-h-[52px] hover:bg-surfaceRaised hover:no-underline"
       >
-        <span className="text-text">{label}</span>
-        <svg
-          className="text-textFaint"
-          width={16}
-          height={16}
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={2}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <polyline points="9 18 15 12 9 6" />
-        </svg>
+        <Icon className="w-4 h-4 mr-3 text-textMute shrink-0" />
+        <span className="text-text flex-1">{label}</span>
+        <ChevronRight className="w-4 h-4 text-textFaint" />
       </Link>
     </li>
   );

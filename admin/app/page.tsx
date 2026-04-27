@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { FolderTree, Plus, Upload, ChevronRight } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import PageShell from "@/components/PageShell";
 import { createClient } from "@/lib/supabase/server";
 
@@ -38,10 +40,10 @@ export default async function Dashboard() {
             快速操作
           </div>
           <ul className="divide-y divide-line1">
-            <ActionRow href="/tree" label="🌳 瀏覽目錄樹" />
-            <ActionRow href="/works/new" label="➕ 新增作品" />
-            <ActionRow href="/posters/new" label="➕ 新增海報" />
-            <ActionRow href="/upload-queue" label="📤 待補真圖佇列" />
+            <ActionRow href="/tree" label="瀏覽目錄樹" icon={FolderTree} />
+            <ActionRow href="/works/new" label="新增作品" icon={Plus} />
+            <ActionRow href="/posters/new" label="新增海報" icon={Plus} />
+            <ActionRow href="/upload-queue" label="待補真圖佇列" icon={Upload} />
           </ul>
         </section>
       </div>
@@ -74,27 +76,24 @@ function Card({
   );
 }
 
-function ActionRow({ href, label }: { href: string; label: string }) {
+function ActionRow({
+  href,
+  label,
+  icon: Icon,
+}: {
+  href: string;
+  label: string;
+  icon: LucideIcon;
+}) {
   return (
     <li>
       <Link
         href={href}
-        className="flex items-center justify-between px-4 py-3.5 min-h-[52px] hover:bg-surfaceRaised hover:no-underline"
+        className="flex items-center px-4 py-3.5 min-h-[52px] hover:bg-surfaceRaised hover:no-underline"
       >
-        <span className="text-text">{label}</span>
-        <svg
-          className="text-textFaint"
-          width={18}
-          height={18}
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={2}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <polyline points="9 18 15 12 9 6" />
-        </svg>
+        <Icon className="w-4 h-4 mr-3 text-textMute shrink-0" />
+        <span className="text-text flex-1">{label}</span>
+        <ChevronRight className="w-4 h-4 text-textFaint" />
       </Link>
     </li>
   );

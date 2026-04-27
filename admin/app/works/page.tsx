@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ChevronRight } from "lucide-react";
 import PageShell from "@/components/PageShell";
 import { createClient } from "@/lib/supabase/server";
 
@@ -61,19 +62,7 @@ export default async function WorksListPage() {
                 <div className="text-xs text-textMute mr-2 shrink-0">
                   {w.poster_count} 張
                 </div>
-                <svg
-                  className="text-textFaint shrink-0"
-                  width={16}
-                  height={16}
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth={2}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <polyline points="9 18 15 12 9 6" />
-                </svg>
+                <ChevronRight className="w-4 h-4 text-textFaint shrink-0" />
               </Link>
             </li>
           ))}
