@@ -107,8 +107,17 @@ export default function PosterForm({ mode, works, initial, defaultWorkId }: Post
       // admin uploads the real scan (Phase 2 work).
       row.title = posterName.trim() || "(待命名)"; // legacy NOT NULL on posters.title
       row.status = "approved"; // admin-created rows bypass the review queue
-      row.uploader_id = null; // legacy column; admin-created rows have no uploader
       row.poster_url = ""; // legacy NOT NULL; placeholder swap happens later
+      // uploader_id is NOT NULL on the legacy posters table — the admin who
+      // creates the row counts as the "uploader" until we refactor to nullable.
+      const { data: userData } = await supabase.auth.getUser();
+      const uid = userData.user?.id;
+      if (!uid) {
+        setError("尚未登入或 session 已失效");
+        setSubmitting(false);
+        return;
+      }
+      row.uploader_id = uid;
     }
 
     const { error } =

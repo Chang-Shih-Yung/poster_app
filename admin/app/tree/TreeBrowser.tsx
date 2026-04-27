@@ -496,13 +496,20 @@ export default function TreeBrowser({ studios: initialStudios }: { studios: Stud
         if (error) throw error;
       } else {
         // childKind === 'poster' — insert minimal row, defaults handle the rest.
+        // uploader_id is NOT NULL on the legacy posters table, so we set it to
+        // the current admin user's id (the row is "uploaded" by whoever
+        // created it).
+        const { data: userData } = await supabase.auth.getUser();
+        const uid = userData.user?.id;
+        if (!uid) throw new Error("尚未登入或 session 已失效");
         const { error } = await supabase.from("posters").insert({
           work_id: opts.workId!,
           parent_group_id: opts.groupId ?? null,
           poster_name: name.trim(),
           title: name.trim(), // legacy NOT NULL
           status: "approved",
-          poster_url: "",
+          poster_url: "", // legacy NOT NULL — replaced when admin uploads image
+          uploader_id: uid,
         });
         if (error) throw error;
       }
@@ -600,7 +607,7 @@ export default function TreeBrowser({ studios: initialStudios }: { studios: Stud
           onClick={() => setAdding("__root__")}
           className="text-accent inline-flex items-center gap-1 mt-2"
         >
-          <Plus className="w-4 h-4" /> 新增第一個 studio
+          <Plus className="w-4 h-4" /> 新增第一個分類
         </button>
         {adding === "__root__" && (
           <NewStudioForm
@@ -628,13 +635,13 @@ export default function TreeBrowser({ studios: initialStudios }: { studios: Stud
         className="sticky z-30 bg-bg/95 backdrop-blur-sm flex items-center justify-between px-4 md:px-0 py-2.5 mb-1 top-[calc(env(safe-area-inset-top,0px)+52px)] md:top-0"
       >
         <span className="text-xs text-textMute">
-          {studios.length} 個 studio
+          {studios.length} 個分類
         </span>
         <button
           onClick={() => setAdding("__root__")}
           className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md bg-accent text-bg font-medium"
         >
-          <Plus className="w-4 h-4" /> 新增 studio
+          <Plus className="w-4 h-4" /> 新增分類
         </button>
       </div>
 
@@ -675,11 +682,11 @@ export default function TreeBrowser({ studios: initialStudios }: { studios: Stud
                 <InlineRowEdit
                   depth={0}
                   initialValue={s.studio === NULL_STUDIO_KEY ? "" : s.studio}
-                  placeholder={s.studio === NULL_STUDIO_KEY ? "把未分類改名（例：吉卜力）" : "新 studio 名稱"}
+                  placeholder={s.studio === NULL_STUDIO_KEY ? "把未分類改名（例：電影）" : "新分類名稱"}
                   helper={
                     s.studio === NULL_STUDIO_KEY
-                      ? `會把 ${s.works} 部「未分類」作品的 studio 全部設為這個名字`
-                      : `會把 ${s.works} 部「${s.studio}」作品的 studio 全部改名`
+                      ? `會把 ${s.works} 部「未分類」作品的分類全部設為這個名字`
+                      : `會把 ${s.works} 部「${s.studio}」作品的分類全部改名`
                   }
                   onSubmit={(val) => renameStudio(s.studio, val)}
                   onCancel={() => setEditing(null)}
@@ -1466,14 +1473,14 @@ function NewStudioForm({
         autoFocus
         value={studioName}
         onChange={(e) => onStudioName(e.target.value)}
-        placeholder="Studio 名稱（例：吉卜力 / 新海誠 作品）"
+        placeholder="大分類（例：電影、演唱會、戲劇、展覽、活動）"
         className="w-full"
         disabled={busy}
       />
       <input
         value={workTitle}
         onChange={(e) => setWorkTitle(e.target.value)}
-        placeholder="第一個作品名稱（例：神隱少女）"
+        placeholder="第一個作品 / 條目名稱（例：神隱少女、五月天演唱會）"
         className="w-full"
         disabled={busy}
         onKeyDown={(e) => {
@@ -1490,7 +1497,7 @@ function NewStudioForm({
           className="px-3 py-1.5 text-xs rounded-md bg-accent text-bg font-medium disabled:opacity-50 inline-flex items-center gap-1"
         >
           {busy && <Loader2 className="w-3 h-3 animate-spin" />}
-          {busy ? "建立中" : "建立 studio + 作品"}
+          {busy ? "建立中" : "建立分類 + 作品"}
         </button>
         <button
           onClick={onCancel}
@@ -1501,7 +1508,7 @@ function NewStudioForm({
         </button>
       </div>
       <div className="text-[11px] text-textFaint">
-        Studio 是「以作品的 studio 欄位歸納出來的群組」——所以新建 studio 時必須同時建第一個作品。之後可以用每列的 + 按鈕繼續加。
+        分類是樹的最頂層（電影 / 演唱會 / 戲劇 ...），底下放作品 → 群組 → 海報。新建分類時必須同時建第一個作品；之後可以用每列右側的 + 按鈕繼續往下加。
       </div>
     </div>
   );
