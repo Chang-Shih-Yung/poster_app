@@ -246,7 +246,14 @@ export default function WorksList({ initial }: { initial: Work[] }) {
                 <span className="text-xs text-textFaint tabular-nums shrink-0 w-7">
                   {i + 1}.
                 </span>
-                <div className="min-w-0 flex-1 mr-2">
+                {/* Title + subtitle is a link into the work's full edit
+                 * page (group manager + posters list + work metadata).
+                 * Pencil / trash buttons sit outside this anchor so
+                 * clicking them doesn't navigate. */}
+                <a
+                  href={`/works/${w.id}`}
+                  className="min-w-0 flex-1 mr-2 hover:no-underline"
+                >
                   <span className="flex items-baseline gap-1">
                     <span className="text-sm text-text truncate">
                       {w.title_zh}
@@ -257,7 +264,8 @@ export default function WorksList({ initial }: { initial: Work[] }) {
                       </span>
                     )}
                     <button
-                      onClick={() => {
+                      onClick={(e) => {
+                        e.preventDefault();
                         setEditValue(w.title_zh);
                         setEditing(w.id);
                       }}
@@ -273,7 +281,7 @@ export default function WorksList({ initial }: { initial: Work[] }) {
                       .filter(Boolean)
                       .join(" · ")}
                   </span>
-                </div>
+                </a>
                 <button
                   onClick={() => remove(w)}
                   className="w-9 h-9 flex items-center justify-center text-textMute hover:text-red-400 shrink-0"
