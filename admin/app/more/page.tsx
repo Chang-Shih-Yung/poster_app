@@ -33,8 +33,8 @@ export default async function MorePage() {
             資料管理
           </div>
           <ul className="divide-y divide-line1 border-y border-line1 md:border md:rounded-lg md:bg-surface">
-            <Row href="/works" label="管理所有作品" icon={Layers} />
-            <Row href="/posters" label="管理所有海報" icon={ImageIcon} />
+            <Row href="/works" label="所有作品" icon={Layers} />
+            <Row href="/posters" label="所有海報" icon={ImageIcon} />
           </ul>
         </section>
 

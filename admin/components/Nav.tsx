@@ -13,8 +13,8 @@ export default async function Nav() {
           Poster. Admin
         </Link>
         <Link href="/tree">目錄樹</Link>
-        <Link href="/works">作品</Link>
-        <Link href="/posters">海報</Link>
+        <Link href="/works">所有作品</Link>
+        <Link href="/posters">所有海報</Link>
         <Link href="/upload-queue">待補圖</Link>
       </div>
       <div className="flex items-center gap-3 text-sm text-textMute">
