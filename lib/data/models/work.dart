@@ -5,6 +5,8 @@ class Work {
     required this.titleZh,
     this.titleEn,
     this.workKey,
+    this.studio,
+    this.workKind,
     this.movieReleaseDate,
     this.movieReleaseYear,
     this.posterCount = 0,
@@ -18,6 +20,8 @@ class Work {
       workKey: row['work_key'] as String?,
       titleZh: row['title_zh'] as String,
       titleEn: row['title_en'] as String?,
+      studio: row['studio'] as String?,
+      workKind: row['work_kind'] as String?,
       movieReleaseDate: row['movie_release_date'] != null
           ? DateTime.tryParse(row['movie_release_date'] as String)
           : null,
@@ -36,6 +40,8 @@ class Work {
   final String? workKey;
   final String titleZh;
   final String? titleEn;
+  final String? studio;
+  final String? workKind;
   final DateTime? movieReleaseDate;
   final int? movieReleaseYear;
   final int posterCount;
@@ -49,6 +55,8 @@ class Work {
         'title_zh': titleZh,
         if (titleEn != null) 'title_en': titleEn,
         if (workKey != null) 'work_key': workKey,
+        if (studio != null) 'studio': studio,
+        if (workKind != null) 'work_kind': workKind,
         if (movieReleaseDate != null)
           'movie_release_date': movieReleaseDate!.toIso8601String().split('T').first,
         if (movieReleaseYear != null) 'movie_release_year': movieReleaseYear,

@@ -5,7 +5,9 @@ import '../../core/theme/app_theme.dart';
 import '../../core/widgets/app_loader.dart';
 import '../../core/widgets/ds/ds.dart';
 import '../../data/models/poster.dart';
+import '../../data/models/poster_group.dart';
 import '../../data/models/work.dart';
+import '../../data/repositories/poster_group_repository.dart';
 import '../../data/repositories/poster_repository.dart';
 import '../../data/repositories/work_repository.dart';
 
@@ -21,23 +23,46 @@ class WorkPage extends ConsumerWidget {
     final workAsync = ref.watch(workByIdProvider(workId));
     final postersAsync = ref.watch(postersByWorkIdProvider(workId));
 
+    final groupsAsync = ref.watch(posterGroupsForWorkProvider(workId));
+
     return Scaffold(
-      
+
       body: workAsync.when(
         loading: () => const AppLoader.centered(),
         error: (e, _) => AppEmptyState(title: '載入失敗：$e'),
         data: (work) => work == null
             ? const AppEmptyState(title: '找不到這部作品')
-            : _WorkBody(work: work, postersAsync: postersAsync),
+            : _WorkBody(
+                work: work,
+                postersAsync: postersAsync,
+                groupsAsync: groupsAsync,
+              ),
       ),
     );
   }
 }
 
+/// Display labels for work_kind enum. Mirrors admin/lib/enums.ts WORK_KINDS.
+const Map<String, String> _kKindLabels = {
+  'movie': '電影',
+  'concert': '演唱會',
+  'theatre': '戲劇',
+  'exhibition': '展覽',
+  'event': '活動',
+  'original_art': '原創作品',
+  'advertisement': '商業廣告',
+  'other': '其他',
+};
+
 class _WorkBody extends StatelessWidget {
-  const _WorkBody({required this.work, required this.postersAsync});
+  const _WorkBody({
+    required this.work,
+    required this.postersAsync,
+    required this.groupsAsync,
+  });
   final Work work;
   final AsyncValue<List<Poster>> postersAsync;
+  final AsyncValue<List<PosterGroup>> groupsAsync;
 
   @override
   Widget build(BuildContext context) {
@@ -53,7 +78,10 @@ class _WorkBody extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const AppText.label('作品', tone: AppTextTone.faint),
+                AppText.label(
+                  work.studio ?? '作品',
+                  tone: AppTextTone.faint,
+                ),
                 const SizedBox(height: 8),
                 AppText.headline(work.displayTitle),
                 if (work.titleEn != null && work.titleEn != work.titleZh) ...[
@@ -61,12 +89,16 @@ class _WorkBody extends StatelessWidget {
                   AppText.title(work.titleEn!, tone: AppTextTone.muted),
                 ],
                 const SizedBox(height: 14),
-                Row(
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
                   children: [
-                    if (work.movieReleaseYear != null) ...[
+                    if (work.workKind != null)
+                      _MetaPill(
+                        label: _kKindLabels[work.workKind] ?? work.workKind!,
+                      ),
+                    if (work.movieReleaseYear != null)
                       _MetaPill(label: '${work.movieReleaseYear}'),
-                      const SizedBox(width: 8),
-                    ],
                     _MetaPill(label: '${work.posterCount} 張海報'),
                   ],
                 ),
@@ -100,23 +132,21 @@ class _WorkBody extends StatelessWidget {
                 ),
               );
             }
+            // Section the posters by their parent group's path. Groups
+            // come from a separate query — while it's loading we show a
+            // flat grid (cheaper than waiting for both); on error we
+            // also fall back to flat. This means an isolated group-tree
+            // failure never blocks the user from seeing posters.
+            final groups = groupsAsync.maybeWhen(
+              data: (g) => g,
+              orElse: () => const <PosterGroup>[],
+            );
+            final sections = _buildSections(groups, posters);
             return SliverPadding(
               padding: EdgeInsets.fromLTRB(16, 0, 16, bottomInset + 32),
-              sliver: SliverGrid(
-                // Responsive: each cell ~180 wide → 2 cols on phone,
-                // 4-6 on desktop. Avoids the 2-col-stretched-forever look
-                // that Flutter's fixed count produces on wide viewports.
-                gridDelegate:
-                    const SliverGridDelegateWithMaxCrossAxisExtent(
-                  maxCrossAxisExtent: 200,
-                  mainAxisSpacing: 12,
-                  crossAxisSpacing: 12,
-                  childAspectRatio: 0.66,
-                ),
-                delegate: SliverChildBuilderDelegate(
-                  (context, i) => _PosterCell(poster: posters[i]),
-                  childCount: posters.length,
-                ),
+              sliver: SliverList.builder(
+                itemCount: sections.length,
+                itemBuilder: (context, i) => _PosterSection(section: sections[i]),
               ),
             );
           },
@@ -134,13 +164,121 @@ class _PosterCell extends StatelessWidget {
   Widget build(BuildContext context) {
     // Work page cells usually show posterName (e.g. "IMAX 限定版")
     // rather than full title — same tile contract though.
-    return AppPosterTile(
+    final tile = AppPosterTile(
       imageUrl: poster.thumbnailUrl ?? poster.posterUrl,
       fullImageUrl: poster.posterUrl,
       blurhash: poster.blurhash,
       posterId: poster.id,
       title: poster.posterName,
       showOverlayText: poster.posterName != null,
+    );
+    if (!poster.isPlaceholder) return tile;
+    // Admin hasn't uploaded a real scan yet — overlay a "待補真圖" badge
+    // so the user understands why this row looks like a generic silhouette.
+    return Stack(
+      children: [
+        Positioned.fill(child: tile),
+        Positioned(
+          top: 6,
+          left: 6,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.6),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: const AppText.small(
+              '待補真圖',
+              tone: AppTextTone.muted,
+              weight: FontWeight.w500,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// One pre-order section in the work page: header text (a "/"-joined
+/// breadcrumb of group names from work root, or null for ungrouped
+/// posters) plus the posters that hang directly off that group.
+class _Section {
+  const _Section({required this.title, required this.posters});
+  final String? title;
+  final List<Poster> posters;
+}
+
+/// Walk the group tree, emitting one _Section per leaf group whose
+/// children are posters. Posters with NULL parent_group_id (legacy v2
+/// uploads or rows the admin hasn't filed yet) get their own trailing
+/// "(未分類)" section so they remain visible.
+List<_Section> _buildSections(List<PosterGroup> groups, List<Poster> posters) {
+  if (groups.isEmpty) {
+    return [_Section(title: null, posters: posters)];
+  }
+  final byParent = <String?, List<PosterGroup>>{};
+  for (final g in groups) {
+    byParent.putIfAbsent(g.parentGroupId, () => []).add(g);
+  }
+  final postersByGroup = <String, List<Poster>>{};
+  final ungrouped = <Poster>[];
+  for (final p in posters) {
+    final pid = p.parentGroupId;
+    if (pid == null) {
+      ungrouped.add(p);
+    } else {
+      postersByGroup.putIfAbsent(pid, () => []).add(p);
+    }
+  }
+  final sections = <_Section>[];
+  void walk(String? parentId, List<String> path) {
+    final children = byParent[parentId] ?? const [];
+    for (final g in children) {
+      final newPath = [...path, g.name];
+      final hereSorted = (postersByGroup[g.id] ?? const <Poster>[])
+        ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      if (hereSorted.isNotEmpty) {
+        sections.add(_Section(title: newPath.join(' / '), posters: hereSorted));
+      }
+      walk(g.id, newPath);
+    }
+  }
+  walk(null, const []);
+  if (ungrouped.isNotEmpty) {
+    sections.add(_Section(title: '(未分類)', posters: ungrouped));
+  }
+  return sections;
+}
+
+class _PosterSection extends StatelessWidget {
+  const _PosterSection({required this.section});
+  final _Section section;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (section.title != null) ...[
+          Padding(
+            padding: const EdgeInsets.only(top: 12, bottom: 8, left: 4),
+            child: AppText.title(section.title!, tone: AppTextTone.muted),
+          ),
+        ],
+        GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+            maxCrossAxisExtent: 200,
+            mainAxisSpacing: 12,
+            crossAxisSpacing: 12,
+            childAspectRatio: 0.66,
+          ),
+          itemCount: section.posters.length,
+          itemBuilder: (context, i) =>
+              _PosterCell(poster: section.posters[i]),
+        ),
+      ],
     );
   }
 }

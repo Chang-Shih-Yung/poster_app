@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/env.dart';
 import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
+import 'data/providers/realtime_sync_provider.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -77,6 +78,10 @@ class PosterApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(routerProvider);
+    // Open the realtime channel for the entire app session — this keeps
+    // works/posters/poster_groups providers in sync with admin edits
+    // without requiring a manual pull-to-refresh.
+    ref.watch(realtimeSyncProvider);
     // v19: app is locked to dark mode. The theme_mode_notifier and
     // day-mode palette stay intact so we can flip this back on in
     // one line if we ever ship a white editorial mode, but while

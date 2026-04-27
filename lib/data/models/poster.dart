@@ -16,6 +16,9 @@ class Poster {
     this.viewCount = 0,
     // V2 fields
     this.workId,
+    this.workKind,
+    this.parentGroupId,
+    this.isPlaceholder = false,
     this.posterName,
     this.region,
     this.posterReleaseDate,
@@ -64,6 +67,9 @@ class Poster {
       createdAt: DateTime.parse(row['created_at'] as String),
       // V2 fields — nullable, safe for V1 rows
       workId: row['work_id'] as String?,
+      workKind: row['work_kind'] as String?,
+      parentGroupId: row['parent_group_id'] as String?,
+      isPlaceholder: (row['is_placeholder'] as bool?) ?? false,
       posterName: row['poster_name'] as String?,
       region: row['region'] != null
           ? Region.fromString(row['region'] as String)
@@ -119,6 +125,16 @@ class Poster {
 
   // V2 fields
   final String? workId;
+  /// Denormalized from works.work_kind — kept in lock-step by DB triggers
+  /// (see migration 20260427160000_sync_posters_work_kind.sql).
+  final String? workKind;
+  /// v3: leaf poster hangs off a poster_groups node. NULL for legacy v2
+  /// posters that haven't been migrated into the tree yet.
+  final String? parentGroupId;
+  /// v3: TRUE when poster_url is still a work-kind silhouette (admin
+  /// hasn't uploaded the real scan). UI uses this to show a placeholder
+  /// hint and an upload affordance.
+  final bool isPlaceholder;
   final String? posterName;
   final Region? region;
   final DateTime? posterReleaseDate;
