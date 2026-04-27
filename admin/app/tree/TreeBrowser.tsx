@@ -258,34 +258,51 @@ export default function TreeBrowser({ studios: initialStudios }: { studios: Stud
 
   /* ──────────────────────────── work level ───────────────────────────── */
 
-  // Decorate each group with its immediate-child count (sub-groups + leaf
-  // posters) so the UI can show "(N)" even before the group is expanded.
-  // Two extra small queries per load — cheap because each tree level
-  // typically has < 50 groups.
+  // Decorate each group with the recursive count of POSTERS underneath it
+  // (across any depth of sub-groups). A group whose sub-groups are all
+  // empty correctly shows (0) — sub-groups themselves don't count, only
+  // leaf posters do.
+  //
+  // Implementation: pull the entire group tree + every poster in the work
+  // in two queries, then walk the tree client-side. Cheap because a typical
+  // work has at most a few dozen groups and a few dozen posters.
   const decorateGroupCounts = useCallback(
-    async (groups: GroupNode[]): Promise<GroupNode[]> => {
+    async (workId: string, groups: GroupNode[]): Promise<GroupNode[]> => {
       if (groups.length === 0) return groups;
-      const ids = groups.map((g) => g.id);
-      const [subGroupsRes, postersRes] = await Promise.all([
+      const [allGroupsRes, allPostersRes] = await Promise.all([
         supabase
           .from("poster_groups")
-          .select("parent_group_id")
-          .in("parent_group_id", ids),
+          .select("id, parent_group_id")
+          .eq("work_id", workId),
         supabase
           .from("posters")
           .select("parent_group_id")
-          .in("parent_group_id", ids),
+          .eq("work_id", workId)
+          .is("deleted_at", null),
       ]);
-      const counts = new Map<string, number>();
-      for (const r of subGroupsRes.data ?? []) {
-        const k = r.parent_group_id as string;
-        counts.set(k, (counts.get(k) ?? 0) + 1);
+      // Map: group_id → its direct sub-group ids
+      const subOf = new Map<string, string[]>();
+      for (const g of allGroupsRes.data ?? []) {
+        const parent = (g.parent_group_id as string | null) ?? "__root__";
+        if (!subOf.has(parent)) subOf.set(parent, []);
+        subOf.get(parent)!.push(g.id as string);
       }
-      for (const r of postersRes.data ?? []) {
-        const k = r.parent_group_id as string;
-        counts.set(k, (counts.get(k) ?? 0) + 1);
+      // Map: group_id → direct poster count (parent_group_id = group)
+      const directPosterCount = new Map<string, number>();
+      for (const p of allPostersRes.data ?? []) {
+        const k = p.parent_group_id as string | null;
+        if (!k) continue;
+        directPosterCount.set(k, (directPosterCount.get(k) ?? 0) + 1);
       }
-      return groups.map((g) => ({ ...g, child_count: counts.get(g.id) ?? 0 }));
+      // Recursive sum: posters directly under g + posters under any descendant
+      function recurse(groupId: string): number {
+        let total = directPosterCount.get(groupId) ?? 0;
+        for (const sub of subOf.get(groupId) ?? []) {
+          total += recurse(sub);
+        }
+        return total;
+      }
+      return groups.map((g) => ({ ...g, child_count: recurse(g.id) }));
     },
     [supabase]
   );
@@ -308,6 +325,7 @@ export default function TreeBrowser({ studios: initialStudios }: { studios: Stud
           .order("created_at", { ascending: false }),
       ]);
       const decoratedGroups = await decorateGroupCounts(
+        workId,
         (groupsRes.data ?? []) as GroupNode[]
       );
       setChildrenByWork((c) => ({
@@ -448,14 +466,22 @@ export default function TreeBrowser({ studios: initialStudios }: { studios: Stud
           .eq("parent_group_id", groupId)
           .order("created_at", { ascending: false }),
       ]);
-      const decoratedGroups = await decorateGroupCounts(
-        (groupsRes.data ?? []) as GroupNode[]
-      );
+      // Both immediate sub-groups and direct posters carry work_id; pluck
+      // it from any one of them. If neither exists (empty group), skip the
+      // decorate step — there are no groups to decorate anyway.
+      const childGroups = (groupsRes.data ?? []) as GroupNode[];
+      const childPosters = (postersRes.data ?? []) as PosterLeaf[];
+      const workId =
+        childGroups[0]?.work_id ?? childPosters[0]?.work_id ?? null;
+      const decoratedGroups =
+        workId && childGroups.length > 0
+          ? await decorateGroupCounts(workId, childGroups)
+          : childGroups;
       setChildrenByGroup((c) => ({
         ...c,
         [groupId]: {
           groups: decoratedGroups,
-          posters: (postersRes.data ?? []) as PosterLeaf[],
+          posters: childPosters,
         },
       }));
     },
@@ -490,8 +516,9 @@ export default function TreeBrowser({ studios: initialStudios }: { studios: Stud
       setEditing(null);
       router.refresh();
       // Cheap update local: refetch parent.
+      // Reload work first so ancestor recursive counts re-decorate.
+      await loadWorkChildren(group.work_id);
       if (group.parent_group_id) await loadGroupChildren(group.parent_group_id);
-      else await loadWorkChildren(group.work_id);
     } catch (e) {
       setErrorMsg(describeError(e));
     } finally {
@@ -512,8 +539,9 @@ export default function TreeBrowser({ studios: initialStudios }: { studios: Stud
       const { error } = await supabase.from("poster_groups").delete().eq("id", group.id);
       if (error) throw error;
       router.refresh();
+      // Reload work first so ancestor recursive counts re-decorate.
+      await loadWorkChildren(group.work_id);
       if (group.parent_group_id) await loadGroupChildren(group.parent_group_id);
-      else await loadWorkChildren(group.work_id);
     } catch (e) {
       setErrorMsg(describeError(e));
     } finally {
@@ -579,9 +607,11 @@ export default function TreeBrowser({ studios: initialStudios }: { studios: Stud
           return out;
         });
       }
-      // Optimistic child_count bump on the parent group, so the
-      // collapsed "(N)" updates without waiting for re-fetch.
-      if (opts.groupId) {
+      // Optimistic child_count bump — only for posters, since the count is
+      // now recursive POSTERS only and adding a group doesn't change it.
+      // We bump the direct parent only; loadGroupChildren / refresh below
+      // will correct any ancestor that we miss.
+      if (opts.groupId && opts.childKind === "poster") {
         const bump = (gs: GroupNode[]) =>
           gs.map((g) =>
             g.id === opts.groupId
@@ -606,8 +636,10 @@ export default function TreeBrowser({ studios: initialStudios }: { studios: Stud
 
       setAdding(null);
       router.refresh();
+      // Always reload the work — this re-decorates every group's
+      // recursive poster count even for ancestors of opts.groupId.
+      if (opts.workId) await loadWorkChildren(opts.workId);
       if (opts.groupId) await loadGroupChildren(opts.groupId);
-      else if (opts.workId) await loadWorkChildren(opts.workId);
     } catch (e) {
       setErrorMsg(describeError(e));
     } finally {
@@ -629,8 +661,9 @@ export default function TreeBrowser({ studios: initialStudios }: { studios: Stud
       if (error) throw error;
       setEditing(null);
       router.refresh();
+      // Re-decorate ancestor counts by reloading the work too.
+      if (poster.work_id) await loadWorkChildren(poster.work_id);
       if (poster.parent_group_id) await loadGroupChildren(poster.parent_group_id);
-      else if (poster.work_id) await loadWorkChildren(poster.work_id);
     } catch (e) {
       setErrorMsg(describeError(e));
     } finally {
@@ -668,8 +701,9 @@ export default function TreeBrowser({ studios: initialStudios }: { studios: Stud
         return out;
       });
       router.refresh();
+      // Re-decorate ancestor counts by reloading the work too.
+      if (poster.work_id) await loadWorkChildren(poster.work_id);
       if (poster.parent_group_id) await loadGroupChildren(poster.parent_group_id);
-      else if (poster.work_id) await loadWorkChildren(poster.work_id);
     } catch (e) {
       setErrorMsg(describeError(e));
     } finally {
