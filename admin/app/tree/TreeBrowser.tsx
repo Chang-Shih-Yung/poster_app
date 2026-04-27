@@ -11,13 +11,13 @@ import {
   Plus,
   Trash2,
   ImagePlus,
-  FolderPlus,
   FilePlus2,
   AlertTriangle,
   Loader2,
 } from "lucide-react";
 import { uploadPosterImage } from "@/lib/imageUpload";
 import { createClient } from "@/lib/supabase/client";
+import { WORK_KINDS } from "@/lib/enums";
 
 /**
  * Tree-as-editor design (2026-04-27 redesign): every row has inline
@@ -201,23 +201,36 @@ export default function TreeBrowser({ studios: initialStudios }: { studios: Stud
   }
 
   async function deleteStudio(studio: string) {
-    const items = (worksByStudio[studio] ?? []).length || studios.find((s) => s.studio === studio)?.works || 0;
-    const msg =
-      studio === NULL_STUDIO_KEY
-        ? `「未分類」是一個虛擬分類（不是真實的 studio），無法直接刪除。\n\n要清空的話，請把它改名（例如「吉卜力」）讓裡面的作品有歸屬。`
-        : `把「${studio}」清空（${items} 部作品的 studio 變成 NULL，會被丟回「未分類」）？\n作品本身不會被刪除。`;
+    const studioStat = studios.find((s) => s.studio === studio);
+    const works = studioStat?.works ?? 0;
+    const posters = studioStat?.posters ?? 0;
     if (studio === NULL_STUDIO_KEY) {
-      alert(msg);
+      alert(
+        `「未分類」是一個虛擬分類（不是真實的 studio），無法直接刪除。\n\n要清空的話，請把它改名（例如「吉卜力」）讓裡面的作品有歸屬。`
+      );
       return;
     }
-    if (!confirm(msg)) return;
+    if (
+      !confirm(
+        `刪除分類「${studio}」？\n底下 ${works} 部作品、${posters} 張海報全部會被刪除。\n此操作不可復原。`
+      )
+    )
+      return;
     setBusy(true);
     setErrorMsg(null);
     try {
-      const { error } = await supabase.from("works").update({ studio: null }).eq("studio", studio);
+      // CASCADE FK on posters.work_id and poster_groups.work_id means
+      // deleting the works will tear down every group + poster underneath
+      // in one statement.
+      const { error } = await supabase.from("works").delete().eq("studio", studio);
       if (error) throw error;
       router.refresh();
       setStudios((list) => list.filter((s) => s.studio !== studio));
+      setWorksByStudio((map) => {
+        const out = { ...map };
+        delete out[studio];
+        return out;
+      });
     } catch (e) {
       setErrorMsg(describeError(e));
     } finally {
@@ -225,7 +238,7 @@ export default function TreeBrowser({ studios: initialStudios }: { studios: Stud
     }
   }
 
-  async function addWorkToStudio(studio: string, title: string) {
+  async function addWorkToStudio(studio: string, title: string, kind: string) {
     if (!title.trim()) return;
     setBusy(true);
     setErrorMsg(null);
@@ -236,7 +249,7 @@ export default function TreeBrowser({ studios: initialStudios }: { studios: Stud
         .insert({
           title_zh: title.trim(),
           studio: studioValue,
-          work_kind: "movie",
+          work_kind: kind,
         })
         .select("id, title_zh, title_en, work_kind, poster_count, studio")
         .single();
@@ -372,6 +385,36 @@ export default function TreeBrowser({ studios: initialStudios }: { studios: Stud
           ...map,
           [studioKey]: arr.map((w) =>
             w.id === work.id ? { ...w, title_zh: newName.trim() } : w
+          ),
+        };
+      });
+      setEditing(null);
+      router.refresh();
+    } catch (e) {
+      setErrorMsg(describeError(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function changeWorkKind(work: WorkNode, newKind: string) {
+    if (newKind === work.work_kind) return;
+    setBusy(true);
+    setErrorMsg(null);
+    try {
+      const { error } = await supabase
+        .from("works")
+        .update({ work_kind: newKind })
+        .eq("id", work.id);
+      if (error) throw error;
+      setWorksByStudio((map) => {
+        const studioKey = work.studio ?? NULL_STUDIO_KEY;
+        const arr = map[studioKey];
+        if (!arr) return map;
+        return {
+          ...map,
+          [studioKey]: arr.map((w) =>
+            w.id === work.id ? { ...w, work_kind: newKind } : w
           ),
         };
       });
@@ -719,7 +762,7 @@ export default function TreeBrowser({ studios: initialStudios }: { studios: Stud
   // back-to-back.
   const [newStudioName, setNewStudioName] = useState("");
 
-  async function createNewStudio(studio: string, firstWorkTitle: string) {
+  async function createNewStudio(studio: string, firstWorkTitle: string, firstWorkKind: string) {
     if (!studio.trim() || !firstWorkTitle.trim()) return;
     setBusy(true);
     setErrorMsg(null);
@@ -727,7 +770,7 @@ export default function TreeBrowser({ studios: initialStudios }: { studios: Stud
       const { error } = await supabase.from("works").insert({
         title_zh: firstWorkTitle.trim(),
         studio: studio.trim(),
-        work_kind: "movie",
+        work_kind: firstWorkKind,
       });
       if (error) throw error;
       // Optimistically prepend the new studio.
@@ -760,7 +803,7 @@ export default function TreeBrowser({ studios: initialStudios }: { studios: Stud
           <NewStudioForm
             studioName={newStudioName}
             onStudioName={setNewStudioName}
-            onSubmit={(workTitle) => createNewStudio(newStudioName, workTitle)}
+            onSubmit={(workTitle, workKind) => createNewStudio(newStudioName, workTitle, workKind)}
             onCancel={() => {
               setAdding(null);
               setNewStudioName("");
@@ -797,7 +840,7 @@ export default function TreeBrowser({ studios: initialStudios }: { studios: Stud
           <NewStudioForm
             studioName={newStudioName}
             onStudioName={setNewStudioName}
-            onSubmit={(workTitle) => createNewStudio(newStudioName, workTitle)}
+            onSubmit={(workTitle, workKind) => createNewStudio(newStudioName, workTitle, workKind)}
             onCancel={() => {
               setAdding(null);
               setNewStudioName("");
@@ -864,13 +907,11 @@ export default function TreeBrowser({ studios: initialStudios }: { studios: Stud
                 <ul>
                   {adding === addKey && (
                     <li>
-                      <InlineRowEdit
+                      <NewWorkInline
                         depth={1}
-                        placeholder="作品名稱（中文）"
-                        onSubmit={(val) => addWorkToStudio(s.studio, val)}
+                        onSubmit={(title, kind) => addWorkToStudio(s.studio, title, kind)}
                         onCancel={() => setAdding(null)}
                         busy={busy}
-                        bgClass="bg-surfaceRaised"
                       />
                     </li>
                   )}
@@ -891,6 +932,7 @@ export default function TreeBrowser({ studios: initialStudios }: { studios: Stud
                       onSetAdding={setAdding}
                       onRenameWork={renameWork}
                       onDeleteWork={deleteWork}
+                      onChangeWorkKind={changeWorkKind}
                       onAddGroupToWork={addGroupToWork}
                       onRenameGroup={renameGroup}
                       onDeleteGroup={deleteGroup}
@@ -927,6 +969,7 @@ function WorkRow(props: {
   onSetAdding: (k: string | null) => void;
   onRenameWork: (w: WorkNode, newName: string) => void;
   onDeleteWork: (w: WorkNode) => void;
+  onChangeWorkKind: (w: WorkNode, newKind: string) => void;
   onAddGroupToWork: (workId: string, name: string) => void;
   onRenameGroup: (g: GroupNode, newName: string) => void;
   onDeleteGroup: (g: GroupNode) => void;
@@ -964,6 +1007,16 @@ function WorkRow(props: {
           count={w.poster_count}
           subtitle={w.title_en ?? undefined}
           onRenameInline={() => props.onSetEditing(editKey)}
+          titleExtra={
+            <WorkKindChip
+              workKind={w.work_kind}
+              isEditing={props.editing === `work-kind:${w.id}`}
+              onStartEdit={() => props.onSetEditing(`work-kind:${w.id}`)}
+              onCancel={() => props.onSetEditing(null)}
+              onChange={(newKind) => props.onChangeWorkKind(w, newKind)}
+              busy={props.busy}
+            />
+          }
           actions={
             <RowActions
               onAddChild={() => {
@@ -972,7 +1025,6 @@ function WorkRow(props: {
               }}
               onDelete={() => props.onDeleteWork(w)}
               addLabel="新增群組（資料夾）"
-              addIcon={<FolderPlus className="w-4 h-4 text-accent" />}
               extra={
                 <IconButton
                   onClick={(e) => {
@@ -1131,7 +1183,6 @@ function GroupNodeRow(props: {
               }}
               onDelete={() => props.onDeleteGroup(g)}
               addLabel="子群組"
-              addIcon={<FolderPlus className="w-4 h-4 text-accent" />}
               extra={
                 <IconButton
                   onClick={(e) => {
@@ -1357,6 +1408,7 @@ function TreeRow({
   subtitleColor,
   thumbnailUrl,
   onRenameInline,
+  titleExtra,
   actions,
   rightAfterActions,
   onClick,
@@ -1371,6 +1423,7 @@ function TreeRow({
   subtitleColor?: "amber";
   thumbnailUrl?: string | null;
   onRenameInline?: (e: React.MouseEvent) => void;
+  titleExtra?: React.ReactNode;
   actions?: React.ReactNode;
   rightAfterActions?: React.ReactNode;
   onClick?: () => void;
@@ -1429,6 +1482,7 @@ function TreeRow({
               <Pencil className="w-3 h-3" />
             </button>
           )}
+          {titleExtra}
         </span>
         {subtitle && (
           <span
@@ -1626,37 +1680,53 @@ function NewStudioForm({
 }: {
   studioName: string;
   onStudioName: (v: string) => void;
-  onSubmit: (firstWorkTitle: string) => void;
+  onSubmit: (firstWorkTitle: string, firstWorkKind: string) => void;
   onCancel: () => void;
   busy: boolean;
 }) {
   const [workTitle, setWorkTitle] = useState("");
+  const [workKind, setWorkKind] = useState<string>("movie");
   return (
     <div className="space-y-2">
       <input
         autoFocus
         value={studioName}
         onChange={(e) => onStudioName(e.target.value)}
-        placeholder="大分類（例：電影、演唱會、戲劇、展覽、活動）"
+        placeholder="大分類（例：吉卜力、漫威、五月天）"
         className="w-full"
         disabled={busy}
-      />
-      <input
-        value={workTitle}
-        onChange={(e) => setWorkTitle(e.target.value)}
-        placeholder="第一個作品 / 條目名稱（例：神隱少女、五月天演唱會）"
-        className="w-full"
-        disabled={busy}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" && studioName.trim() && workTitle.trim()) {
-            onSubmit(workTitle);
-          }
-          if (e.key === "Escape") onCancel();
-        }}
       />
       <div className="flex gap-2">
+        <input
+          value={workTitle}
+          onChange={(e) => setWorkTitle(e.target.value)}
+          placeholder="第一個作品 / 條目名稱（例：神隱少女）"
+          className="flex-1"
+          disabled={busy}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && studioName.trim() && workTitle.trim()) {
+              onSubmit(workTitle, workKind);
+            }
+            if (e.key === "Escape") onCancel();
+          }}
+        />
+        <select
+          value={workKind}
+          onChange={(e) => setWorkKind(e.target.value)}
+          disabled={busy}
+          className="shrink-0"
+          title="作品類型"
+        >
+          {WORK_KINDS.map((k) => (
+            <option key={k.value} value={k.value}>
+              {k.label}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="flex gap-2">
         <button
-          onClick={() => onSubmit(workTitle)}
+          onClick={() => onSubmit(workTitle, workKind)}
           disabled={busy || !studioName.trim() || !workTitle.trim()}
           className="px-3 py-1.5 text-xs rounded-md bg-accent text-bg font-medium disabled:opacity-50 inline-flex items-center gap-1"
         >
@@ -1672,9 +1742,146 @@ function NewStudioForm({
         </button>
       </div>
       <div className="text-[11px] text-textFaint">
-        分類是樹的最頂層（電影 / 演唱會 / 戲劇 ...），底下放作品 → 群組 → 海報。新建分類時必須同時建第一個作品；之後可以用每列右側的 + 按鈕繼續往下加。
+        分類是樹的最頂層，底下放作品 → 群組 → 海報。新建分類時必須同時建第一個作品；之後可以用每列右側的 + 按鈕繼續往下加。
       </div>
     </div>
+  );
+}
+
+/**
+ * Inline form for adding a work under an existing studio. Like InlineRowEdit
+ * but with a kind dropdown so admin can set work_kind without later jumping
+ * to /works/[id]. The dropdown lives next to the name input on the same row.
+ */
+function NewWorkInline({
+  depth,
+  onSubmit,
+  onCancel,
+  busy,
+}: {
+  depth: number;
+  onSubmit: (title: string, kind: string) => void;
+  onCancel: () => void;
+  busy: boolean;
+}) {
+  const padding = depth * 16 + 28;
+  const [title, setTitle] = useState("");
+  const [kind, setKind] = useState<string>("movie");
+  const ref = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    ref.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, []);
+  return (
+    <div
+      ref={ref}
+      className="py-2 pr-3 bg-surfaceRaised"
+      style={{ paddingLeft: `${padding}px` }}
+    >
+      <div className="flex gap-2">
+        <input
+          autoFocus
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="群組名稱（中文）"
+          className="flex-1"
+          disabled={busy}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && title.trim()) onSubmit(title, kind);
+            if (e.key === "Escape") onCancel();
+          }}
+        />
+        <select
+          value={kind}
+          onChange={(e) => setKind(e.target.value)}
+          disabled={busy}
+          className="shrink-0"
+          title="作品類型"
+        >
+          {WORK_KINDS.map((k) => (
+            <option key={k.value} value={k.value}>
+              {k.label}
+            </option>
+          ))}
+        </select>
+        <button
+          onClick={() => onSubmit(title, kind)}
+          disabled={busy || !title.trim()}
+          className="px-3 py-1.5 text-xs rounded-md bg-accent text-bg font-medium disabled:opacity-50"
+        >
+          {busy ? "處理中…" : "確認"}
+        </button>
+        <button
+          onClick={onCancel}
+          disabled={busy}
+          className="px-3 py-1.5 text-xs rounded-md border border-line2 text-textMute"
+        >
+          取消
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ─────────────────────────── work kind chip ───────────────────────── */
+
+/**
+ * Inline kind editor on each work row. Chip → click → dropdown → pick →
+ * saves and reverts to chip. stopPropagation everywhere so clicking the
+ * chip doesn't toggle the row's expand/collapse.
+ */
+function WorkKindChip({
+  workKind,
+  isEditing,
+  onStartEdit,
+  onCancel,
+  onChange,
+  busy,
+}: {
+  workKind: string;
+  isEditing: boolean;
+  onStartEdit: () => void;
+  onCancel: () => void;
+  onChange: (newKind: string) => void;
+  busy: boolean;
+}) {
+  const label = WORK_KINDS.find((k) => k.value === workKind)?.label ?? workKind;
+  if (isEditing) {
+    return (
+      <select
+        autoFocus
+        value={workKind}
+        onClick={(e) => e.stopPropagation()}
+        onChange={(e) => {
+          e.stopPropagation();
+          onChange(e.target.value);
+        }}
+        onBlur={onCancel}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") onCancel();
+        }}
+        disabled={busy}
+        className="text-xs py-0.5 px-1 shrink-0"
+      >
+        {WORK_KINDS.map((k) => (
+          <option key={k.value} value={k.value}>
+            {k.label}
+          </option>
+        ))}
+      </select>
+    );
+  }
+  return (
+    <button
+      onClick={(e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        onStartEdit();
+      }}
+      className="shrink-0 text-[10px] tracking-wide px-1.5 py-0.5 rounded bg-surfaceRaised text-textMute hover:text-text hover:bg-surface border border-line2"
+      title="變更類型"
+    >
+      {label}
+    </button>
   );
 }
 

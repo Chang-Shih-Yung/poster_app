@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { REGIONS, RELEASE_TYPES, SIZE_TYPES, CHANNEL_CATEGORIES } from "@/lib/enums";
+import { REGIONS, RELEASE_TYPES, SIZE_TYPES, CHANNEL_CATEGORIES, WORK_KINDS } from "@/lib/enums";
 
 type WorkOption = { id: string; title_zh: string; studio: string | null };
 
@@ -13,6 +13,7 @@ type PosterFormProps = {
   initial?: {
     id: string;
     work_id: string | null;
+    work_kind?: string | null;
     poster_name: string | null;
     region: string | null;
     year: number | null;
@@ -171,6 +172,10 @@ export default function PosterForm({ mode, works, initial, defaultWorkId }: Post
           ))}
         </select>
       </Field>
+
+      {initial?.work_kind && workId && (
+        <WorkKindReadOnly workKind={initial.work_kind} />
+      )}
 
       <Field label="所屬群組">
         <select
@@ -339,6 +344,24 @@ export default function PosterForm({ mode, works, initial, defaultWorkId }: Post
         後台會加拖拉上傳真實圖片的功能。
       </p>
     </form>
+  );
+}
+
+/**
+ * Read-only display of work_kind. The value lives on posters.work_kind
+ * (denormalized from works.work_kind for filtering) but the source of truth
+ * is the work — DB triggers keep them in lock-step. To change the kind, the
+ * admin edits the work, not the poster.
+ */
+function WorkKindReadOnly({ workKind }: { workKind: string }) {
+  const label = WORK_KINDS.find((k) => k.value === workKind)?.label ?? workKind;
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-xs uppercase tracking-wider text-textMute">類型</span>
+      <span className="px-2 py-0.5 rounded bg-surfaceRaised text-sm text-textFaint opacity-60">
+        {label}
+      </span>
+    </div>
   );
 }
 
