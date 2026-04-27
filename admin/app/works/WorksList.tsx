@@ -207,94 +207,8 @@ export default function WorksList({ initial }: { initial: Work[] }) {
         </div>
       )}
 
-      <ul className="divide-y divide-line1 border-y border-line1 md:border md:rounded-lg md:bg-surface">
-        {works.map((w, i) => (
-          <li key={w.id}>
-            {editing === w.id ? (
-              <div className="bg-surfaceRaised py-2 px-4">
-                <div className="flex gap-2">
-                  <input
-                    autoFocus
-                    value={editValue}
-                    onChange={(e) => setEditValue(e.target.value)}
-                    placeholder="作品中文名"
-                    className="flex-1"
-                    disabled={busy}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") rename(w, editValue);
-                      if (e.key === "Escape") setEditing(null);
-                    }}
-                  />
-                  <button
-                    onClick={() => rename(w, editValue)}
-                    disabled={busy || !editValue.trim()}
-                    className="px-3 py-1.5 text-xs rounded-md bg-accent text-bg font-medium disabled:opacity-50"
-                  >
-                    {busy ? "儲存中" : "確認"}
-                  </button>
-                  <button
-                    onClick={() => setEditing(null)}
-                    disabled={busy}
-                    className="px-3 py-1.5 text-xs rounded-md border border-line2 text-textMute"
-                  >
-                    取消
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="flex items-center px-4 py-3 min-h-[60px]">
-                <span className="text-xs text-textFaint tabular-nums shrink-0 w-7">
-                  {i + 1}.
-                </span>
-                {/* Title + subtitle is a link into the work's full edit
-                 * page (group manager + posters list + work metadata).
-                 * Pencil / trash buttons sit outside this anchor so
-                 * clicking them doesn't navigate. */}
-                <a
-                  href={`/works/${w.id}`}
-                  className="min-w-0 flex-1 mr-2 hover:no-underline"
-                >
-                  <span className="flex items-baseline gap-1">
-                    <span className="text-sm text-text truncate">
-                      {w.title_zh}
-                    </span>
-                    {w.poster_count > 0 && (
-                      <span className="text-xs text-textFaint tabular-nums shrink-0">
-                        ({w.poster_count})
-                      </span>
-                    )}
-                    <button
-                      onClick={(e) => {
-                        e.preventDefault();
-                        setEditValue(w.title_zh);
-                        setEditing(w.id);
-                      }}
-                      className="shrink-0 text-textFaint hover:text-text p-1 -m-1"
-                      aria-label="重新命名"
-                      title="重新命名"
-                    >
-                      <Pencil className="w-3 h-3" />
-                    </button>
-                  </span>
-                  <span className="block text-xs text-textFaint truncate mt-0.5">
-                    {[w.studio, w.work_kind, w.movie_release_year]
-                      .filter(Boolean)
-                      .join(" · ")}
-                  </span>
-                </a>
-                <button
-                  onClick={() => remove(w)}
-                  className="w-9 h-9 flex items-center justify-center text-textMute hover:text-red-400 shrink-0"
-                  aria-label="刪除"
-                  title="刪除"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-            )}
-          </li>
-        ))}
-        {works.length === 0 && (
+      {works.length === 0 ? (
+        <ul className="border-y border-line1 md:border md:rounded-lg md:bg-surface">
           <li className="px-4 py-10 text-center text-textFaint text-sm">
             還沒有作品。
             <br />
@@ -305,8 +219,154 @@ export default function WorksList({ initial }: { initial: Work[] }) {
               <Plus className="w-4 h-4" /> 新增第一筆
             </button>
           </li>
-        )}
-      </ul>
+        </ul>
+      ) : (
+        <WorksSections
+          works={works}
+          editing={editing}
+          editValue={editValue}
+          busy={busy}
+          onStartEdit={(w) => {
+            setEditValue(w.title_zh);
+            setEditing(w.id);
+          }}
+          onCancelEdit={() => setEditing(null)}
+          onChangeEdit={setEditValue}
+          onCommitEdit={rename}
+          onRemove={remove}
+        />
+      )}
     </>
+  );
+}
+
+/**
+ * Sections works by their `studio` field, preserving the newest-first
+ * order within each section. Section header shows the studio name +
+ * total count; "(未分類)" collects works whose studio is null.
+ */
+function WorksSections({
+  works,
+  editing,
+  editValue,
+  busy,
+  onStartEdit,
+  onCancelEdit,
+  onChangeEdit,
+  onCommitEdit,
+  onRemove,
+}: {
+  works: Work[];
+  editing: string | null;
+  editValue: string;
+  busy: boolean;
+  onStartEdit: (w: Work) => void;
+  onCancelEdit: () => void;
+  onChangeEdit: (v: string) => void;
+  onCommitEdit: (w: Work, newTitle: string) => void;
+  onRemove: (w: Work) => void;
+}) {
+  // Bucket by studio in iteration order so the studio whose newest work
+  // appears first in the source list comes first in the rendered sections.
+  const sections = new Map<string, Work[]>();
+  for (const w of works) {
+    const k = w.studio ?? "(未分類)";
+    if (!sections.has(k)) sections.set(k, []);
+    sections.get(k)!.push(w);
+  }
+
+  return (
+    <div className="space-y-4">
+      {[...sections.entries()].map(([studio, items]) => (
+        <div key={studio}>
+          <div className="px-4 md:px-0 pb-1 text-xs text-textFaint">
+            {studio} ({items.length})
+          </div>
+          <ul className="divide-y divide-line1 border-y border-line1 md:border md:rounded-lg md:bg-surface">
+            {items.map((w, i) => (
+              <li key={w.id}>
+                {editing === w.id ? (
+                  <div className="bg-surfaceRaised py-2 px-4">
+                    <div className="flex gap-2">
+                      <input
+                        autoFocus
+                        value={editValue}
+                        onChange={(e) => onChangeEdit(e.target.value)}
+                        placeholder="作品中文名"
+                        className="flex-1"
+                        disabled={busy}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") onCommitEdit(w, editValue);
+                          if (e.key === "Escape") onCancelEdit();
+                        }}
+                      />
+                      <button
+                        onClick={() => onCommitEdit(w, editValue)}
+                        disabled={busy || !editValue.trim()}
+                        className="px-3 py-1.5 text-xs rounded-md bg-accent text-bg font-medium disabled:opacity-50"
+                      >
+                        {busy ? "儲存中" : "確認"}
+                      </button>
+                      <button
+                        onClick={onCancelEdit}
+                        disabled={busy}
+                        className="px-3 py-1.5 text-xs rounded-md border border-line2 text-textMute"
+                      >
+                        取消
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center px-4 py-3 min-h-[60px]">
+                    <span className="text-xs text-textFaint tabular-nums shrink-0 w-7">
+                      {i + 1}.
+                    </span>
+                    <a
+                      href={`/works/${w.id}`}
+                      className="min-w-0 flex-1 mr-2 hover:no-underline"
+                    >
+                      <span className="flex items-baseline gap-1">
+                        <span className="text-sm text-text truncate">
+                          {w.title_zh}
+                        </span>
+                        {w.poster_count > 0 && (
+                          <span className="text-xs text-textFaint tabular-nums shrink-0">
+                            ({w.poster_count})
+                          </span>
+                        )}
+                        <button
+                          onClick={(e) => {
+                            e.preventDefault();
+                            onStartEdit(w);
+                          }}
+                          className="shrink-0 text-textFaint hover:text-text p-1 -m-1"
+                          aria-label="重新命名"
+                          title="重新命名"
+                        >
+                          <Pencil className="w-3 h-3" />
+                        </button>
+                      </span>
+                      {(w.title_en || w.work_kind) && (
+                        <span className="block text-xs text-textFaint truncate mt-0.5">
+                          {[w.title_en, w.work_kind].filter(Boolean).join(" · ")}
+                        </span>
+                      )}
+                    </a>
+                    <button
+                      onClick={() => onRemove(w)}
+                      className="w-9 h-9 flex items-center justify-center text-textMute hover:text-red-400 shrink-0"
+                      aria-label="刪除"
+                      title="刪除"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+    </div>
   );
 }

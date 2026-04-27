@@ -17,15 +17,18 @@ type WorkFormProps = {
   };
 };
 
+/**
+ * "Work" in the DB schema, but Henry's mental model treats it as a
+ * "群組" (the same word he uses for poster_groups one level deeper).
+ * UI labels reflect that. The form intentionally captures only what's
+ * meaningful at the group level — name, kind, IP holder. Per-poster
+ * data (year, region, channel, etc.) lives on PosterForm.
+ */
 export default function WorkForm({ mode, initial }: WorkFormProps) {
   const router = useRouter();
   const [studio, setStudio] = useState(initial?.studio ?? "");
   const [titleZh, setTitleZh] = useState(initial?.title_zh ?? "");
-  const [titleEn, setTitleEn] = useState(initial?.title_en ?? "");
   const [workKind, setWorkKind] = useState(initial?.work_kind ?? "movie");
-  const [releaseYear, setReleaseYear] = useState(
-    initial?.movie_release_year?.toString() ?? ""
-  );
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -33,7 +36,7 @@ export default function WorkForm({ mode, initial }: WorkFormProps) {
     e.preventDefault();
     setError(null);
     if (!titleZh.trim()) {
-      setError("中文名必填");
+      setError("群組名稱必填");
       return;
     }
     setSubmitting(true);
@@ -42,9 +45,7 @@ export default function WorkForm({ mode, initial }: WorkFormProps) {
     const row = {
       studio: studio.trim() || null,
       title_zh: titleZh.trim(),
-      title_en: titleEn.trim() || null,
       work_kind: workKind,
-      movie_release_year: releaseYear.trim() ? parseInt(releaseYear, 10) : null,
     };
 
     const { error } =
@@ -75,25 +76,18 @@ export default function WorkForm({ mode, initial }: WorkFormProps) {
         <input
           value={studio}
           onChange={(e) => setStudio(e.target.value)}
-          placeholder="例：吉卜力 / Marvel / 新海誠 作品"
+          placeholder="例：漫威 / 吉卜力 / 新海誠 作品"
           className="w-full"
         />
       </Field>
 
-      <Field label="中文名 *" required>
+      <Field label="群組名稱 *" required>
         <input
           value={titleZh}
           onChange={(e) => setTitleZh(e.target.value)}
+          placeholder="例：復仇者系列 / 神隱少女"
           className="w-full"
           required
-        />
-      </Field>
-
-      <Field label="英文名">
-        <input
-          value={titleEn}
-          onChange={(e) => setTitleEn(e.target.value)}
-          className="w-full"
         />
       </Field>
 
@@ -111,16 +105,10 @@ export default function WorkForm({ mode, initial }: WorkFormProps) {
         </select>
       </Field>
 
-      <Field label="發行年份">
-        <input
-          type="number"
-          min={1900}
-          max={2100}
-          value={releaseYear}
-          onChange={(e) => setReleaseYear(e.target.value)}
-          className="w-full"
-        />
-      </Field>
+      <p className="text-[11px] text-textFaint">
+        年份、地區、通路等資訊請在每張海報單獨設定（每張海報可能對應不同
+        重映、版本、通路）。
+      </p>
 
       <div className="pt-4 flex gap-3">
         <button

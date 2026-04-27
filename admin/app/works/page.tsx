@@ -6,12 +6,14 @@ export const dynamic = "force-dynamic";
 
 export default async function WorksListPage() {
   const supabase = await createClient();
+  // Newest-first by created_at — WorksList groups by studio while
+  // preserving this order, so the studio whose newest work was created
+  // most recently appears as the first section.
   const { data: works } = await supabase
     .from("works")
     .select(
       "id, studio, title_zh, title_en, work_kind, movie_release_year, poster_count"
     )
-    // Newest-first so freshly-added works show at the top.
     .order("created_at", { ascending: false });
 
   return (

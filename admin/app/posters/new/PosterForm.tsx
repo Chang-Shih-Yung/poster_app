@@ -15,6 +15,7 @@ type PosterFormProps = {
     work_id: string | null;
     poster_name: string | null;
     region: string | null;
+    year: number | null;
     poster_release_type: string | null;
     size_type: string | null;
     channel_category: string | null;
@@ -41,6 +42,9 @@ export default function PosterForm({ mode, works, initial, defaultWorkId }: Post
     { id: string; label: string }[]
   >([]);
   const [posterName, setPosterName] = useState(initial?.poster_name ?? "");
+  const [year, setYear] = useState<string>(
+    initial?.year != null ? String(initial.year) : ""
+  );
   const [region, setRegion] = useState(initial?.region ?? "TW");
   const [releaseType, setReleaseType] = useState(initial?.poster_release_type ?? "");
   const [sizeType, setSizeType] = useState(initial?.size_type ?? "");
@@ -85,10 +89,19 @@ export default function PosterForm({ mode, works, initial, defaultWorkId }: Post
     setSubmitting(true);
     const supabase = createClient();
 
+    const yearTrimmed = year.trim();
+    const yearInt = yearTrimmed ? parseInt(yearTrimmed, 10) : null;
+    if (yearTrimmed && (Number.isNaN(yearInt!) || yearInt! < 1900 || yearInt! > 2100)) {
+      setError("年份格式錯誤（1900-2100 整數）");
+      setSubmitting(false);
+      return;
+    }
+
     const row: Record<string, unknown> = {
       work_id: workId,
       parent_group_id: parentGroupId || null,
       poster_name: posterName.trim() || null,
+      year: yearInt,
       region: region || "TW",
       poster_release_type: releaseType || null,
       size_type: sizeType || null,
@@ -190,6 +203,17 @@ export default function PosterForm({ mode, works, initial, defaultWorkId }: Post
       </Field>
 
       <div className="grid grid-cols-2 gap-3">
+        <Field label="發行年份">
+          <input
+            type="number"
+            min={1900}
+            max={2100}
+            value={year}
+            onChange={(e) => setYear(e.target.value)}
+            placeholder="例：2026"
+            className="w-full"
+          />
+        </Field>
         <Field label="地區">
           <select value={region} onChange={(e) => setRegion(e.target.value)} className="w-full">
             {REGIONS.map((r) => (
@@ -197,6 +221,9 @@ export default function PosterForm({ mode, works, initial, defaultWorkId }: Post
             ))}
           </select>
         </Field>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
         <Field label="發行類型">
           <select value={releaseType} onChange={(e) => setReleaseType(e.target.value)} className="w-full">
             <option value="">—</option>
@@ -205,9 +232,6 @@ export default function PosterForm({ mode, works, initial, defaultWorkId }: Post
             ))}
           </select>
         </Field>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3">
         <Field label="尺寸">
           <select value={sizeType} onChange={(e) => setSizeType(e.target.value)} className="w-full">
             <option value="">—</option>
@@ -216,6 +240,9 @@ export default function PosterForm({ mode, works, initial, defaultWorkId }: Post
             ))}
           </select>
         </Field>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
         <Field label="通路類型">
           <select value={channelCat} onChange={(e) => setChannelCat(e.target.value)} className="w-full">
             <option value="">—</option>
@@ -224,16 +251,15 @@ export default function PosterForm({ mode, works, initial, defaultWorkId }: Post
             ))}
           </select>
         </Field>
+        <Field label="通路名稱">
+          <input
+            value={channelName}
+            onChange={(e) => setChannelName(e.target.value)}
+            placeholder="例：威秀影城、東寶"
+            className="w-full"
+          />
+        </Field>
       </div>
-
-      <Field label="通路名稱">
-        <input
-          value={channelName}
-          onChange={(e) => setChannelName(e.target.value)}
-          placeholder="例：威秀影城、東寶"
-          className="w-full"
-        />
-      </Field>
 
       <label className="flex items-center gap-2 text-sm">
         <input
