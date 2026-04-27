@@ -49,6 +49,9 @@ type GroupNode = {
   group_type: string | null;
   work_id: string;
   parent_group_id: string | null;
+  /** Number of immediate children (sub-groups + leaf posters) — pre-fetched
+   * so collapsed groups can still show their count without expanding. */
+  child_count?: number;
 };
 
 type PosterLeaf = {
@@ -255,6 +258,38 @@ export default function TreeBrowser({ studios: initialStudios }: { studios: Stud
 
   /* ──────────────────────────── work level ───────────────────────────── */
 
+  // Decorate each group with its immediate-child count (sub-groups + leaf
+  // posters) so the UI can show "(N)" even before the group is expanded.
+  // Two extra small queries per load — cheap because each tree level
+  // typically has < 50 groups.
+  const decorateGroupCounts = useCallback(
+    async (groups: GroupNode[]): Promise<GroupNode[]> => {
+      if (groups.length === 0) return groups;
+      const ids = groups.map((g) => g.id);
+      const [subGroupsRes, postersRes] = await Promise.all([
+        supabase
+          .from("poster_groups")
+          .select("parent_group_id")
+          .in("parent_group_id", ids),
+        supabase
+          .from("posters")
+          .select("parent_group_id")
+          .in("parent_group_id", ids),
+      ]);
+      const counts = new Map<string, number>();
+      for (const r of subGroupsRes.data ?? []) {
+        const k = r.parent_group_id as string;
+        counts.set(k, (counts.get(k) ?? 0) + 1);
+      }
+      for (const r of postersRes.data ?? []) {
+        const k = r.parent_group_id as string;
+        counts.set(k, (counts.get(k) ?? 0) + 1);
+      }
+      return groups.map((g) => ({ ...g, child_count: counts.get(g.id) ?? 0 }));
+    },
+    [supabase]
+  );
+
   const loadWorkChildren = useCallback(
     async (workId: string) => {
       const [groupsRes, postersRes] = await Promise.all([
@@ -272,15 +307,18 @@ export default function TreeBrowser({ studios: initialStudios }: { studios: Stud
           .is("parent_group_id", null)
           .order("created_at", { ascending: false }),
       ]);
+      const decoratedGroups = await decorateGroupCounts(
+        (groupsRes.data ?? []) as GroupNode[]
+      );
       setChildrenByWork((c) => ({
         ...c,
         [workId]: {
-          groups: (groupsRes.data ?? []) as GroupNode[],
+          groups: decoratedGroups,
           posters: (postersRes.data ?? []) as PosterLeaf[],
         },
       }));
     },
-    [supabase]
+    [supabase, decorateGroupCounts]
   );
 
   const toggleWork = useCallback(
@@ -410,15 +448,18 @@ export default function TreeBrowser({ studios: initialStudios }: { studios: Stud
           .eq("parent_group_id", groupId)
           .order("created_at", { ascending: false }),
       ]);
+      const decoratedGroups = await decorateGroupCounts(
+        (groupsRes.data ?? []) as GroupNode[]
+      );
       setChildrenByGroup((c) => ({
         ...c,
         [groupId]: {
-          groups: (groupsRes.data ?? []) as GroupNode[],
+          groups: decoratedGroups,
           posters: (postersRes.data ?? []) as PosterLeaf[],
         },
       }));
     },
-    [supabase]
+    [supabase, decorateGroupCounts]
   );
 
   const toggleGroup = useCallback(
@@ -538,6 +579,31 @@ export default function TreeBrowser({ studios: initialStudios }: { studios: Stud
           return out;
         });
       }
+      // Optimistic child_count bump on the parent group, so the
+      // collapsed "(N)" updates without waiting for re-fetch.
+      if (opts.groupId) {
+        const bump = (gs: GroupNode[]) =>
+          gs.map((g) =>
+            g.id === opts.groupId
+              ? { ...g, child_count: (g.child_count ?? 0) + 1 }
+              : g
+          );
+        setChildrenByWork((c) => {
+          const out = { ...c };
+          for (const k of Object.keys(out)) {
+            out[k] = { ...out[k], groups: bump(out[k].groups) };
+          }
+          return out;
+        });
+        setChildrenByGroup((c) => {
+          const out = { ...c };
+          for (const k of Object.keys(out)) {
+            out[k] = { ...out[k], groups: bump(out[k].groups) };
+          }
+          return out;
+        });
+      }
+
       setAdding(null);
       router.refresh();
       if (opts.groupId) await loadGroupChildren(opts.groupId);
@@ -1012,10 +1078,14 @@ function GroupNodeRow(props: {
           onClick={() => props.onToggleGroup(g.id)}
           chevron={props.open ? "down" : "right"}
           title={g.name}
+          // Prefer the eagerly-fetched child_count from decorateGroupCounts
+          // (visible while collapsed). Fall back to live counts if the
+          // group is open and we have its children loaded.
           count={
-            props.children
+            g.child_count ??
+            (props.children
               ? props.children.groups.length + props.children.posters.length
-              : undefined
+              : undefined)
           }
           subtitle={g.group_type ?? undefined}
           onRenameInline={() => props.onSetEditing(editKey)}

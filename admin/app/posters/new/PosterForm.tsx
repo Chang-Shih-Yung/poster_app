@@ -38,7 +38,7 @@ export default function PosterForm({ mode, works, initial, defaultWorkId }: Post
     initial?.parent_group_id ?? ""
   );
   const [groupOptions, setGroupOptions] = useState<
-    { id: string; name: string; depth: number }[]
+    { id: string; label: string }[]
   >([]);
   const [posterName, setPosterName] = useState(initial?.poster_name ?? "");
   const [region, setRegion] = useState(initial?.region ?? "TW");
@@ -169,9 +169,7 @@ export default function PosterForm({ mode, works, initial, defaultWorkId }: Post
           <option value="">── 不屬於任何群組 ──</option>
           {groupOptions.map((g) => (
             <option key={g.id} value={g.id}>
-              {"  ".repeat(g.depth)}
-              {g.depth > 0 ? "└ " : ""}
-              {g.name}
+              {g.label}
             </option>
           ))}
         </select>
@@ -330,8 +328,12 @@ function Field({ label, required, children }: { label: string; required?: boolea
 }
 
 /**
- * Flatten a list of poster_groups (with parent_group_id) into a depth-
- * annotated array suitable for rendering an indented dropdown.
+ * Flatten a list of poster_groups (with parent_group_id) into a list of
+ * { id, label } where label is the FULL PATH from root, e.g.
+ * "美麗華 / 2025 / 測試子子群組". Native HTML <select> options can't
+ * render true visual indent (browsers strip leading whitespace), so we
+ * encode the hierarchy in the label itself — unambiguous and readable
+ * regardless of the dropdown's positioning.
  */
 type GroupRow = {
   id: string;
@@ -340,25 +342,26 @@ type GroupRow = {
   display_order: number;
 };
 
-function flattenTree(rows: GroupRow[]): { id: string; name: string; depth: number }[] {
+function flattenTree(rows: GroupRow[]): { id: string; label: string }[] {
   const childrenMap = new Map<string | null, GroupRow[]>();
   for (const r of rows) {
     const arr = childrenMap.get(r.parent_group_id) ?? [];
     arr.push(r);
     childrenMap.set(r.parent_group_id, arr);
   }
-  const out: { id: string; name: string; depth: number }[] = [];
-  function walk(parent: string | null, depth: number) {
+  const out: { id: string; label: string }[] = [];
+  function walk(parent: string | null, prefix: string[]) {
     const kids = (childrenMap.get(parent) ?? []).sort((a, b) =>
       a.display_order !== b.display_order
         ? a.display_order - b.display_order
         : a.name.localeCompare(b.name)
     );
     for (const k of kids) {
-      out.push({ id: k.id, name: k.name, depth });
-      walk(k.id, depth + 1);
+      const path = [...prefix, k.name];
+      out.push({ id: k.id, label: path.join(" / ") });
+      walk(k.id, path);
     }
   }
-  walk(null, 0);
+  walk(null, []);
   return out;
 }
