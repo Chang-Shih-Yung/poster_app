@@ -708,6 +708,18 @@ export default function TreeBrowser({ studios: initialStudios }: { studios: Stud
               )}
               {open && works && (
                 <ul>
+                  {adding === addKey && (
+                    <li>
+                      <InlineRowEdit
+                        depth={1}
+                        placeholder="作品名稱（中文）"
+                        onSubmit={(val) => addWorkToStudio(s.studio, val)}
+                        onCancel={() => setAdding(null)}
+                        busy={busy}
+                        bgClass="bg-surfaceRaised"
+                      />
+                    </li>
+                  )}
                   {works.map((w, wIdx) => (
                     <WorkRow
                       key={w.id}
@@ -734,18 +746,6 @@ export default function TreeBrowser({ studios: initialStudios }: { studios: Stud
                       busy={busy}
                     />
                   ))}
-                  {adding === addKey && (
-                    <li>
-                      <InlineRowEdit
-                        depth={1}
-                        placeholder="作品名稱（中文）"
-                        onSubmit={(val) => addWorkToStudio(s.studio, val)}
-                        onCancel={() => setAdding(null)}
-                        busy={busy}
-                        bgClass="bg-surfaceRaised"
-                      />
-                    </li>
-                  )}
                 </ul>
               )}
             </li>
@@ -832,20 +832,37 @@ function WorkRow(props: {
               }
             />
           }
-          rightAfterActions={
-            <Link
-              href={`/works/${w.id}`}
-              onClick={(e) => e.stopPropagation()}
-              className="text-xs text-accent px-2 py-1.5"
-            >
-              詳細
-            </Link>
-          }
         />
       )}
 
       {props.open && props.children && (
         <ul>
+          {props.adding === addGroupKey && (
+            <li>
+              <InlineRowEdit
+                depth={2}
+                placeholder="群組名稱（例：2001 日本首映）"
+                onSubmit={(val) => props.onAddGroupToWork(w.id, val)}
+                onCancel={() => props.onSetAdding(null)}
+                busy={props.busy}
+                bgClass="bg-surfaceRaised"
+              />
+            </li>
+          )}
+          {props.adding === addPosterKey && (
+            <li>
+              <InlineRowEdit
+                depth={2}
+                placeholder="海報名稱（例：B1 原版）"
+                onSubmit={(val) =>
+                  props.onAddChildToGroup({ workId: w.id, childKind: "poster" }, val)
+                }
+                onCancel={() => props.onSetAdding(null)}
+                busy={props.busy}
+                bgClass="bg-surfaceRaised"
+              />
+            </li>
+          )}
           {props.children.groups.map((g, gIdx) => (
             <GroupNodeRow
               key={g.id}
@@ -882,32 +899,6 @@ function WorkRow(props: {
               busy={props.busy}
             />
           ))}
-          {props.adding === addGroupKey && (
-            <li>
-              <InlineRowEdit
-                depth={2}
-                placeholder="群組名稱（例：2001 日本首映）"
-                onSubmit={(val) => props.onAddGroupToWork(w.id, val)}
-                onCancel={() => props.onSetAdding(null)}
-                busy={props.busy}
-                bgClass="bg-surfaceRaised"
-              />
-            </li>
-          )}
-          {props.adding === addPosterKey && (
-            <li>
-              <InlineRowEdit
-                depth={2}
-                placeholder="海報名稱（例：B1 原版）"
-                onSubmit={(val) =>
-                  props.onAddChildToGroup({ workId: w.id, childKind: "poster" }, val)
-                }
-                onCancel={() => props.onSetAdding(null)}
-                busy={props.busy}
-                bgClass="bg-surfaceRaised"
-              />
-            </li>
-          )}
           {props.children.groups.length === 0 && props.children.posters.length === 0 && props.adding !== addGroupKey && props.adding !== addPosterKey && (
             <li className="pl-12 pr-4 py-3 text-xs text-textFaint">
               此作品還沒有群組或海報
@@ -972,6 +963,7 @@ function GroupNodeRow(props: {
             <RowActions
               onAddChild={() => {
                 props.onSetAdding(addGroupKey);
+                if (!props.open) props.onToggleGroup(g.id);
               }}
               onDelete={() => props.onDeleteGroup(g)}
               addLabel="子群組"
@@ -981,6 +973,7 @@ function GroupNodeRow(props: {
                   onClick={(e) => {
                     e.stopPropagation();
                     props.onSetAdding(addPosterKey);
+                    if (!props.open) props.onToggleGroup(g.id);
                   }}
                   title="新增海報"
                 >
@@ -994,6 +987,34 @@ function GroupNodeRow(props: {
 
       {props.open && props.children && (
         <ul>
+          {props.adding === addGroupKey && (
+            <li>
+              <InlineRowEdit
+                depth={props.depth + 1}
+                placeholder="子群組名稱"
+                onSubmit={(val) =>
+                  props.onAddChildToGroup({ groupId: g.id, workId: g.work_id, childKind: "group" }, val)
+                }
+                onCancel={() => props.onSetAdding(null)}
+                busy={props.busy}
+                bgClass="bg-surfaceRaised"
+              />
+            </li>
+          )}
+          {props.adding === addPosterKey && (
+            <li>
+              <InlineRowEdit
+                depth={props.depth + 1}
+                placeholder="海報名稱"
+                onSubmit={(val) =>
+                  props.onAddChildToGroup({ groupId: g.id, workId: g.work_id, childKind: "poster" }, val)
+                }
+                onCancel={() => props.onSetAdding(null)}
+                busy={props.busy}
+                bgClass="bg-surfaceRaised"
+              />
+            </li>
+          )}
           {props.children.groups.map((sub, sIdx) => (
             <GroupNodeRow
               key={sub.id}
@@ -1030,34 +1051,6 @@ function GroupNodeRow(props: {
               busy={props.busy}
             />
           ))}
-          {props.adding === addGroupKey && (
-            <li>
-              <InlineRowEdit
-                depth={props.depth + 1}
-                placeholder="子群組名稱"
-                onSubmit={(val) =>
-                  props.onAddChildToGroup({ groupId: g.id, workId: g.work_id, childKind: "group" }, val)
-                }
-                onCancel={() => props.onSetAdding(null)}
-                busy={props.busy}
-                bgClass="bg-surfaceRaised"
-              />
-            </li>
-          )}
-          {props.adding === addPosterKey && (
-            <li>
-              <InlineRowEdit
-                depth={props.depth + 1}
-                placeholder="海報名稱"
-                onSubmit={(val) =>
-                  props.onAddChildToGroup({ groupId: g.id, workId: g.work_id, childKind: "poster" }, val)
-                }
-                onCancel={() => props.onSetAdding(null)}
-                busy={props.busy}
-                bgClass="bg-surfaceRaised"
-              />
-            </li>
-          )}
         </ul>
       )}
     </li>
@@ -1244,9 +1237,9 @@ function TreeRow({
       )}
 
       <span className="flex-1 min-w-0">
-        <span className="flex items-center gap-1.5">
+        <span className="flex items-baseline gap-1">
           {index != null && (
-            <span className="text-xs text-textFaint tabular-nums shrink-0 w-5 text-right">
+            <span className="text-xs text-textFaint tabular-nums shrink-0">
               {index}.
             </span>
           )}
@@ -1346,7 +1339,7 @@ function IconButton({
   return (
     <button
       onClick={onClick}
-      className={`min-w-[36px] min-h-[36px] flex items-center justify-center text-textMute ${hoverClass}`}
+      className={`w-9 h-9 flex items-center justify-center text-textMute ${hoverClass}`}
       title={title}
       aria-label={title}
     >
@@ -1375,8 +1368,19 @@ function InlineRowEdit({
   bgClass?: string;
 }) {
   const padding = depth * 16 + 28;
+  const ref = useRef<HTMLDivElement | null>(null);
+  // Whenever this form mounts (i.e. whenever the user just clicked +
+  // somewhere) scroll it into the viewport. Block: "center" keeps it
+  // visible regardless of where in the page the row sits.
+  useEffect(() => {
+    ref.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, []);
   return (
-    <div className={`py-2 pr-3 ${bgClass ?? "bg-surfaceRaised"}`} style={{ paddingLeft: `${padding}px` }}>
+    <div
+      ref={ref}
+      className={`py-2 pr-3 ${bgClass ?? "bg-surfaceRaised"}`}
+      style={{ paddingLeft: `${padding}px` }}
+    >
       <InlineInput
         initialValue={initialValue}
         placeholder={placeholder}
