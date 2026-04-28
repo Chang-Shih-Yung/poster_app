@@ -95,7 +95,13 @@ export function ItemActionsBundle<T>({
           if (!v) closeAll();
         }}
       >
-        <SheetContent side="bottom">
+        <SheetContent
+          side="bottom"
+          // Radix Dialog requires a Description child or an explicit
+          // opt-out — bundles without a description (e.g. delete-only
+          // single-action rows) pass undefined to silence the warning.
+          {...(description ? {} : { "aria-describedby": undefined })}
+        >
           <SheetHeader>
             <SheetTitle className="truncate">{title}</SheetTitle>
             {description && <SheetDescription>{description}</SheetDescription>}

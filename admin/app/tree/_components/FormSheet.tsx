@@ -107,7 +107,14 @@ export function FormSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto">
+      <SheetContent
+        side="bottom"
+        className="max-h-[85vh] overflow-y-auto"
+        // Radix Dialog warns when neither a Description child nor an
+        // explicit aria-describedby is set. Forms without a description
+        // (e.g. simple rename) opt out by passing undefined explicitly.
+        {...(description ? {} : { "aria-describedby": undefined })}
+      >
         <SheetHeader>
           <SheetTitle>{title}</SheetTitle>
           {description && <SheetDescription>{description}</SheetDescription>}
