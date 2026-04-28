@@ -7,7 +7,7 @@ import TreeRow from "./_components/TreeRow";
 import FAB from "./_components/FAB";
 import { FormSheet } from "./_components/FormSheet";
 import { ItemActionsBundle, type ItemAction } from "./_components/ItemActionsBundle";
-import { NULL_STUDIO_KEY, encodeStudioParam } from "./_components/keys";
+import { NULL_STUDIO_KEY, encodeStudioParam } from "@/lib/keys";
 import { WORK_KINDS } from "@/lib/enums";
 import { useTransitionAction } from "@/lib/clientActions";
 import {

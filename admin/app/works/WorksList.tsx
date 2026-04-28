@@ -3,7 +3,7 @@
 import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import { Pencil, Trash2, Plus, Loader2, AlertTriangle, X } from "lucide-react";
-import { NULL_STUDIO_KEY } from "@/app/tree/_components/keys";
+import { NULL_STUDIO_KEY } from "@/lib/keys";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

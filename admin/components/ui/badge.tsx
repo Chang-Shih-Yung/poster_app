@@ -16,6 +16,11 @@ const badgeVariants = cva(
         outline: "text-foreground",
         muted:
           "border-transparent bg-muted text-muted-foreground",
+        // Amber outline used for "needs real image" placeholder posters.
+        // Single source for the colour so every list / detail / row
+        // renders the same hue.
+        placeholder:
+          "text-amber-500 border-amber-500/40 dark:text-amber-400",
       },
     },
     defaultVariants: {

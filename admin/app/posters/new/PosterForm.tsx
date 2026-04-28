@@ -14,6 +14,7 @@ import {
   WORK_KINDS,
 } from "@/lib/enums";
 import { flattenGroupTree } from "@/lib/groupTree";
+import { DEFAULT_REGION } from "@/lib/keys";
 import { createPoster, updatePosterMetadata } from "@/app/actions/posters";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -116,7 +117,7 @@ export default function PosterForm({
       parent_group_id: initial?.parent_group_id ?? NONE,
       poster_name: initial?.poster_name ?? "",
       year: initial?.year != null ? String(initial.year) : "",
-      region: initial?.region ?? "TW",
+      region: initial?.region ?? DEFAULT_REGION,
       poster_release_type: initial?.poster_release_type ?? NONE,
       size_type: initial?.size_type ?? NONE,
       channel_category: initial?.channel_category ?? NONE,
@@ -161,7 +162,7 @@ export default function PosterForm({
     const payload = {
       poster_name: values.poster_name.trim(),
       year: yearInt,
-      region: values.region || "TW",
+      region: values.region || DEFAULT_REGION,
       poster_release_type: fromSentinel(values.poster_release_type),
       size_type: fromSentinel(values.size_type),
       channel_category: fromSentinel(values.channel_category),

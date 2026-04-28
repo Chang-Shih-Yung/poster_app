@@ -4,6 +4,7 @@ import PageShell from "@/components/PageShell";
 import { createClient } from "@/lib/supabase/server";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { UNNAMED_POSTER } from "@/lib/keys";
 
 export const dynamic = "force-dynamic";
 
@@ -48,17 +49,14 @@ export default async function UploadQueuePage() {
                     >
                       <div className="min-w-0 flex-1">
                         <div className="text-sm text-foreground truncate">
-                          {p.poster_name ?? "(未命名)"}
+                          {p.poster_name ?? UNNAMED_POSTER}
                         </div>
                         <div className="text-xs text-muted-foreground truncate mt-0.5">
                           {work?.studio ? `${work.studio} · ` : ""}
                           {work?.title_zh ?? "?"} · {p.region ?? "—"}
                         </div>
                       </div>
-                      <Badge
-                        variant="outline"
-                        className="mr-2 text-amber-500 border-amber-500/40 dark:text-amber-400"
-                      >
+                      <Badge variant="placeholder" className="mr-2">
                         待補
                       </Badge>
                       <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0 group-hover:text-foreground transition-colors" />

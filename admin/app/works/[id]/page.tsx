@@ -7,6 +7,7 @@ import { notFound } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { UNNAMED_POSTER } from "@/lib/keys";
 
 export const dynamic = "force-dynamic";
 
@@ -136,7 +137,7 @@ export default async function EditWorkPage({
                             >
                               <div className="min-w-0 flex-1">
                                 <div className="text-sm text-foreground truncate">
-                                  {p.poster_name ?? "(未命名)"}
+                                  {p.poster_name ?? UNNAMED_POSTER}
                                 </div>
                                 <div className="text-xs text-muted-foreground truncate mt-0.5">
                                   {p.region ?? "—"}
@@ -144,10 +145,7 @@ export default async function EditWorkPage({
                                 </div>
                               </div>
                               {p.is_placeholder && (
-                                <Badge
-                                  variant="outline"
-                                  className="mr-2 text-amber-500 border-amber-500/40 dark:text-amber-400"
-                                >
+                                <Badge variant="placeholder" className="mr-2">
                                   占位
                                 </Badge>
                               )}

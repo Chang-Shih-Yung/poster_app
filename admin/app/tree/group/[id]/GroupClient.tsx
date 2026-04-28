@@ -19,8 +19,9 @@ import {
   ItemActionsBundle,
   type ItemAction,
 } from "../../_components/ItemActionsBundle";
-import { uploadPosterImage } from "@/lib/imageUpload";
-import { describeError } from "@/lib/errors";
+import { useAddSheets } from "../../_components/useAddSheets";
+import { useImageAttach } from "../../_components/useImageAttach";
+import { UNNAMED_POSTER } from "@/lib/keys";
 import { useTransitionAction } from "@/lib/clientActions";
 import {
   createGroup,
@@ -31,7 +32,6 @@ import {
   createPoster,
   renamePoster,
   deletePoster,
-  attachImage,
 } from "@/app/actions/posters";
 
 type GroupInfo = {
@@ -103,17 +103,12 @@ export default function GroupClient({
   const [activeGroup, setActiveGroup] = React.useState<Group | null>(null);
   const [activePoster, setActivePoster] = React.useState<Poster | null>(null);
   const [selfActive, setSelfActive] = React.useState(false);
-  const [addPickerOpen, setAddPickerOpen] = React.useState(false);
-  const [addGroupOpen, setAddGroupOpen] = React.useState(false);
-  const [addPosterOpen, setAddPosterOpen] = React.useState(false);
-  const { runFormAction, runAction } = useTransitionAction();
+  const addSheets = useAddSheets<"group" | "poster">();
+  const image = useImageAttach();
+  const { runFormAction } = useTransitionAction();
 
-  const fileInputRef = React.useRef<HTMLInputElement | null>(null);
-  const uploadTargetRef = React.useRef<Poster | null>(null);
-
-  // "Edit this group" actions — reuse the child-group action descriptors
-  // but with a custom delete that navigates back after success (the
-  // current URL would 404 once the group is gone).
+  // Self-actions for "編輯此群組". The delete variant navigates back
+  // because the current URL would 404 once the group is gone.
   const selfActions: ItemAction<GroupInfo>[] = [
     {
       kind: "form",
@@ -160,7 +155,7 @@ export default function GroupClient({
           key: "name",
           kind: "text",
           label: "海報名稱",
-          placeholder: "例：B1 原版",
+          placeholder: "例:B1 原版",
           required: true,
           initialValue: p.poster_name ?? "",
         },
@@ -173,8 +168,7 @@ export default function GroupClient({
       label: "上傳 / 更換圖片",
       hint: "選一張新圖，覆蓋既有海報",
       run: async (p) => {
-        uploadTargetRef.current = p;
-        fileInputRef.current?.click();
+        image.pickFor(p);
         return { ok: true, data: undefined };
       },
     },
@@ -183,35 +177,11 @@ export default function GroupClient({
       icon: <Trash2 className="w-4 h-4" />,
       label: "刪除海報",
       destructive: true,
-      confirm: (p) => `刪除海報「${p.poster_name ?? "(未命名)"}」？此操作不可復原。`,
+      confirm: (p) =>
+        `刪除海報「${p.poster_name ?? UNNAMED_POSTER}」？此操作不可復原。`,
       run: (p) => deletePoster(p.id),
     },
   ];
-
-  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    const target = uploadTargetRef.current;
-    if (!file || !target) return;
-    try {
-      const result = await uploadPosterImage(file, target.id);
-      const r = await attachImage(target.id, {
-        poster_url: result.posterUrl,
-        thumbnail_url: result.thumbnailUrl,
-        blurhash: result.blurhash,
-        image_size_bytes: result.imageSizeBytes,
-      });
-      if (!r.ok) throw new Error(r.error);
-    } catch (err) {
-      alert(describeError(err));
-    } finally {
-      if (fileInputRef.current) fileInputRef.current.value = "";
-      uploadTargetRef.current = null;
-    }
-  }
-
-  // Suppress unused warning; runAction is part of useTransitionAction's
-  // contract — kept for future use cases.
-  void runAction;
 
   const items = [
     ...groups.map((g) => ({ kind: "group" as const, data: g })),
@@ -224,7 +194,7 @@ export default function GroupClient({
       back={back}
       title={group.name}
       subtitle={`${groups.length} 個子群組 · ${posters.length} 張直屬海報`}
-      fab={<FAB onClick={() => setAddPickerOpen(true)} label="新增" />}
+      fab={<FAB onClick={addSheets.openPicker} label="新增" />}
     >
       <div className="flex justify-end mb-2">
         <button
@@ -236,11 +206,11 @@ export default function GroupClient({
       </div>
 
       <input
-        ref={fileInputRef}
+        ref={image.fileInputRef}
         type="file"
         accept="image/*"
         className="hidden"
-        onChange={handleFile}
+        onChange={image.handleFile}
       />
       {items.length === 0 ? (
         <div className="text-center text-muted-foreground py-12 text-sm">
@@ -266,7 +236,7 @@ export default function GroupClient({
                 kind="poster"
                 href={`/posters/${it.data.id}`}
                 thumbnailUrl={it.data.thumbnail_url}
-                title={it.data.poster_name ?? "(未命名)"}
+                title={it.data.poster_name ?? UNNAMED_POSTER}
                 placeholder={it.data.is_placeholder}
                 onMore={() => setActivePoster(it.data)}
               />
@@ -296,14 +266,14 @@ export default function GroupClient({
       <ItemActionsBundle<Poster>
         item={activePoster}
         onClose={() => setActivePoster(null)}
-        title={activePoster?.poster_name ?? "(未命名)"}
+        title={activePoster?.poster_name ?? UNNAMED_POSTER}
         description={
           activePoster?.is_placeholder ? "尚未上傳真實圖片" : "海報"
         }
         actions={posterActions}
       />
 
-      <Sheet open={addPickerOpen} onOpenChange={setAddPickerOpen}>
+      <Sheet open={addSheets.pickerOpen} onOpenChange={addSheets.setPickerOpen}>
         <SheetContent side="bottom">
           <SheetHeader>
             <SheetTitle>新增到「{group.name}」</SheetTitle>
@@ -316,19 +286,13 @@ export default function GroupClient({
                   icon: <FolderPlus className="w-4 h-4" />,
                   label: "新增子群組（資料夾）",
                   hint: "可以再往下分層",
-                  onClick: () => {
-                    setAddPickerOpen(false);
-                    setAddGroupOpen(true);
-                  },
+                  onClick: () => addSheets.openForm("group"),
                 },
                 {
                   icon: <FilePlus2 className="w-4 h-4" />,
                   label: "新增海報",
                   hint: "直接放在這個群組裡",
-                  onClick: () => {
-                    setAddPickerOpen(false);
-                    setAddPosterOpen(true);
-                  },
+                  onClick: () => addSheets.openForm("poster"),
                 },
               ]}
             />
@@ -337,8 +301,8 @@ export default function GroupClient({
       </Sheet>
 
       <FormSheet
-        open={addGroupOpen}
-        onOpenChange={setAddGroupOpen}
+        open={addSheets.formKind === "group"}
+        onOpenChange={addSheets.setFormOpen("group")}
         title="新增子群組"
         description={`會建在「${group.name}」底下。`}
         fields={[
@@ -359,14 +323,14 @@ export default function GroupClient({
                 parent_group_id: group.id,
                 name: values.name,
               }),
-            () => setAddGroupOpen(false)
+            addSheets.close
           )
         }
       />
 
       <FormSheet
-        open={addPosterOpen}
-        onOpenChange={setAddPosterOpen}
+        open={addSheets.formKind === "poster"}
+        onOpenChange={addSheets.setFormOpen("poster")}
         title="新增海報"
         description={`會放在「${group.name}」群組裡。`}
         fields={[
@@ -387,7 +351,7 @@ export default function GroupClient({
                 parent_group_id: group.id,
                 poster_name: values.name,
               }),
-            () => setAddPosterOpen(false)
+            addSheets.close
           )
         }
       />

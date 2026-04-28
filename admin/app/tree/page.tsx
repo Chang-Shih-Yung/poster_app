@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import StudiosClient from "./StudiosClient";
-import { NULL_STUDIO_KEY } from "./_components/keys";
+import { NULL_STUDIO_KEY } from "@/lib/keys";
 import Nav from "@/components/Nav";
 
 export const dynamic = "force-dynamic";

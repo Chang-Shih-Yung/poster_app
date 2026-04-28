@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requireAdmin, ok, fail, logAudit, type ActionResult } from "./_internal";
-import { NULL_STUDIO_KEY } from "@/app/tree/_components/keys";
+import { NULL_STUDIO_KEY } from "@/lib/keys";
 
 const WORKS_PAGE_SIZE = 50;
 

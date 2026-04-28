@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Pencil, Trash2, ImagePlus, Loader2, AlertTriangle, X } from "lucide-react";
 import { uploadPosterImage } from "@/lib/imageUpload";
 import { describeError } from "@/lib/errors";
+import { UNNAMED_POSTER } from "@/lib/keys";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -55,7 +56,7 @@ export default function PostersList({
   }
 
   function remove(p: Poster) {
-    if (!confirm(`刪除海報「${p.poster_name ?? "(未命名)"}」？此操作不可復原。`))
+    if (!confirm(`刪除海報「${p.poster_name ?? UNNAMED_POSTER}」？此操作不可復原。`))
       return;
     startTransition(async () => {
       const r = await deletePoster(p.id);
@@ -246,16 +247,9 @@ function PosterRow({
         >
           <span className="flex items-center gap-2">
             <span className="text-sm text-foreground truncate">
-              {p.poster_name ?? "(未命名)"}
+              {p.poster_name ?? UNNAMED_POSTER}
             </span>
-            {p.is_placeholder && (
-              <Badge
-                variant="outline"
-                className="text-amber-500 border-amber-500/40 dark:text-amber-400"
-              >
-                待補圖
-              </Badge>
-            )}
+            {p.is_placeholder && <Badge variant="placeholder">待補圖</Badge>}
           </span>
           <span className="block text-xs text-muted-foreground truncate mt-0.5">
             {[p.works?.studio, p.works?.title_zh, p.region]

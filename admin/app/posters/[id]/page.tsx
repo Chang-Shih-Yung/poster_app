@@ -3,6 +3,7 @@ import PosterForm from "../new/PosterForm";
 import PosterImageUploader from "@/components/PosterImageUploader";
 import { createClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
+import { UNNAMED_POSTER } from "@/lib/keys";
 
 export const dynamic = "force-dynamic";
 
@@ -28,11 +29,11 @@ export default async function EditPosterPage({
   if (!poster) notFound();
 
   return (
-    <PageShell title={poster.poster_name ?? "(未命名)"} back>
+    <PageShell title={poster.poster_name ?? UNNAMED_POSTER} back>
       <div className="px-4 md:px-0 pt-4 md:pt-0 space-y-6">
         <section>
           <h1 className="hidden md:block text-2xl font-semibold tracking-tight mb-4">
-            編輯海報：{poster.poster_name ?? "(未命名)"}
+            編輯海報：{poster.poster_name ?? UNNAMED_POSTER}
           </h1>
           <h2 className="text-xs uppercase tracking-wider text-muted-foreground mb-3">
             真實圖片

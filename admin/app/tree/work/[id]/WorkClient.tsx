@@ -18,9 +18,9 @@ import {
   ItemActionsBundle,
   type ItemAction,
 } from "../../_components/ItemActionsBundle";
-import { encodeStudioParam, NULL_STUDIO_KEY } from "../../_components/keys";
-import { uploadPosterImage } from "@/lib/imageUpload";
-import { describeError } from "@/lib/errors";
+import { useAddSheets } from "../../_components/useAddSheets";
+import { useImageAttach } from "../../_components/useImageAttach";
+import { encodeStudioParam, NULL_STUDIO_KEY, UNNAMED_POSTER } from "@/lib/keys";
 import { useTransitionAction } from "@/lib/clientActions";
 import {
   createGroup,
@@ -31,7 +31,6 @@ import {
   createPoster,
   renamePoster,
   deletePoster,
-  attachImage,
 } from "@/app/actions/posters";
 
 type WorkInfo = {
@@ -98,14 +97,12 @@ export default function WorkClient({
 }) {
   const [activeGroup, setActiveGroup] = React.useState<Group | null>(null);
   const [activePoster, setActivePoster] = React.useState<Poster | null>(null);
-  const [addPickerOpen, setAddPickerOpen] = React.useState(false);
-  const [addGroupOpen, setAddGroupOpen] = React.useState(false);
-  const [addPosterOpen, setAddPosterOpen] = React.useState(false);
+  const addSheets = useAddSheets<"group" | "poster">();
+  const image = useImageAttach();
   const { runFormAction } = useTransitionAction();
 
-  const fileInputRef = React.useRef<HTMLInputElement | null>(null);
-  const uploadTargetRef = React.useRef<Poster | null>(null);
-
+  // Poster actions reference `image.pickFor` so they have to live
+  // inside the component body, not module scope.
   const posterActions: ItemAction<Poster>[] = [
     {
       kind: "form",
@@ -131,11 +128,7 @@ export default function WorkClient({
       label: "上傳 / 更換圖片",
       hint: "選一張新圖，覆蓋既有海報",
       run: async (p) => {
-        // Trigger file picker; the actual upload + attachImage runs
-        // in handleFile below. The action returns ok immediately —
-        // the upload progress is its own UI.
-        uploadTargetRef.current = p;
-        fileInputRef.current?.click();
+        image.pickFor(p);
         return { ok: true, data: undefined };
       },
     },
@@ -144,31 +137,11 @@ export default function WorkClient({
       icon: <Trash2 className="w-4 h-4" />,
       label: "刪除海報",
       destructive: true,
-      confirm: (p) => `刪除海報「${p.poster_name ?? "(未命名)"}」？此操作不可復原。`,
+      confirm: (p) =>
+        `刪除海報「${p.poster_name ?? UNNAMED_POSTER}」？此操作不可復原。`,
       run: (p) => deletePoster(p.id),
     },
   ];
-
-  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    const target = uploadTargetRef.current;
-    if (!file || !target) return;
-    try {
-      const result = await uploadPosterImage(file, target.id);
-      const r = await attachImage(target.id, {
-        poster_url: result.posterUrl,
-        thumbnail_url: result.thumbnailUrl,
-        blurhash: result.blurhash,
-        image_size_bytes: result.imageSizeBytes,
-      });
-      if (!r.ok) throw new Error(r.error);
-    } catch (err) {
-      alert(describeError(err));
-    } finally {
-      if (fileInputRef.current) fileInputRef.current.value = "";
-      uploadTargetRef.current = null;
-    }
-  }
 
   const items = [
     ...groups.map((g) => ({ kind: "group" as const, data: g })),
@@ -186,14 +159,14 @@ export default function WorkClient({
       }}
       title={work.title_zh}
       subtitle={`${groups.length} 個群組 · ${posters.length} 張直屬海報`}
-      fab={<FAB onClick={() => setAddPickerOpen(true)} label="新增" />}
+      fab={<FAB onClick={addSheets.openPicker} label="新增" />}
     >
       <input
-        ref={fileInputRef}
+        ref={image.fileInputRef}
         type="file"
         accept="image/*"
         className="hidden"
-        onChange={handleFile}
+        onChange={image.handleFile}
       />
       {items.length === 0 ? (
         <div className="text-center text-muted-foreground py-12 text-sm">
@@ -219,7 +192,7 @@ export default function WorkClient({
                 kind="poster"
                 href={`/posters/${it.data.id}`}
                 thumbnailUrl={it.data.thumbnail_url}
-                title={it.data.poster_name ?? "(未命名)"}
+                title={it.data.poster_name ?? UNNAMED_POSTER}
                 placeholder={it.data.is_placeholder}
                 onMore={() => setActivePoster(it.data)}
               />
@@ -241,17 +214,15 @@ export default function WorkClient({
       <ItemActionsBundle<Poster>
         item={activePoster}
         onClose={() => setActivePoster(null)}
-        title={activePoster?.poster_name ?? "(未命名)"}
+        title={activePoster?.poster_name ?? UNNAMED_POSTER}
         description={
           activePoster?.is_placeholder ? "尚未上傳真實圖片" : "海報"
         }
         actions={posterActions}
       />
 
-      {/* Add picker: a small Sheet that just chooses between
-       * "new group" and "new poster". Each option triggers its own
-       * FormSheet below. */}
-      <Sheet open={addPickerOpen} onOpenChange={setAddPickerOpen}>
+      {/* Picker: choose group vs poster, then dispatch into FormSheet */}
+      <Sheet open={addSheets.pickerOpen} onOpenChange={addSheets.setPickerOpen}>
         <SheetContent side="bottom">
           <SheetHeader>
             <SheetTitle>新增到「{work.title_zh}」</SheetTitle>
@@ -264,19 +235,13 @@ export default function WorkClient({
                   icon: <FolderPlus className="w-4 h-4" />,
                   label: "新增群組（資料夾）",
                   hint: "可以再往下分層，例如「2024 國際版」",
-                  onClick: () => {
-                    setAddPickerOpen(false);
-                    setAddGroupOpen(true);
-                  },
+                  onClick: () => addSheets.openForm("group"),
                 },
                 {
                   icon: <FilePlus2 className="w-4 h-4" />,
                   label: "新增海報",
                   hint: "直接掛在這個作品下，不放進群組",
-                  onClick: () => {
-                    setAddPickerOpen(false);
-                    setAddPosterOpen(true);
-                  },
+                  onClick: () => addSheets.openForm("poster"),
                 },
               ]}
             />
@@ -285,8 +250,8 @@ export default function WorkClient({
       </Sheet>
 
       <FormSheet
-        open={addGroupOpen}
-        onOpenChange={setAddGroupOpen}
+        open={addSheets.formKind === "group"}
+        onOpenChange={addSheets.setFormOpen("group")}
         title="新增群組"
         description={`會建在「${work.title_zh}」底下。`}
         fields={[
@@ -307,14 +272,14 @@ export default function WorkClient({
                 parent_group_id: null,
                 name: values.name,
               }),
-            () => setAddGroupOpen(false)
+            addSheets.close
           )
         }
       />
 
       <FormSheet
-        open={addPosterOpen}
-        onOpenChange={setAddPosterOpen}
+        open={addSheets.formKind === "poster"}
+        onOpenChange={addSheets.setFormOpen("poster")}
         title="新增海報"
         description={`會直屬於「${work.title_zh}」（不放在群組裡）。`}
         fields={[
@@ -335,7 +300,7 @@ export default function WorkClient({
                 parent_group_id: null,
                 poster_name: values.name,
               }),
-            () => setAddPosterOpen(false)
+            addSheets.close
           )
         }
       />
