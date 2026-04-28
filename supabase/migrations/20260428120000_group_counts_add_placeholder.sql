@@ -8,7 +8,11 @@
 
 begin;
 
-create or replace function public.get_group_recursive_counts(p_work_id uuid)
+-- Must drop first: PostgreSQL disallows CREATE OR REPLACE when the
+-- return type changes (adding placeholder_total column here).
+drop function if exists public.get_group_recursive_counts(uuid);
+
+create function public.get_group_recursive_counts(p_work_id uuid)
 returns table(group_id uuid, total bigint, placeholder_total bigint)
 language sql
 stable
