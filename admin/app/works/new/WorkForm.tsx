@@ -17,8 +17,12 @@ import {
 import { Card, CardContent } from "@/components/ui/card";
 import { AlertTriangle, Loader2 } from "lucide-react";
 
+const CUSTOM_VALUE = "__custom__";
+
 type WorkFormProps = {
   mode: "create" | "edit";
+  /** Existing studio names for the dropdown. */
+  studios?: string[];
   initial?: {
     id: string;
     studio: string | null;
@@ -29,9 +33,16 @@ type WorkFormProps = {
   };
 };
 
-export default function WorkForm({ mode, initial }: WorkFormProps) {
+export default function WorkForm({ mode, initial, studios = [] }: WorkFormProps) {
   const router = useRouter();
+  // If the initial studio is not in the list (rare edge case), start in
+  // custom-text mode so the value isn't lost.
+  const initialInList =
+    !initial?.studio || studios.includes(initial.studio);
   const [studio, setStudio] = useState(initial?.studio ?? "");
+  const [studioMode, setStudioMode] = useState<"select" | "custom">(
+    initialInList ? "select" : "custom"
+  );
   const [titleZh, setTitleZh] = useState(initial?.title_zh ?? "");
   const [titleEn, setTitleEn] = useState(initial?.title_en ?? "");
   const [workKind, setWorkKind] = useState(initial?.work_kind ?? "movie");
@@ -77,13 +88,59 @@ export default function WorkForm({ mode, initial }: WorkFormProps) {
 
       <div className="space-y-1.5">
         <Label htmlFor="studio">Studio / IP 持有者</Label>
-        <Input
-          id="studio"
-          value={studio}
-          onChange={(e) => setStudio(e.target.value)}
-          placeholder="例：漫威 / 吉卜力 / 新海誠 作品"
-          disabled={pending}
-        />
+        {studioMode === "select" ? (
+          <Select
+            value={studio}
+            onValueChange={(v) => {
+              if (v === CUSTOM_VALUE) {
+                setStudioMode("custom");
+                setStudio("");
+              } else {
+                setStudio(v);
+              }
+            }}
+            disabled={pending}
+          >
+            <SelectTrigger id="studio">
+              <SelectValue placeholder="（選填）請選擇分類" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="">（未分類）</SelectItem>
+              {studios.map((s) => (
+                <SelectItem key={s} value={s}>
+                  {s}
+                </SelectItem>
+              ))}
+              <SelectItem value={CUSTOM_VALUE}>其他（輸入新分類）…</SelectItem>
+            </SelectContent>
+          </Select>
+        ) : (
+          <div className="flex gap-2">
+            <Input
+              id="studio"
+              autoFocus
+              value={studio}
+              onChange={(e) => setStudio(e.target.value)}
+              placeholder="新分類名稱"
+              disabled={pending}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="shrink-0"
+              onClick={() => {
+                setStudioMode("select");
+                // If the typed value exists in the list keep it,
+                // otherwise clear so the Select shows its placeholder.
+                if (!studios.includes(studio)) setStudio("");
+              }}
+              disabled={pending}
+            >
+              取消
+            </Button>
+          </div>
+        )}
       </div>
 
       <div className="space-y-1.5">

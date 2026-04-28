@@ -85,7 +85,7 @@ export async function createPoster(input: {
       .single();
     if (error) throw error;
     revalidatePosterSurfaces(input.work_id);
-    await logAudit(supabase, user, {
+    void logAudit(supabase, user, {
       action: "create_poster",
       target_kind: "poster",
       target_id: data.id,
@@ -120,7 +120,7 @@ export async function renamePoster(
       .maybeSingle();
     if (error) throw error;
     revalidatePosterSurfaces(data?.work_id ?? undefined, id);
-    await logAudit(supabase, user, {
+    void logAudit(supabase, user, {
       action: "rename_poster",
       target_kind: "poster",
       target_id: id,
@@ -159,7 +159,7 @@ export async function movePoster(
     if (error) throw error;
 
     revalidatePosterSurfaces(existing.work_id ?? undefined, id);
-    await logAudit(supabase, user, {
+    void logAudit(supabase, user, {
       action: "move_poster",
       target_kind: "poster",
       target_id: id,
@@ -189,7 +189,7 @@ export async function deletePoster(id: string): Promise<ActionResult> {
     const { error } = await supabase.from("posters").delete().eq("id", id);
     if (error) throw error;
     revalidatePosterSurfaces(existing?.work_id ?? undefined, id);
-    await logAudit(supabase, user, {
+    void logAudit(supabase, user, {
       action: "delete_poster",
       target_kind: "poster",
       target_id: id,
@@ -255,7 +255,7 @@ export async function attachImage(
       .eq("id", id);
     if (error) throw error;
     revalidatePosterSurfaces(existing?.work_id ?? undefined, id);
-    await logAudit(supabase, user, {
+    void logAudit(supabase, user, {
       action: "attach_image",
       target_kind: "image",
       target_id: id,

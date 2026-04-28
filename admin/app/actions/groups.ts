@@ -45,7 +45,7 @@ export async function createGroup(input: {
       .single();
     if (error) throw error;
     revalidateGroupSurfaces(input.work_id, input.parent_group_id ?? undefined);
-    await logAudit(supabase, user, {
+    void logAudit(supabase, user, {
       action: "create_group",
       target_kind: "group",
       target_id: data.id,
@@ -80,7 +80,7 @@ export async function renameGroup(
       .maybeSingle();
     if (error) throw error;
     revalidateGroupSurfaces(data?.work_id ?? undefined, id);
-    await logAudit(supabase, user, {
+    void logAudit(supabase, user, {
       action: "rename_group",
       target_kind: "group",
       target_id: id,
@@ -156,7 +156,7 @@ export async function moveGroup(
     if (newParentGroupId)
       revalidateGroupSurfaces(undefined, newParentGroupId);
 
-    await logAudit(supabase, user, {
+    void logAudit(supabase, user, {
       action: "move_group",
       target_kind: "group",
       target_id: id,
@@ -192,7 +192,7 @@ export async function deleteGroup(id: string): Promise<ActionResult> {
       existing?.work_id ?? undefined,
       existing?.parent_group_id ?? undefined
     );
-    await logAudit(supabase, user, {
+    void logAudit(supabase, user, {
       action: "delete_group",
       target_kind: "group",
       target_id: id,

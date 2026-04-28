@@ -112,7 +112,7 @@ export async function createWork(input: {
       .single();
     if (error) throw error;
     revalidateWorkSurfaces();
-    await logAudit(supabase, user, {
+    void logAudit(supabase, user, {
       action: "create_work",
       target_kind: "work",
       target_id: data.id,
@@ -145,7 +145,7 @@ export async function renameWork(
       .eq("id", id);
     if (error) throw error;
     revalidateWorkSurfaces(id);
-    await logAudit(supabase, user, {
+    void logAudit(supabase, user, {
       action: "rename_work",
       target_kind: "work",
       target_id: id,
@@ -169,7 +169,7 @@ export async function changeWorkKind(
       .eq("id", id);
     if (error) throw error;
     revalidateWorkSurfaces(id);
-    await logAudit(supabase, user, {
+    void logAudit(supabase, user, {
       action: "change_work_kind",
       target_kind: "work",
       target_id: id,
@@ -213,7 +213,7 @@ export async function updateWork(
     const { error } = await supabase.from("works").update(safePatch).eq("id", id);
     if (error) throw error;
     revalidateWorkSurfaces(id);
-    await logAudit(supabase, user, {
+    void logAudit(supabase, user, {
       action: "update_work",
       target_kind: "work",
       target_id: id,
@@ -239,7 +239,7 @@ export async function deleteWork(id: string): Promise<ActionResult> {
     const { error } = await supabase.from("works").delete().eq("id", id);
     if (error) throw error;
     revalidateWorkSurfaces(id);
-    await logAudit(supabase, user, {
+    void logAudit(supabase, user, {
       action: "delete_work",
       target_kind: "work",
       target_id: id,
@@ -273,7 +273,7 @@ export async function renameStudio(
         : await q.eq("studio", oldName).select("id");
     if (error) throw error;
     revalidateWorkSurfaces();
-    await logAudit(supabase, user, {
+    void logAudit(supabase, user, {
       action: "rename_studio",
       target_kind: "studio",
       target_id: trimmed,
@@ -316,7 +316,7 @@ export async function deleteStudio(studio: string): Promise<ActionResult> {
     const { error } = await supabase.from("works").delete().eq("studio", studio);
     if (error) throw error;
     revalidateWorkSurfaces();
-    await logAudit(supabase, user, {
+    void logAudit(supabase, user, {
       action: "delete_studio",
       target_kind: "studio",
       target_id: studio,

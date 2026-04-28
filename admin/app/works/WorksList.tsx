@@ -9,6 +9,24 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { toast } from "sonner";
+import {
   renameWork,
   deleteWork,
   createWork,
@@ -29,9 +47,11 @@ type Work = {
 export default function WorksList({
   initial,
   initialCursor,
+  studios = [],
 }: {
   initial: Work[];
   initialCursor?: string | null;
+  studios?: string[];
 }) {
   // The first batch comes from the server-rendered page; subsequent
   // batches are appended via loadWorksPage on "載入更多". A
@@ -47,6 +67,7 @@ export default function WorksList({
   const [adding, setAdding] = useState(false);
   const [newStudio, setNewStudio] = useState("");
   const [newTitle, setNewTitle] = useState("");
+  const [pendingDelete, setPendingDelete] = useState<Work | null>(null);
   const [pending, startTransition] = useTransition();
   const [loadingMore, setLoadingMore] = useState(false);
 
@@ -78,41 +99,60 @@ export default function WorksList({
       setEditing(null);
       return;
     }
+    const tid = toast.loading("儲存中…");
     startTransition(async () => {
       const r = await renameWork(work.id, newTitle);
-      if (!r.ok) setError(r.error);
-      else setEditing(null);
+      toast.dismiss(tid);
+      if (!r.ok) {
+        setError(r.error);
+        toast.error(r.error);
+      } else {
+        setEditing(null);
+        toast.success("已儲存");
+      }
     });
   }
 
   function remove(work: Work) {
-    if (
-      !confirm(
-        `刪除作品「${work.title_zh}」？\n底下所有群組與海報（${work.poster_count} 張）都會一起刪除。\n此操作不可復原。`
-      )
-    )
-      return;
+    setPendingDelete(work);
+  }
+
+  function confirmDelete() {
+    if (!pendingDelete) return;
+    const work = pendingDelete;
+    setPendingDelete(null);
+    const tid = toast.loading(`刪除「${work.title_zh}」中…`);
     startTransition(async () => {
       const r = await deleteWork(work.id);
-      if (!r.ok) setError(r.error);
+      toast.dismiss(tid);
+      if (!r.ok) {
+        setError(r.error);
+        toast.error(r.error);
+      } else {
+        toast.success(`已刪除「${work.title_zh}」`);
+      }
     });
   }
 
   function createNew() {
     if (!newTitle.trim()) return;
+    const tid = toast.loading("新增中…");
     startTransition(async () => {
       const r = await createWork({
         title_zh: newTitle,
         studio: newStudio.trim() || null,
         work_kind: "movie",
       });
+      toast.dismiss(tid);
       if (!r.ok) {
         setError(r.error);
+        toast.error(r.error);
         return;
       }
       setAdding(false);
       setNewStudio("");
       setNewTitle("");
+      toast.success(`已新增「${newTitle}」`);
     });
   }
 
@@ -131,13 +171,23 @@ export default function WorksList({
       {adding && (
         <Card className="mb-3">
           <CardContent className="p-3 space-y-2">
-            <Input
-              autoFocus
+            <Select
               value={newStudio}
-              onChange={(e) => setNewStudio(e.target.value)}
-              placeholder="（選填）所屬分類"
+              onValueChange={setNewStudio}
               disabled={pending}
-            />
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="（選填）所屬分類" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">（未分類）</SelectItem>
+                {studios.map((s) => (
+                  <SelectItem key={s} value={s}>
+                    {s}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Input
               value={newTitle}
               onChange={(e) => setNewTitle(e.target.value)}
@@ -238,6 +288,31 @@ export default function WorksList({
           </Button>
         </div>
       )}
+
+      <AlertDialog
+        open={pendingDelete != null}
+        onOpenChange={(open) => {
+          if (!open) setPendingDelete(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>確認刪除作品</AlertDialogTitle>
+            <AlertDialogDescription className="whitespace-pre-line">
+              {`刪除作品「${pendingDelete?.title_zh}」？\n底下所有群組與海報（${pendingDelete?.poster_count ?? 0} 張）都會一起刪除。\n此操作不可復原。`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={confirmDelete}
+            >
+              確認刪除
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
@@ -346,6 +421,7 @@ function WorksSections({
                           onClick={() => onRemove(w)}
                           aria-label="刪除"
                           title="刪除"
+                          disabled={busy}
                           className="hover:text-destructive"
                         >
                           <Trash2 />

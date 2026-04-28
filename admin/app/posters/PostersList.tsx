@@ -15,6 +15,17 @@ import {
   deletePoster,
   attachImage,
 } from "@/app/actions/posters";
+import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 type Poster = {
   id: string;
@@ -41,6 +52,7 @@ export default function PostersList({
   const [editing, setEditing] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<Poster | null>(null);
   const [pending, startTransition] = useTransition();
 
   function commitRename(p: Poster, newName: string) {
@@ -56,11 +68,24 @@ export default function PostersList({
   }
 
   function remove(p: Poster) {
-    if (!confirm(`刪除海報「${p.poster_name ?? UNNAMED_POSTER}」？此操作不可復原。`))
-      return;
+    setPendingDelete(p);
+  }
+
+  function confirmDelete() {
+    if (!pendingDelete) return;
+    const p = pendingDelete;
+    setPendingDelete(null);
+    const name = p.poster_name ?? UNNAMED_POSTER;
+    const tid = toast.loading(`刪除「${name}」中…`);
     startTransition(async () => {
       const r = await deletePoster(p.id);
-      if (!r.ok) setError(r.error);
+      toast.dismiss(tid);
+      if (!r.ok) {
+        setError(r.error);
+        toast.error(r.error);
+      } else {
+        toast.success(`已刪除「${name}」`);
+      }
     });
   }
 
@@ -138,6 +163,31 @@ export default function PostersList({
           </ul>
         </CardContent>
       </Card>
+
+      <AlertDialog
+        open={pendingDelete != null}
+        onOpenChange={(open) => {
+          if (!open) setPendingDelete(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>確認刪除海報</AlertDialogTitle>
+            <AlertDialogDescription>
+              刪除海報「{pendingDelete?.poster_name ?? UNNAMED_POSTER}」？此操作不可復原。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={confirmDelete}
+            >
+              確認刪除
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

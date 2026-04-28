@@ -27,7 +27,7 @@ export default async function EditWorkPage({
   const { id } = await params;
   const supabase = await getServerSupabase();
 
-  const [{ data: work }, { data: posters }, { data: groups }] = await Promise.all([
+  const [{ data: work }, { data: posters }, { data: groups }, { data: studioRows }] = await Promise.all([
     supabase
       .from("works")
       .select("id, studio, title_zh, title_en, work_kind, movie_release_year")
@@ -42,7 +42,18 @@ export default async function EditWorkPage({
       .from("poster_groups")
       .select("id, name, parent_group_id")
       .eq("work_id", id),
+    supabase
+      .from("works")
+      .select("studio")
+      .not("studio", "is", null)
+      .order("studio", { ascending: true }),
   ]);
+
+  const studios = [
+    ...new Set(
+      (studioRows ?? []).map((r) => r.studio as string).filter(Boolean)
+    ),
+  ];
 
   if (!work) notFound();
 
@@ -68,7 +79,7 @@ export default async function EditWorkPage({
           <h1 className="hidden md:block text-2xl font-semibold tracking-tight mb-6">
             編輯作品：{work.title_zh}
           </h1>
-          <WorkForm mode="edit" initial={work} />
+          <WorkForm mode="edit" initial={work} studios={studios} />
         </section>
 
         {/* CTA — single canonical place to edit hierarchy. */}
