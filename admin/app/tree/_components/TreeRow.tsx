@@ -1,16 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import { Folder, FileImage, MoreVertical, GripVertical } from "lucide-react";
+import { Folder, FileImage, MoreVertical } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /**
- * One Drive-style row. Body is a navigation link (or a plain div for
- * leaf posters that route elsewhere), the trailing ⋯ button is a
- * separate clickable element so it doesn't trigger navigation.
+ * One Drive-style row. Body is a navigation link; the trailing ⋯ button
+ * is a separate clickable element so it doesn't trigger navigation.
  *
- * Optional drag-and-drop props let the parent (WorkClient / GroupClient)
- * attach @dnd-kit handles without duplicating layout logic.
+ * When `dragListeners` are provided the whole <li> becomes the drag
+ * target (Google Drive / Files style). The TouchSensor (400 ms delay)
+ * ensures short taps still navigate; the MouseSensor (8 px threshold)
+ * ensures short clicks still navigate. No separate drag-handle button
+ * is rendered — the entire card surface activates the drag.
  */
 export default function TreeRow({
   href,
@@ -51,7 +53,7 @@ export default function TreeRow({
   // Optional DnD props
   /** Callback ref from useDraggable/useDroppable to attach to the <li>. */
   innerRef?: (node: HTMLLIElement | null) => void;
-  /** Event listeners from useDraggable – spread on the drag handle button. */
+  /** Event listeners from useDraggable — spread on the entire <li>. */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   dragListeners?: Record<string, any>;
   /** Aria/data attributes from useDraggable. */
@@ -116,8 +118,14 @@ export default function TreeRow({
   return (
     <li
       ref={innerRef}
+      /* Spread DnD listeners on the whole card — whole-surface drag activation.
+         Short taps (<400 ms touch / <8 px mouse) let clicks through to the Link. */
+      {...(dragListeners ?? {})}
+      {...(dragAttributes ?? {})}
+      suppressHydrationWarning
       className={cn(
-        "rounded-xl border bg-card transition-all duration-150",
+        "rounded-xl border bg-card transition-all duration-150 select-none",
+        dragListeners && "cursor-grab active:cursor-grabbing",
         isDragging
           ? "opacity-30 border-border"
           : isDropTarget
@@ -126,23 +134,12 @@ export default function TreeRow({
       )}
     >
       <div className="flex items-center pr-1">
-        {/* Drag handle — only rendered when dragListeners are provided */}
-        {dragListeners && (
-          <button
-            {...dragListeners}
-            {...dragAttributes}
-            className="shrink-0 w-8 h-12 flex items-center justify-center text-muted-foreground/40 hover:text-muted-foreground touch-none cursor-grab active:cursor-grabbing transition-colors"
-            aria-label="拖移"
-            tabIndex={-1}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <GripVertical className="w-4 h-4" />
-          </button>
-        )}
         <Link
           href={href}
+          /* Prevent the Link's own pointer handler from short-circuiting the
+             DnD listeners on the parent <li>. */
+          draggable={false}
           className="flex-1 min-w-0 flex items-center gap-2 px-3 py-3 hover:no-underline"
-          style={{ paddingLeft: dragListeners ? "4px" : undefined }}
         >
           {Body}
         </Link>
