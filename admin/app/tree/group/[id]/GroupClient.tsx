@@ -14,7 +14,8 @@ import TreeShell from "../../_components/TreeShell";
 import TreeRow from "../../_components/TreeRow";
 import { SheetMenuList } from "../../_components/SheetMenu";
 import FAB from "../../_components/FAB";
-import { FormSheet, describeError } from "../../_components/FormSheet";
+import { FormSheet } from "../../_components/FormSheet";
+import { describeError } from "@/lib/errors";
 import { createClient } from "@/lib/supabase/client";
 import { uploadPosterImage } from "@/lib/imageUpload";
 

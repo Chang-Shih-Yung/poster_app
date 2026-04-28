@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Pencil, Trash2, ImagePlus, Loader2, AlertTriangle, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { uploadPosterImage } from "@/lib/imageUpload";
+import { describeError } from "@/lib/errors";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,25 +30,6 @@ type Poster = {
     studio: string | null;
   } | null;
 };
-
-function describeError(e: unknown): string {
-  if (e instanceof Error) return e.message;
-  if (typeof e === "string") return e;
-  if (e && typeof e === "object") {
-    const obj = e as Record<string, unknown>;
-    const parts: string[] = [];
-    if (typeof obj.message === "string") parts.push(obj.message);
-    if (typeof obj.details === "string") parts.push(obj.details);
-    if (typeof obj.code === "string") parts.push(`code: ${obj.code}`);
-    if (parts.length > 0) return parts.join(" · ");
-    try {
-      return JSON.stringify(e);
-    } catch {
-      return "(unknown)";
-    }
-  }
-  return String(e);
-}
 
 export default function PostersList({
   initial,

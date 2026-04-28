@@ -19,6 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Loader2, AlertTriangle } from "lucide-react";
+import { describeError } from "@/lib/errors";
 
 /**
  * Reusable bottom-sheet form. Handles the visual chrome (header, fields,
@@ -177,22 +178,3 @@ function formValid(fields: FormField[], values: Record<string, string>) {
   return true;
 }
 
-export function describeError(e: unknown): string {
-  if (e instanceof Error) return e.message;
-  if (typeof e === "string") return e;
-  if (e && typeof e === "object") {
-    const obj = e as Record<string, unknown>;
-    const parts: string[] = [];
-    if (typeof obj.message === "string") parts.push(obj.message);
-    if (typeof obj.details === "string") parts.push(obj.details);
-    if (typeof obj.hint === "string") parts.push(`hint: ${obj.hint}`);
-    if (typeof obj.code === "string") parts.push(`code: ${obj.code}`);
-    if (parts.length > 0) return parts.join(" · ");
-    try {
-      return JSON.stringify(e);
-    } catch {
-      return "(unknown error)";
-    }
-  }
-  return String(e);
-}

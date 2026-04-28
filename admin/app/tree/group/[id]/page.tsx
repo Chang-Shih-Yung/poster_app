@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { recursivePosterCount } from "@/lib/groupTree";
 import GroupClient from "./GroupClient";
 import Nav from "@/components/Nav";
 
@@ -62,31 +63,19 @@ export default async function GroupPage({
         : Promise.resolve({ data: null }),
     ]);
 
-  const subOf = new Map<string, string[]>();
-  for (const g of allGroups ?? []) {
-    const parent = (g.parent_group_id as string | null) ?? "__root__";
-    if (!subOf.has(parent)) subOf.set(parent, []);
-    subOf.get(parent)!.push(g.id as string);
-  }
-  const directPosterCount = new Map<string, number>();
-  for (const p of allPosters ?? []) {
-    const k = p.parent_group_id as string | null;
-    if (!k) continue;
-    directPosterCount.set(k, (directPosterCount.get(k) ?? 0) + 1);
-  }
-  function recurse(groupId: string): number {
-    let total = directPosterCount.get(groupId) ?? 0;
-    for (const sub of subOf.get(groupId) ?? []) {
-      total += recurse(sub);
-    }
-    return total;
-  }
+  const allGroupRows = (allGroups ?? []).map((g) => ({
+    id: g.id as string,
+    parent_group_id: (g.parent_group_id as string | null) ?? null,
+  }));
+  const allPosterRows = (allPosters ?? []).map((p) => ({
+    parent_group_id: (p.parent_group_id as string | null) ?? null,
+  }));
 
   const groups = (rootGroups ?? []).map((g) => ({
     id: g.id as string,
     name: g.name as string,
     group_type: (g.group_type as string | null) ?? null,
-    child_count: recurse(g.id as string),
+    child_count: recursivePosterCount(g.id as string, allGroupRows, allPosterRows),
   }));
 
   const posters = (rootPosters ?? []).map((p) => ({

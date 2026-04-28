@@ -10,6 +10,7 @@ import {
   CHANNEL_CATEGORIES,
   WORK_KINDS,
 } from "@/lib/enums";
+import { flattenGroupTree } from "@/lib/groupTree";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -106,7 +107,7 @@ export default function PosterForm({
         .eq("work_id", workId)
         .order("display_order")
         .order("name");
-      const flat = flattenTree(data ?? []);
+      const flat = flattenGroupTree(data ?? []);
       setGroupOptions(flat);
     })();
   }, [workId]);
@@ -445,33 +446,3 @@ function WorkKindReadOnly({ workKind }: { workKind: string }) {
   );
 }
 
-type GroupRow = {
-  id: string;
-  name: string;
-  parent_group_id: string | null;
-  display_order: number;
-};
-
-function flattenTree(rows: GroupRow[]): { id: string; label: string }[] {
-  const childrenMap = new Map<string | null, GroupRow[]>();
-  for (const r of rows) {
-    const arr = childrenMap.get(r.parent_group_id) ?? [];
-    arr.push(r);
-    childrenMap.set(r.parent_group_id, arr);
-  }
-  const out: { id: string; label: string }[] = [];
-  function walk(parent: string | null, prefix: string[]) {
-    const kids = (childrenMap.get(parent) ?? []).sort((a, b) =>
-      a.display_order !== b.display_order
-        ? a.display_order - b.display_order
-        : a.name.localeCompare(b.name)
-    );
-    for (const k of kids) {
-      const path = [...prefix, k.name];
-      out.push({ id: k.id, label: path.join(" / ") });
-      walk(k.id, path);
-    }
-  }
-  walk(null, []);
-  return out;
-}

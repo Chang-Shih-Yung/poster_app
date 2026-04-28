@@ -1,5 +1,6 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { isAdminEmail } from "@/lib/auth";
 
 /**
  * Session refresh + admin gate for every request.
@@ -66,13 +67,4 @@ export async function updateSession(request: NextRequest) {
   }
 
   return response;
-}
-
-function isAdminEmail(email: string | undefined | null): boolean {
-  if (!email) return false;
-  const whitelist = (process.env.ADMIN_EMAILS ?? "")
-    .split(",")
-    .map((e) => e.trim().toLowerCase())
-    .filter(Boolean);
-  return whitelist.includes(email.toLowerCase());
 }
