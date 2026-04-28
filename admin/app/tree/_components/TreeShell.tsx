@@ -41,11 +41,11 @@ export default function TreeShell({
           {back ? (
             <Link
               href={back.href}
-              className="flex items-center gap-1 min-h-[44px] px-2 -ml-1 rounded-md text-foreground hover:bg-secondary hover:no-underline"
+              className="flex items-center gap-1 min-h-[44px] px-2 -ml-1 rounded-md text-foreground hover:no-underline group"
               aria-label={`返回 ${back.label}`}
             >
-              <ChevronLeft className="w-5 h-5" />
-              <span className="text-sm text-muted-foreground max-w-[180px] truncate">
+              <ChevronLeft className="w-5 h-5 text-muted-foreground group-hover:text-foreground transition-colors" />
+              <span className="text-sm text-muted-foreground group-hover:text-foreground max-w-[180px] truncate transition-colors">
                 {back.label}
               </span>
             </Link>

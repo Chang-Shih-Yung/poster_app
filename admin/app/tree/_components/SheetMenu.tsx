@@ -31,8 +31,9 @@ export function SheetMenuList({ items }: { items: SheetMenuItem[] }) {
             className={cn(
               "w-full flex items-center gap-4 py-3.5 px-1 text-left transition-colors",
               "disabled:opacity-50",
-              !it.disabled && "hover:bg-secondary/60",
-              it.destructive ? "text-destructive" : "text-foreground"
+              it.destructive
+                ? "text-destructive"
+                : "text-foreground hover:text-foreground"
             )}
           >
             <span

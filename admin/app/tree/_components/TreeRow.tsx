@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Folder, FileImage, MoreVertical, ChevronRight } from "lucide-react";
+import { Folder, FileImage, MoreVertical } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /**
@@ -94,16 +94,13 @@ export default function TreeRow({
   );
 
   return (
-    <li className="rounded-xl border border-border bg-card hover:bg-secondary/50 transition-colors">
+    <li className="rounded-xl border border-border bg-card">
       <div className="flex items-center pr-1">
         <Link
           href={href}
           className="flex-1 min-w-0 flex items-center gap-2 px-3 py-3 hover:no-underline"
         >
           {Body}
-          {kind === "folder" && (
-            <ChevronRight className="w-4 h-4 shrink-0 text-muted-foreground" />
-          )}
         </Link>
         <button
           onClick={(e) => {
@@ -111,7 +108,7 @@ export default function TreeRow({
             e.stopPropagation();
             onMore();
           }}
-          className="shrink-0 w-10 h-10 flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary"
+          className="shrink-0 w-10 h-10 flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground transition-colors"
           title="更多選項"
           aria-label="更多選項"
         >

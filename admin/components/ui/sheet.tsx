@@ -48,13 +48,16 @@ const sheetVariants = cva(
 interface SheetContentProps
   extends React.ComponentPropsWithoutRef<typeof SheetPrimitive.Content>,
     VariantProps<typeof sheetVariants> {
-  hideCloseButton?: boolean;
+  showCloseButton?: boolean;
 }
 
+// Default-off close button: mobile dismisses by tapping the overlay /
+// swiping down, desktop by clicking outside. Pass showCloseButton on
+// rare cases where the explicit X helps.
 const SheetContent = React.forwardRef<
   React.ElementRef<typeof SheetPrimitive.Content>,
   SheetContentProps
->(({ side = "bottom", className, children, hideCloseButton, ...props }, ref) => (
+>(({ side = "bottom", className, children, showCloseButton, ...props }, ref) => (
   <SheetPortal>
     <SheetOverlay />
     <SheetPrimitive.Content
@@ -67,7 +70,7 @@ const SheetContent = React.forwardRef<
         <div className="mx-auto mb-2 h-1 w-10 rounded-full bg-muted" />
       )}
       {children}
-      {!hideCloseButton && (
+      {showCloseButton && (
         <SheetPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none">
           <X className="h-4 w-4" />
           <span className="sr-only">關閉</span>

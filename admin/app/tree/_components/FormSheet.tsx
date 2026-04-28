@@ -144,22 +144,14 @@ export function FormSheet({
               <span className="flex-1">{errorMsg}</span>
             </div>
           )}
-          <div className="flex gap-2 pt-1">
+          <div className="pt-1">
             <Button
               type="submit"
-              className="flex-1"
+              className="w-full"
               disabled={busy || !formValid(fields, values)}
             >
               {busy && <Loader2 className="w-4 h-4 animate-spin" />}
               {busy ? "處理中…" : submitLabel}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-              disabled={busy}
-            >
-              取消
             </Button>
           </div>
         </form>
