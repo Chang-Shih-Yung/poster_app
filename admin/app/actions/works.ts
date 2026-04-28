@@ -4,11 +4,6 @@ import { revalidatePath } from "next/cache";
 import { requireAdmin, ok, fail, logAudit, type ActionResult } from "./_internal";
 import { NULL_STUDIO_KEY } from "@/app/tree/_components/keys";
 
-/**
- * Page size for the cursor-based "load more" buttons on /works and
- * /tree/studio/[studio]. Small enough to render fast on first paint,
- * big enough that we don't pummel the DB on a busy studio.
- */
 const WORKS_PAGE_SIZE = 50;
 
 export type WorkRow = {
@@ -24,19 +19,12 @@ export type WorkRow = {
 
 export type WorksPage = {
   rows: WorkRow[];
-  /** Cursor for the next page, or null when this was the last batch. */
   nextCursor: string | null;
 };
 
-/**
- * Fetch one page of works, optionally scoped to a studio. Cursor is
- * the previous batch's last `created_at` (ISO string). Sort order is
- * `created_at DESC, id DESC` so the cursor is monotonic and stable
- * even when two works share a created_at.
- */
 export async function loadWorksPage(opts: {
   cursor: string | null;
-  studio?: string | null; // omit for "all studios" (the /works listing)
+  studio?: string | null;
 }): Promise<ActionResult<WorksPage>> {
   try {
     const { supabase } = await requireAdmin();
@@ -49,13 +37,7 @@ export async function loadWorksPage(opts: {
       .order("id", { ascending: false })
       .limit(WORKS_PAGE_SIZE);
 
-    if (opts.cursor) {
-      // Cursor: rows strictly older than this timestamp. The id tie-break
-      // doesn't matter for the request — supabase doesn't expose tuple
-      // comparison cleanly — and the page size is small enough that any
-      // duplicate-timestamp edge is negligible.
-      q = q.lt("created_at", opts.cursor);
-    }
+    if (opts.cursor) q = q.lt("created_at", opts.cursor);
     if (opts.studio !== undefined) {
       q =
         opts.studio === null || opts.studio === NULL_STUDIO_KEY
@@ -78,16 +60,23 @@ export async function loadWorksPage(opts: {
  * (works.studio is just a string column; renaming a studio is bulk
  * UPDATE, deleting it is bulk DELETE). All actions are admin-gated via
  * requireAdmin and revalidate every page that surfaces work data.
+ *
+ * Cache invalidation strategy: precise paths only (no `"layout"`
+ * qualifier). `"layout"` blows up the entire layout segment cache and
+ * cascades into sibling routes that did not change — for an editor
+ * making rapid edits, that thrashes the cache miss → re-fetch loop.
+ * Each surface that consumes a row is listed explicitly below.
  */
 
 function revalidateWorkSurfaces(workId?: string) {
-  // Studio + work pages all read works one way or another; revalidate
-  // the umbrella surfaces every time so we never serve stale list/tree
-  // counts after a mutation.
-  revalidatePath("/tree", "layout");
-  revalidatePath("/works", "layout");
-  revalidatePath("/posters", "layout");
-  revalidatePath("/", "layout");
+  // The dashboard counts (works/posters/placeholders), the tree root
+  // (studio aggregation), the works/posters lists, and the per-work
+  // detail page all read works data. Revalidate just those, not entire
+  // layout segments.
+  revalidatePath("/");
+  revalidatePath("/tree");
+  revalidatePath("/works");
+  revalidatePath("/posters");
   if (workId) {
     revalidatePath(`/works/${workId}`);
     revalidatePath(`/tree/work/${workId}`);
@@ -133,25 +122,23 @@ export async function renameWork(
   title_zh: string
 ): Promise<ActionResult> {
   try {
-    const { supabase } = await requireAdmin();
+    const { supabase, user } = await requireAdmin();
     if (!title_zh.trim()) throw new Error("名稱不能為空");
     const trimmed = title_zh.trim();
-    const { data: before } = await supabase
-      .from("works")
-      .select("title_zh")
-      .eq("id", id)
-      .maybeSingle();
+    // One round-trip: the update returns the new row. We don't need the
+    // pre-rename value for the audit (rename audit answers "who renamed
+    // it to what" — the previous value is in the previous audit row).
     const { error } = await supabase
       .from("works")
       .update({ title_zh: trimmed })
       .eq("id", id);
     if (error) throw error;
     revalidateWorkSurfaces(id);
-    await logAudit({
+    await logAudit(supabase, user, {
       action: "rename_work",
       target_kind: "work",
       target_id: id,
-      payload: { from: before?.title_zh ?? null, to: trimmed },
+      payload: { to: trimmed },
     });
     return ok(undefined);
   } catch (e) {
@@ -164,23 +151,18 @@ export async function changeWorkKind(
   work_kind: string
 ): Promise<ActionResult> {
   try {
-    const { supabase } = await requireAdmin();
-    const { data: before } = await supabase
-      .from("works")
-      .select("work_kind")
-      .eq("id", id)
-      .maybeSingle();
+    const { supabase, user } = await requireAdmin();
     const { error } = await supabase
       .from("works")
       .update({ work_kind })
       .eq("id", id);
     if (error) throw error;
     revalidateWorkSurfaces(id);
-    await logAudit({
+    await logAudit(supabase, user, {
       action: "change_work_kind",
       target_kind: "work",
       target_id: id,
-      payload: { from: before?.work_kind ?? null, to: work_kind },
+      payload: { to: work_kind },
     });
     return ok(undefined);
   } catch (e) {
@@ -188,12 +170,6 @@ export async function changeWorkKind(
   }
 }
 
-/**
- * Generic patch for works — used by /works/[id] and /works/new where
- * the form lets the user edit the full row at once. Specialised
- * actions (renameWork, changeWorkKind) stay around for one-off Sheet
- * forms in the tree where only one field changes.
- */
 export async function updateWork(
   id: string,
   patch: {
@@ -217,8 +193,10 @@ export async function updateWork(
 
 export async function deleteWork(id: string): Promise<ActionResult> {
   try {
-    const { supabase } = await requireAdmin();
-    // Snapshot before deletion so the audit trail captures what was lost.
+    const { supabase, user } = await requireAdmin();
+    // Snapshot before deletion — required because after delete the row
+    // is gone and the audit log is the only record. This is the one
+    // mutation that justifies the extra round-trip.
     const { data: before } = await supabase
       .from("works")
       .select("id, studio, title_zh, title_en, work_kind, poster_count")
@@ -227,7 +205,7 @@ export async function deleteWork(id: string): Promise<ActionResult> {
     const { error } = await supabase.from("works").delete().eq("id", id);
     if (error) throw error;
     revalidateWorkSurfaces(id);
-    await logAudit({
+    await logAudit(supabase, user, {
       action: "delete_work",
       target_kind: "work",
       target_id: id,
@@ -246,28 +224,30 @@ export async function renameStudio(
   newName: string
 ): Promise<ActionResult> {
   try {
-    const { supabase } = await requireAdmin();
+    const { supabase, user } = await requireAdmin();
     if (!newName.trim()) throw new Error("分類名稱不能為空");
     if (newName === oldName) return ok(undefined);
     const trimmed = newName.trim();
-    // Count affected rows for the audit payload before we mutate.
-    const countQ =
-      oldName === NULL_STUDIO_KEY
-        ? supabase.from("works").select("id", { count: "exact", head: true }).is("studio", null)
-        : supabase.from("works").select("id", { count: "exact", head: true }).eq("studio", oldName);
-    const { count: affected } = await countQ;
+    // Combine the count + update into one atomic write that returns the
+    // affected rows. Postgres .update().select() yields the new state,
+    // and the row count is rows.length — saving the separate COUNT
+    // round-trip we used to do.
     const q = supabase.from("works").update({ studio: trimmed });
-    const { error } =
+    const { data: rows, error } =
       oldName === NULL_STUDIO_KEY
-        ? await q.is("studio", null)
-        : await q.eq("studio", oldName);
+        ? await q.is("studio", null).select("id")
+        : await q.eq("studio", oldName).select("id");
     if (error) throw error;
     revalidateWorkSurfaces();
-    await logAudit({
+    await logAudit(supabase, user, {
       action: "rename_studio",
       target_kind: "studio",
       target_id: trimmed,
-      payload: { from: oldName, to: trimmed, affected_works: affected ?? null },
+      payload: {
+        from: oldName,
+        to: trimmed,
+        affected_works: rows?.length ?? 0,
+      },
     });
     return ok(undefined);
   } catch (e) {
@@ -277,13 +257,14 @@ export async function renameStudio(
 
 export async function deleteStudio(studio: string): Promise<ActionResult> {
   try {
-    const { supabase } = await requireAdmin();
+    const { supabase, user } = await requireAdmin();
     if (studio === NULL_STUDIO_KEY) {
       throw new Error(
         "「未分類」是虛擬分類，無法直接刪除；請改名讓裡面的作品有歸屬"
       );
     }
-    // Snapshot the work titles + counts before the cascade demolition.
+    // Same as deleteWork: snapshot is the only post-mortem the audit
+    // log gives us, so the extra round-trip is justified.
     const { data: before } = await supabase
       .from("works")
       .select("id, title_zh, poster_count")
@@ -291,7 +272,7 @@ export async function deleteStudio(studio: string): Promise<ActionResult> {
     const { error } = await supabase.from("works").delete().eq("studio", studio);
     if (error) throw error;
     revalidateWorkSurfaces();
-    await logAudit({
+    await logAudit(supabase, user, {
       action: "delete_studio",
       target_kind: "studio",
       target_id: studio,

@@ -1,14 +1,14 @@
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/auth-cache";
 import LogoutButton from "./LogoutButton";
 import { ThemeToggle } from "./ThemeToggle";
 import { Separator } from "./ui/separator";
 
 export default async function Nav() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Memoised per-request via lib/auth-cache. The page server component
+  // and any sibling that also calls getCurrentUser share this result —
+  // one JWT validation per render, not one per caller.
+  const user = await getCurrentUser();
 
   return (
     <nav className="hidden md:flex items-center justify-between px-6 py-3 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 sticky top-0 z-30">

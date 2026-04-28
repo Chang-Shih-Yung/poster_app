@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/auth-cache";
 import LogoutButton from "@/components/LogoutButton";
 import {
   Card,
@@ -9,10 +9,7 @@ import {
 } from "@/components/ui/card";
 
 export default async function UnauthorizedPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
 
   return (
     <main className="min-h-screen bg-background text-foreground flex items-center justify-center p-4">

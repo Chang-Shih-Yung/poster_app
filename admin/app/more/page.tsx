@@ -2,17 +2,14 @@ import Link from "next/link";
 import { Layers, Image as ImageIcon, ChevronRight } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import PageShell from "@/components/PageShell";
-import { createClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/auth-cache";
 import LogoutButton from "@/components/LogoutButton";
 import { Card, CardContent } from "@/components/ui/card";
 
 export const dynamic = "force-dynamic";
 
 export default async function MorePage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
 
   return (
     <PageShell title="更多">

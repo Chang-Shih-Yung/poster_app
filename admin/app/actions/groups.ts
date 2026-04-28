@@ -10,9 +10,9 @@ import { requireAdmin, ok, fail, logAudit, type ActionResult } from "./_internal
  */
 
 function revalidateGroupSurfaces(workId?: string, groupId?: string) {
-  revalidatePath("/tree", "layout");
-  revalidatePath("/works", "layout");
-  revalidatePath("/posters", "layout");
+  revalidatePath("/tree");
+  revalidatePath("/works");
+  revalidatePath("/posters");
   if (workId) {
     revalidatePath(`/works/${workId}`);
     revalidatePath(`/tree/work/${workId}`);
@@ -32,7 +32,7 @@ export async function createGroup(input: {
   }>
 > {
   try {
-    const { supabase } = await requireAdmin();
+    const { supabase, user } = await requireAdmin();
     if (!input.name.trim()) throw new Error("群組名稱必填");
     const { data, error } = await supabase
       .from("poster_groups")
@@ -45,7 +45,7 @@ export async function createGroup(input: {
       .single();
     if (error) throw error;
     revalidateGroupSurfaces(input.work_id, input.parent_group_id ?? undefined);
-    await logAudit({
+    await logAudit(supabase, user, {
       action: "create_group",
       target_kind: "group",
       target_id: data.id,
@@ -66,26 +66,25 @@ export async function renameGroup(
   name: string
 ): Promise<ActionResult> {
   try {
-    const { supabase } = await requireAdmin();
+    const { supabase, user } = await requireAdmin();
     if (!name.trim()) throw new Error("名稱不能為空");
     const trimmed = name.trim();
-    const { data: existing, error: lookupErr } = await supabase
-      .from("poster_groups")
-      .select("work_id, name")
-      .eq("id", id)
-      .maybeSingle();
-    if (lookupErr) throw lookupErr;
-    const { error } = await supabase
+    // One round-trip: update returns the new row + work_id needed for
+    // revalidate. No separate lookup of the previous name (audit log
+    // records "to" only; previous values are in the prior audit row).
+    const { data, error } = await supabase
       .from("poster_groups")
       .update({ name: trimmed })
-      .eq("id", id);
+      .eq("id", id)
+      .select("work_id")
+      .maybeSingle();
     if (error) throw error;
-    revalidateGroupSurfaces(existing?.work_id ?? undefined, id);
-    await logAudit({
+    revalidateGroupSurfaces(data?.work_id ?? undefined, id);
+    await logAudit(supabase, user, {
       action: "rename_group",
       target_kind: "group",
       target_id: id,
-      payload: { from: existing?.name ?? null, to: trimmed },
+      payload: { to: trimmed },
     });
     return ok(undefined);
   } catch (e) {
@@ -95,7 +94,9 @@ export async function renameGroup(
 
 export async function deleteGroup(id: string): Promise<ActionResult> {
   try {
-    const { supabase } = await requireAdmin();
+    const { supabase, user } = await requireAdmin();
+    // Snapshot is required — after delete the row is gone and the
+    // audit log is the only post-mortem.
     const { data: existing, error: lookupErr } = await supabase
       .from("poster_groups")
       .select("work_id, parent_group_id, name, group_type")
@@ -111,7 +112,7 @@ export async function deleteGroup(id: string): Promise<ActionResult> {
       existing?.work_id ?? undefined,
       existing?.parent_group_id ?? undefined
     );
-    await logAudit({
+    await logAudit(supabase, user, {
       action: "delete_group",
       target_kind: "group",
       target_id: id,

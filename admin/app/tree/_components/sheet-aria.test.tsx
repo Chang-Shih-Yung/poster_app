@@ -35,9 +35,9 @@ describe("Sheet aria-describedby (ISSUE-001)", () => {
     // Radix logs the warning via console.error. Some Radix builds use
     // console.warn — check both to keep the test stable across versions.
     const calls = [...warn.mock.calls, ...error.mock.calls];
-    return calls.filter((args) =>
+    return calls.filter((args: unknown[]) =>
       args.some(
-        (a) =>
+        (a: unknown) =>
           typeof a === "string" &&
           /Description|aria-describedby/i.test(a)
       )

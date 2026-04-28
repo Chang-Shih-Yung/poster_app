@@ -9,15 +9,16 @@ import { requireAdmin, ok, fail, logAudit, type ActionResult } from "./_internal
  * the DB write portion (attachImage) is a server action so the row's
  * is_placeholder flip is admin-gated.
  *
- * Legacy NOT NULL columns (`title`, `poster_url`, `uploader_id`) are
- * back-filled here. A schema cleanup ticket is captured in TODOS.md.
+ * Cache invalidation: precise paths only. `"layout"` qualifier was
+ * removed because it cascaded too aggressively — every poster mutation
+ * was blowing up the entire layout segment cache.
  */
 
 function revalidatePosterSurfaces(workId?: string, posterId?: string) {
-  revalidatePath("/posters", "layout");
+  revalidatePath("/posters");
   revalidatePath("/upload-queue");
-  revalidatePath("/tree", "layout");
-  revalidatePath("/", "layout");
+  revalidatePath("/tree");
+  revalidatePath("/");
   if (workId) {
     revalidatePath(`/works/${workId}`);
     revalidatePath(`/tree/work/${workId}`);
@@ -28,13 +29,9 @@ function revalidatePosterSurfaces(workId?: string, posterId?: string) {
 /**
  * Create a poster row. The minimal form (Sheet "新增海報" inside the
  * tree) supplies just work_id + name; the full PosterForm supplies
- * every metadata field.
- *
- * `title`, `poster_url`, `uploader_id` are NOT NULL legacy columns;
- * the BEFORE INSERT trigger `fill_legacy_poster_defaults` (migration
- * 20260428100200) defaults them so callers don't have to. `status`
- * is set explicitly because admin-created rows bypass the public
- * submission moderation queue.
+ * every metadata field. `title`, `poster_url`, `uploader_id` are
+ * filled by DB triggers (migrations 20260428100200 +
+ * 20260428110000), so we don't write them here.
  */
 export async function createPoster(input: {
   work_id: string;
@@ -61,7 +58,7 @@ export async function createPoster(input: {
   }>
 > {
   try {
-    const { supabase } = await requireAdmin();
+    const { supabase, user } = await requireAdmin();
     if (!input.poster_name.trim()) throw new Error("海報名稱必填");
     const trimmed = input.poster_name.trim();
     const { data, error } = await supabase
@@ -88,7 +85,7 @@ export async function createPoster(input: {
       .single();
     if (error) throw error;
     revalidatePosterSurfaces(input.work_id);
-    await logAudit({
+    await logAudit(supabase, user, {
       action: "create_poster",
       target_kind: "poster",
       target_id: data.id,
@@ -109,29 +106,25 @@ export async function renamePoster(
   poster_name: string
 ): Promise<ActionResult> {
   try {
-    const { supabase } = await requireAdmin();
+    const { supabase, user } = await requireAdmin();
     if (!poster_name.trim()) throw new Error("名稱不能為空");
     const trimmed = poster_name.trim();
-    // The DB trigger `sync_poster_title_from_name` keeps `title` in
-    // lock-step when poster_name updates, so we don't need to write
-    // both columns from here.
-    const { data: existing, error: lookupErr } = await supabase
-      .from("posters")
-      .select("work_id, poster_name")
-      .eq("id", id)
-      .maybeSingle();
-    if (lookupErr) throw lookupErr;
-    const { error } = await supabase
+    // One round-trip: update returns the new row + work_id needed for
+    // revalidation. DB trigger `sync_poster_title_from_name` keeps the
+    // legacy `title` column in lock-step.
+    const { data, error } = await supabase
       .from("posters")
       .update({ poster_name: trimmed })
-      .eq("id", id);
+      .eq("id", id)
+      .select("work_id")
+      .maybeSingle();
     if (error) throw error;
-    revalidatePosterSurfaces(existing?.work_id ?? undefined, id);
-    await logAudit({
+    revalidatePosterSurfaces(data?.work_id ?? undefined, id);
+    await logAudit(supabase, user, {
       action: "rename_poster",
       target_kind: "poster",
       target_id: id,
-      payload: { from: existing?.poster_name ?? null, to: trimmed },
+      payload: { to: trimmed },
     });
     return ok(undefined);
   } catch (e) {
@@ -141,7 +134,7 @@ export async function renamePoster(
 
 export async function deletePoster(id: string): Promise<ActionResult> {
   try {
-    const { supabase } = await requireAdmin();
+    const { supabase, user } = await requireAdmin();
     const { data: existing, error: lookupErr } = await supabase
       .from("posters")
       .select(
@@ -153,7 +146,7 @@ export async function deletePoster(id: string): Promise<ActionResult> {
     const { error } = await supabase.from("posters").delete().eq("id", id);
     if (error) throw error;
     revalidatePosterSurfaces(existing?.work_id ?? undefined, id);
-    await logAudit({
+    await logAudit(supabase, user, {
       action: "delete_poster",
       target_kind: "poster",
       target_id: id,
@@ -167,9 +160,12 @@ export async function deletePoster(id: string): Promise<ActionResult> {
 
 /**
  * After client-side image upload finishes, this writes the resulting
- * URLs/blurhash and flips is_placeholder. The upload itself stays on
- * the client (browser image compression libraries can't run on the
- * server cheaply) but the DB write goes through admin gating.
+ * URLs/blurhash and flips is_placeholder.
+ *
+ * The audit trail wants the previous URL (so a wrong image upload
+ * leaves a forensic trail). We fetch + update in two round-trips
+ * because the new URL replaces the old in the row, so .update().select()
+ * can't return the previous value.
  */
 export async function attachImage(
   id: string,
@@ -181,7 +177,7 @@ export async function attachImage(
   }
 ): Promise<ActionResult> {
   try {
-    const { supabase } = await requireAdmin();
+    const { supabase, user } = await requireAdmin();
     const { data: existing, error: lookupErr } = await supabase
       .from("posters")
       .select("work_id, poster_url, thumbnail_url, is_placeholder")
@@ -200,7 +196,7 @@ export async function attachImage(
       .eq("id", id);
     if (error) throw error;
     revalidatePosterSurfaces(existing?.work_id ?? undefined, id);
-    await logAudit({
+    await logAudit(supabase, user, {
       action: "attach_image",
       target_kind: "image",
       target_id: id,
@@ -225,15 +221,17 @@ export async function updatePosterMetadata(
 ): Promise<ActionResult> {
   try {
     const { supabase } = await requireAdmin();
-    const { data: existing, error: lookupErr } = await supabase
+    // One round-trip: update returns the work_id we need for
+    // revalidation. updatePosterMetadata is non-destructive bulk
+    // edit (form save) so no audit log entry is generated here.
+    const { data, error } = await supabase
       .from("posters")
-      .select("work_id")
+      .update(patch)
       .eq("id", id)
+      .select("work_id")
       .maybeSingle();
-    if (lookupErr) throw lookupErr;
-    const { error } = await supabase.from("posters").update(patch).eq("id", id);
     if (error) throw error;
-    revalidatePosterSurfaces(existing?.work_id ?? undefined, id);
+    revalidatePosterSurfaces(data?.work_id ?? undefined, id);
     return ok(undefined);
   } catch (e) {
     return fail(e);
