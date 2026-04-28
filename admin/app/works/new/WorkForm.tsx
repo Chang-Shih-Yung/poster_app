@@ -4,6 +4,18 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { WORK_KINDS } from "@/lib/enums";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Card, CardContent } from "@/components/ui/card";
+import { AlertTriangle, Loader2 } from "lucide-react";
 
 type WorkFormProps = {
   mode: "create" | "edit";
@@ -17,13 +29,6 @@ type WorkFormProps = {
   };
 };
 
-/**
- * "Work" in the DB schema, but Henry's mental model treats it as a
- * "群組" (the same word he uses for poster_groups one level deeper).
- * UI labels reflect that. The form intentionally captures only what's
- * meaningful at the group level — name, kind, IP holder. Per-poster
- * data (year, region, channel, etc.) lives on PosterForm.
- */
 export default function WorkForm({ mode, initial }: WorkFormProps) {
   const router = useRouter();
   const [studio, setStudio] = useState(initial?.studio ?? "");
@@ -69,93 +74,75 @@ export default function WorkForm({ mode, initial }: WorkFormProps) {
   return (
     <form onSubmit={onSubmit} className="space-y-4">
       {error && (
-        <div className="p-3 rounded-md bg-red-900/40 border border-red-700 text-sm">
-          {error}
-        </div>
+        <Card className="border-destructive/40 bg-destructive/10">
+          <CardContent className="p-3 flex items-start gap-2 text-sm text-destructive">
+            <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+            <span>{error}</span>
+          </CardContent>
+        </Card>
       )}
 
-      <Field label="Studio / IP 持有者">
-        <input
+      <div className="space-y-1.5">
+        <Label htmlFor="studio">Studio / IP 持有者</Label>
+        <Input
+          id="studio"
           value={studio}
           onChange={(e) => setStudio(e.target.value)}
           placeholder="例：漫威 / 吉卜力 / 新海誠 作品"
-          className="w-full"
         />
-      </Field>
+      </div>
 
-      <Field label="群組名稱 *" required>
-        <input
+      <div className="space-y-1.5">
+        <Label htmlFor="title_zh">群組名稱 *</Label>
+        <Input
+          id="title_zh"
           value={titleZh}
           onChange={(e) => setTitleZh(e.target.value)}
           placeholder="例：復仇者系列 / 神隱少女"
-          className="w-full"
           required
         />
-      </Field>
+      </div>
 
-      <Field label="英文名">
-        <input
+      <div className="space-y-1.5">
+        <Label htmlFor="title_en">英文名</Label>
+        <Input
+          id="title_en"
           value={titleEn}
           onChange={(e) => setTitleEn(e.target.value)}
           placeholder="例：Avengers / Spirited Away"
-          className="w-full"
         />
-      </Field>
+      </div>
 
-      <Field label="類型">
-        <select
-          value={workKind}
-          onChange={(e) => setWorkKind(e.target.value)}
-          className="w-full"
-        >
-          {WORK_KINDS.map((k) => (
-            <option key={k.value} value={k.value}>
-              {k.label}
-            </option>
-          ))}
-        </select>
-      </Field>
+      <div className="space-y-1.5">
+        <Label htmlFor="work_kind">類型</Label>
+        <Select value={workKind} onValueChange={setWorkKind}>
+          <SelectTrigger id="work_kind">
+            <SelectValue placeholder="請選擇" />
+          </SelectTrigger>
+          <SelectContent>
+            {WORK_KINDS.map((k) => (
+              <SelectItem key={k.value} value={k.value}>
+                {k.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
 
-      <p className="text-[11px] text-textFaint">
+      <p className="text-xs text-muted-foreground">
         年份、地區、通路等資訊請在每張海報單獨設定（每張海報可能對應不同
         重映、版本、通路）。
       </p>
 
       <div className="pt-4 flex gap-3">
-        <button
-          type="submit"
-          disabled={submitting}
-          className="px-4 py-2 rounded-md bg-accent text-bg font-medium disabled:opacity-50"
-        >
+        <Button type="submit" disabled={submitting}>
+          {submitting && <Loader2 className="animate-spin" />}
           {submitting ? "儲存中…" : mode === "create" ? "建立" : "儲存"}
-        </button>
-        <button
-          type="button"
-          onClick={() => router.back()}
-          className="px-4 py-2 rounded-md border border-line2 text-textMute"
-        >
+        </Button>
+        <Button type="button" variant="outline" onClick={() => router.back()}>
           取消
-        </button>
+        </Button>
       </div>
     </form>
-  );
-}
-
-function Field({
-  label,
-  required,
-  children,
-}: {
-  label: string;
-  required?: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <label className="block">
-      <span className="block text-xs uppercase tracking-wider text-textMute mb-1.5">
-        {label}
-      </span>
-      {children}
-    </label>
   );
 }

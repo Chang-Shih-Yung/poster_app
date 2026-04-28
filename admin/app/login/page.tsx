@@ -1,6 +1,14 @@
 "use client";
 
 import { createClient } from "@/lib/supabase/client";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 
 export default function LoginPage() {
   async function signInWithGoogle() {
@@ -15,19 +23,18 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="min-h-screen flex items-center justify-center">
-      <div className="w-80 p-8 rounded-xl bg-surface border border-line1 text-center">
-        <h1 className="text-xl font-semibold mb-2">Poster. Admin</h1>
-        <p className="text-sm text-textMute mb-6">
-          只有白名單內的 Google 帳號能登入。
-        </p>
-        <button
-          onClick={signInWithGoogle}
-          className="w-full py-2.5 rounded-md bg-accent text-bg font-medium hover:opacity-90"
-        >
-          以 Google 登入
-        </button>
-      </div>
+    <main className="min-h-screen bg-background text-foreground flex items-center justify-center p-4">
+      <Card className="w-80">
+        <CardHeader className="text-center">
+          <CardTitle>Poster. Admin</CardTitle>
+          <CardDescription>只有白名單內的 Google 帳號能登入。</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button onClick={signInWithGoogle} className="w-full">
+            以 Google 登入
+          </Button>
+        </CardContent>
+      </Card>
     </main>
   );
 }

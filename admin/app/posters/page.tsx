@@ -29,8 +29,6 @@ export default async function PostersListPage({
 
   const { data: rows } = await query;
 
-  // Supabase types `works` as either an object or array depending on the
-  // join cardinality. PostersList expects { ... } | null — normalise.
   const posters = (rows ?? []).map((r) => {
     const work = Array.isArray(r.works) ? r.works[0] : r.works;
     return {
@@ -41,8 +39,8 @@ export default async function PostersListPage({
 
   return (
     <PageShell title="所有海報">
-      <div className="md:px-0">
-        <h1 className="hidden md:block text-2xl font-semibold mb-4 px-4 md:px-0">
+      <div className="pt-4 md:pt-0">
+        <h1 className="hidden md:block text-2xl font-semibold tracking-tight mb-4 px-4 md:px-0">
           所有海報
         </h1>
         <PostersList

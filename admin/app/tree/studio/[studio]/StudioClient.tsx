@@ -31,9 +31,11 @@ type Work = {
 export default function StudioClient({
   studio,
   works: initialWorks,
+  nav,
 }: {
   studio: string;
   works: Work[];
+  nav?: React.ReactNode;
 }) {
   const router = useRouter();
   const supabase = createClient();
@@ -108,6 +110,7 @@ export default function StudioClient({
 
   return (
     <TreeShell
+      nav={nav}
       back={{ href: "/tree", label: "目錄" }}
       title={studio}
       subtitle={`${works.length} 部作品 · ${totalPosters} 張海報`}

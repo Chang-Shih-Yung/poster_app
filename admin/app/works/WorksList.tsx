@@ -2,8 +2,13 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Pencil, Trash2, Plus, Loader2, AlertTriangle } from "lucide-react";
+import Link from "next/link";
+import { Pencil, Trash2, Plus, Loader2, AlertTriangle, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 
 /**
  * Flat list of every work in the catalogue, with inline rename + delete +
@@ -134,92 +139,98 @@ export default function WorksList({ initial }: { initial: Work[] }) {
   }
 
   return (
-    <>
-      <div className="sticky z-30 bg-bg/95 backdrop-blur-sm flex items-center justify-between px-4 md:px-0 py-2.5 mb-1 top-[calc(env(safe-area-inset-top,0px)+52px)] md:top-0">
-        <span className="text-xs text-textMute">{works.length} 部作品</span>
-        <button
-          onClick={() => setAdding(true)}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md bg-accent text-bg font-medium"
-        >
-          <Plus className="w-4 h-4" /> 新增作品
-        </button>
+    <div className="px-4 md:px-0">
+      <div className="sticky top-[calc(env(safe-area-inset-top,0px)+52px)] md:top-14 z-30 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 -mx-4 md:mx-0 px-4 md:px-0 py-2.5 mb-3 flex items-center justify-between">
+        <span className="text-xs text-muted-foreground">
+          {works.length} 部作品
+        </span>
+        <Button size="sm" onClick={() => setAdding(true)}>
+          <Plus />
+          新增作品
+        </Button>
       </div>
 
       {adding && (
-        <div className="mx-4 md:mx-0 mb-3 p-3 rounded-md bg-surfaceRaised border border-line2 space-y-2">
-          <input
-            autoFocus
-            value={newStudio}
-            onChange={(e) => setNewStudio(e.target.value)}
-            placeholder="（選填）所屬分類（電影 / 演唱會 ...）"
-            className="w-full"
-            disabled={busy}
-          />
-          <input
-            value={newTitle}
-            onChange={(e) => setNewTitle(e.target.value)}
-            placeholder="作品名稱（中文）"
-            className="w-full"
-            disabled={busy}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") createNew();
-              if (e.key === "Escape") {
-                setAdding(false);
-                setNewStudio("");
-                setNewTitle("");
-              }
-            }}
-          />
-          <div className="flex gap-2">
-            <button
-              onClick={createNew}
-              disabled={busy || !newTitle.trim()}
-              className="px-3 py-1.5 text-xs rounded-md bg-accent text-bg font-medium disabled:opacity-50 inline-flex items-center gap-1"
-            >
-              {busy && <Loader2 className="w-3 h-3 animate-spin" />}
-              {busy ? "建立中" : "建立"}
-            </button>
-            <button
-              onClick={() => {
-                setAdding(false);
-                setNewStudio("");
-                setNewTitle("");
-              }}
+        <Card className="mb-3">
+          <CardContent className="p-3 space-y-2">
+            <Input
+              autoFocus
+              value={newStudio}
+              onChange={(e) => setNewStudio(e.target.value)}
+              placeholder="（選填）所屬分類"
               disabled={busy}
-              className="px-3 py-1.5 text-xs rounded-md border border-line2 text-textMute"
-            >
-              取消
-            </button>
-          </div>
-        </div>
+            />
+            <Input
+              value={newTitle}
+              onChange={(e) => setNewTitle(e.target.value)}
+              placeholder="作品名稱（中文）"
+              disabled={busy}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") createNew();
+                if (e.key === "Escape") {
+                  setAdding(false);
+                  setNewStudio("");
+                  setNewTitle("");
+                }
+              }}
+            />
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                onClick={createNew}
+                disabled={busy || !newTitle.trim()}
+              >
+                {busy && <Loader2 className="animate-spin" />}
+                {busy ? "建立中" : "建立"}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  setAdding(false);
+                  setNewStudio("");
+                  setNewTitle("");
+                }}
+                disabled={busy}
+              >
+                取消
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {error && (
-        <div className="mx-4 md:mx-0 mb-3 p-3 rounded-md bg-red-900/40 border border-red-700 text-sm flex items-start gap-2">
-          <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-red-400" />
-          <span className="flex-1">{error}</span>
-          <button
-            onClick={() => setError(null)}
-            className="text-textMute hover:text-text shrink-0"
-          >
-            關閉
-          </button>
-        </div>
+        <Card className="mb-3 border-destructive/40 bg-destructive/10">
+          <CardContent className="p-3 flex items-start gap-2 text-sm text-destructive">
+            <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+            <span className="flex-1">{error}</span>
+            <Button
+              variant="quiet"
+              size="icon"
+              onClick={() => setError(null)}
+              aria-label="關閉"
+            >
+              <X />
+            </Button>
+          </CardContent>
+        </Card>
       )}
 
       {works.length === 0 ? (
-        <ul className="border-y border-line1 md:border md:rounded-lg md:bg-surface">
-          <li className="px-4 py-10 text-center text-textFaint text-sm">
-            還沒有作品。
-            <br />
-            <button
+        <Card>
+          <CardContent className="py-10 text-center text-muted-foreground text-sm">
+            <div>還沒有作品。</div>
+            <Button
+              variant="link"
               onClick={() => setAdding(true)}
-              className="text-accent inline-flex items-center gap-1 mt-2"
+              className="mt-2"
             >
-              <Plus className="w-4 h-4" /> 新增第一筆
-            </button>
-          </li>
-        </ul>
+              <Plus />
+              新增第一筆
+            </Button>
+          </CardContent>
+        </Card>
       ) : (
         <WorksSections
           works={works}
@@ -236,15 +247,10 @@ export default function WorksList({ initial }: { initial: Work[] }) {
           onRemove={remove}
         />
       )}
-    </>
+    </div>
   );
 }
 
-/**
- * Sections works by their `studio` field, preserving the newest-first
- * order within each section. Section header shows the studio name +
- * total count; "(未分類)" collects works whose studio is null.
- */
 function WorksSections({
   works,
   editing,
@@ -266,8 +272,6 @@ function WorksSections({
   onCommitEdit: (w: Work, newTitle: string) => void;
   onRemove: (w: Work) => void;
 }) {
-  // Bucket by studio in iteration order so the studio whose newest work
-  // appears first in the source list comes first in the rendered sections.
   const sections = new Map<string, Work[]>();
   for (const w of works) {
     const k = w.studio ?? "(未分類)";
@@ -279,92 +283,89 @@ function WorksSections({
     <div className="space-y-4">
       {[...sections.entries()].map(([studio, items]) => (
         <div key={studio}>
-          <div className="px-4 md:px-0 pb-1 text-xs text-textFaint">
+          <div className="pb-1 text-xs text-muted-foreground">
             {studio} ({items.length})
           </div>
-          <ul className="divide-y divide-line1 border-y border-line1 md:border md:rounded-lg md:bg-surface">
-            {items.map((w, i) => (
-              <li key={w.id}>
-                {editing === w.id ? (
-                  <div className="bg-surfaceRaised py-2 px-4">
-                    <div className="flex gap-2">
-                      <input
-                        autoFocus
-                        value={editValue}
-                        onChange={(e) => onChangeEdit(e.target.value)}
-                        placeholder="作品中文名"
-                        className="flex-1"
-                        disabled={busy}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") onCommitEdit(w, editValue);
-                          if (e.key === "Escape") onCancelEdit();
-                        }}
-                      />
-                      <button
-                        onClick={() => onCommitEdit(w, editValue)}
-                        disabled={busy || !editValue.trim()}
-                        className="px-3 py-1.5 text-xs rounded-md bg-accent text-bg font-medium disabled:opacity-50"
-                      >
-                        {busy ? "儲存中" : "確認"}
-                      </button>
-                      <button
-                        onClick={onCancelEdit}
-                        disabled={busy}
-                        className="px-3 py-1.5 text-xs rounded-md border border-line2 text-textMute"
-                      >
-                        取消
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex items-center px-4 py-3 min-h-[60px]">
-                    <span className="text-xs text-textFaint tabular-nums shrink-0 w-7">
-                      {i + 1}.
-                    </span>
-                    <a
-                      href={`/works/${w.id}`}
-                      className="min-w-0 flex-1 mr-2 hover:no-underline"
-                    >
-                      <span className="flex items-baseline gap-1">
-                        <span className="text-sm text-text truncate">
-                          {w.title_zh}
-                        </span>
-                        {w.poster_count > 0 && (
-                          <span className="text-xs text-textFaint tabular-nums shrink-0">
-                            ({w.poster_count})
-                          </span>
-                        )}
-                        <button
-                          onClick={(e) => {
-                            e.preventDefault();
-                            onStartEdit(w);
+          <Card>
+            <CardContent className="p-0">
+              <ul className="divide-y divide-border">
+                {items.map((w) => (
+                  <li key={w.id}>
+                    {editing === w.id ? (
+                      <div className="bg-secondary/40 py-2 px-3 flex gap-2">
+                        <Input
+                          autoFocus
+                          value={editValue}
+                          onChange={(e) => onChangeEdit(e.target.value)}
+                          placeholder="作品中文名"
+                          disabled={busy}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") onCommitEdit(w, editValue);
+                            if (e.key === "Escape") onCancelEdit();
                           }}
-                          className="shrink-0 text-textFaint hover:text-text p-1 -m-1"
+                        />
+                        <Button
+                          size="sm"
+                          onClick={() => onCommitEdit(w, editValue)}
+                          disabled={busy || !editValue.trim()}
+                        >
+                          {busy ? "儲存中" : "確認"}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={onCancelEdit}
+                          disabled={busy}
+                        >
+                          取消
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center px-4 py-3 min-h-[60px]">
+                        <Link
+                          href={`/works/${w.id}`}
+                          className="min-w-0 flex-1 mr-2 hover:no-underline"
+                        >
+                          <span className="flex items-baseline gap-2">
+                            <span className="text-sm text-foreground truncate">
+                              {w.title_zh}
+                            </span>
+                            {w.poster_count > 0 && (
+                              <Badge variant="muted">{w.poster_count}</Badge>
+                            )}
+                          </span>
+                          {(w.title_en || w.work_kind) && (
+                            <span className="block text-xs text-muted-foreground truncate mt-0.5">
+                              {[w.title_en, w.work_kind].filter(Boolean).join(" · ")}
+                            </span>
+                          )}
+                        </Link>
+                        <Button
+                          variant="quiet"
+                          size="icon"
+                          onClick={() => onStartEdit(w)}
                           aria-label="重新命名"
                           title="重新命名"
                         >
-                          <Pencil className="w-3 h-3" />
-                        </button>
-                      </span>
-                      {(w.title_en || w.work_kind) && (
-                        <span className="block text-xs text-textFaint truncate mt-0.5">
-                          {[w.title_en, w.work_kind].filter(Boolean).join(" · ")}
-                        </span>
-                      )}
-                    </a>
-                    <button
-                      onClick={() => onRemove(w)}
-                      className="w-9 h-9 flex items-center justify-center text-textMute hover:text-red-400 shrink-0"
-                      aria-label="刪除"
-                      title="刪除"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                )}
-              </li>
-            ))}
-          </ul>
+                          <Pencil />
+                        </Button>
+                        <Button
+                          variant="quiet"
+                          size="icon"
+                          onClick={() => onRemove(w)}
+                          aria-label="刪除"
+                          title="刪除"
+                          className="hover:text-destructive"
+                        >
+                          <Trash2 />
+                        </Button>
+                      </div>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </CardContent>
+          </Card>
         </div>
       ))}
     </div>

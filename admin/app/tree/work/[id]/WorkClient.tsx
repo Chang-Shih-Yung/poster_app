@@ -48,10 +48,12 @@ export default function WorkClient({
   work,
   groups: initialGroups,
   posters: initialPosters,
+  nav,
 }: {
   work: WorkInfo;
   groups: Group[];
   posters: Poster[];
+  nav?: React.ReactNode;
 }) {
   const router = useRouter();
   const supabase = createClient();
@@ -221,6 +223,7 @@ export default function WorkClient({
 
   return (
     <TreeShell
+      nav={nav}
       back={{
         href: `/tree/studio/${encodeStudioParam(studioKey)}`,
         label: studioKey,

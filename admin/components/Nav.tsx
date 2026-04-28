@@ -1,26 +1,54 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import LogoutButton from "./LogoutButton";
+import { ThemeToggle } from "./ThemeToggle";
+import { Separator } from "./ui/separator";
 
 export default async function Nav() {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   return (
-    <nav className="hidden md:flex items-center justify-between px-6 py-3 border-b border-line1">
+    <nav className="hidden md:flex items-center justify-between px-6 py-3 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 sticky top-0 z-30">
       <div className="flex items-center gap-6">
-        <Link href="/" className="font-semibold text-text hover:no-underline">
+        <Link
+          href="/"
+          className="font-semibold text-foreground hover:no-underline"
+        >
           Poster. Admin
         </Link>
-        <Link href="/tree">目錄</Link>
-        <Link href="/works">所有作品</Link>
-        <Link href="/posters">所有海報</Link>
-        <Link href="/upload-queue">待補圖</Link>
+        <Separator orientation="vertical" className="h-4" />
+        <NavLink href="/tree">目錄</NavLink>
+        <NavLink href="/works">所有作品</NavLink>
+        <NavLink href="/posters">所有海報</NavLink>
+        <NavLink href="/upload-queue">待補圖</NavLink>
       </div>
-      <div className="flex items-center gap-3 text-sm text-textMute">
-        {user && <span>{user.email}</span>}
-        <LogoutButton />
+      <div className="flex items-center gap-3">
+        {user && (
+          <span className="text-sm text-muted-foreground">{user.email}</span>
+        )}
+        <ThemeToggle />
+        <LogoutButton variant="outline" withIcon={false} />
       </div>
     </nav>
+  );
+}
+
+function NavLink({
+  href,
+  children,
+}: {
+  href: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <Link
+      href={href}
+      className="text-sm text-muted-foreground hover:text-foreground hover:no-underline transition-colors"
+    >
+      {children}
+    </Link>
   );
 }

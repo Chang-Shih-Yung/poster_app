@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import GroupClient from "./GroupClient";
+import Nav from "@/components/Nav";
 
 export const dynamic = "force-dynamic";
 
@@ -107,6 +108,7 @@ export default async function GroupPage({
 
   return (
     <GroupClient
+      nav={<Nav />}
       group={{
         id: group.id as string,
         name: group.name as string,

@@ -15,7 +15,7 @@ export function ThemeToggle() {
   const next = current === "dark" ? "light" : "dark";
   return (
     <Button
-      variant="ghost"
+      variant="quiet"
       size="icon"
       onClick={() => setTheme(next)}
       title={current === "dark" ? "切換到白天模式" : "切換到夜晚模式"}

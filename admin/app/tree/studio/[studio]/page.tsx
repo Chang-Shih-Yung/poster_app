@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import StudioClient from "./StudioClient";
 import { NULL_STUDIO_KEY } from "../../_components/keys";
+import Nav from "@/components/Nav";
 
 export const dynamic = "force-dynamic";
 
@@ -27,5 +28,7 @@ export default async function StudioPage({
     notFound();
   }
 
-  return <StudioClient studio={studio} works={works ?? []} />;
+  return (
+    <StudioClient nav={<Nav />} studio={studio} works={works ?? []} />
+  );
 }

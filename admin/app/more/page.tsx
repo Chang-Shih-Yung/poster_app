@@ -4,45 +4,58 @@ import type { LucideIcon } from "lucide-react";
 import PageShell from "@/components/PageShell";
 import { createClient } from "@/lib/supabase/server";
 import LogoutButton from "@/components/LogoutButton";
+import { Card, CardContent } from "@/components/ui/card";
 
 export const dynamic = "force-dynamic";
 
 export default async function MorePage() {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   return (
     <PageShell title="更多">
-      <div className="md:px-0">
-        <h1 className="hidden md:block text-2xl font-semibold mb-6 px-4 md:px-0">
+      <div className="px-4 md:px-0 pt-4 md:pt-0">
+        <h1 className="hidden md:block text-2xl font-semibold tracking-tight mb-6">
           更多
         </h1>
 
-        <section className="mb-6 px-4 md:px-0">
-          <div className="text-xs uppercase tracking-wider text-textMute mb-2">
-            帳號
-          </div>
-          <div className="rounded-lg bg-surface border border-line1 p-4">
-            <div className="text-sm text-text">{user?.email}</div>
-            <div className="text-xs text-textFaint mt-1">管理員</div>
-          </div>
+        <section className="mb-6">
+          <SectionLabel>帳號</SectionLabel>
+          <Card>
+            <CardContent className="p-4">
+              <div className="text-sm text-foreground">{user?.email}</div>
+              <div className="text-xs text-muted-foreground mt-1">管理員</div>
+            </CardContent>
+          </Card>
         </section>
 
         <section className="mb-6">
-          <div className="text-xs uppercase tracking-wider text-textMute mb-2 px-4 md:px-0">
-            資料管理
-          </div>
-          <ul className="divide-y divide-line1 border-y border-line1 md:border md:rounded-lg md:bg-surface">
-            <Row href="/works" label="所有作品" icon={Layers} />
-            <Row href="/posters" label="所有海報" icon={ImageIcon} />
-          </ul>
+          <SectionLabel>資料管理</SectionLabel>
+          <Card>
+            <CardContent className="p-0">
+              <ul className="divide-y divide-border">
+                <Row href="/works" label="所有作品" icon={Layers} />
+                <Row href="/posters" label="所有海報" icon={ImageIcon} />
+              </ul>
+            </CardContent>
+          </Card>
         </section>
 
-        <section className="px-4 md:px-0">
+        <section>
           <LogoutButton />
         </section>
       </div>
     </PageShell>
+  );
+}
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="text-xs uppercase tracking-wider text-muted-foreground mb-2">
+      {children}
+    </div>
   );
 }
 
@@ -59,11 +72,11 @@ function Row({
     <li>
       <Link
         href={href}
-        className="flex items-center px-4 py-3.5 min-h-[52px] hover:bg-surfaceRaised hover:no-underline"
+        className="flex items-center px-4 py-3.5 min-h-[52px] hover:no-underline group transition-colors"
       >
-        <Icon className="w-4 h-4 mr-3 text-textMute shrink-0" />
-        <span className="text-text flex-1">{label}</span>
-        <ChevronRight className="w-4 h-4 text-textFaint" />
+        <Icon className="w-4 h-4 mr-3 text-muted-foreground shrink-0 group-hover:text-foreground transition-colors" />
+        <span className="text-foreground flex-1">{label}</span>
+        <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-foreground transition-colors" />
       </Link>
     </li>
   );

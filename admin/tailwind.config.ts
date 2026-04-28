@@ -9,20 +9,6 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // Legacy palette — still referenced across /works, /posters, /more
-        // and the Nav/PageShell. Keep these working until the rest of the
-        // admin migrates to shadcn tokens.
-        bg: "#0d1116",
-        surface: "#161b22",
-        surfaceRaised: "#1f252d",
-        line1: "#2a323c",
-        line2: "#3b4552",
-        text: "#e6edf3",
-        textMute: "#8b949e",
-        textFaint: "#6e7681",
-        accent: "#58a6ff",
-
-        // shadcn tokens — drive theme-aware components on the new /tree.
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
@@ -44,6 +30,10 @@ const config: Config = {
           DEFAULT: "hsl(var(--muted))",
           foreground: "hsl(var(--muted-foreground))",
         },
+        accent: {
+          DEFAULT: "hsl(var(--accent))",
+          foreground: "hsl(var(--accent-foreground))",
+        },
         card: {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
@@ -59,7 +49,16 @@ const config: Config = {
         sm: "calc(var(--radius) - 4px)",
       },
       fontFamily: {
-        sans: ["-apple-system", "BlinkMacSystemFont", "Segoe UI", "Roboto", "Helvetica", "Arial", "Noto Sans TC", "sans-serif"],
+        sans: [
+          "-apple-system",
+          "BlinkMacSystemFont",
+          "Segoe UI",
+          "Roboto",
+          "Helvetica",
+          "Arial",
+          "Noto Sans TC",
+          "sans-serif",
+        ],
       },
       keyframes: {
         "accordion-down": {

@@ -45,6 +45,7 @@ export default function GroupClient({
   back,
   groups: initialGroups,
   posters: initialPosters,
+  nav,
 }: {
   group: GroupInfo;
   /** Where the breadcrumb back arrow points — either the parent group or
@@ -53,6 +54,7 @@ export default function GroupClient({
   back: { href: string; label: string };
   groups: Group[];
   posters: Poster[];
+  nav?: React.ReactNode;
 }) {
   const router = useRouter();
   const supabase = createClient();
@@ -253,6 +255,7 @@ export default function GroupClient({
 
   return (
     <TreeShell
+      nav={nav}
       back={back}
       title={group.name}
       subtitle={`${groups.length} 個子群組 · ${posters.length} 張直屬海報`}

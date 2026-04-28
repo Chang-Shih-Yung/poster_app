@@ -4,11 +4,12 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Home, FolderTree, Upload, MoreHorizontal } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 /**
- * Mobile-only bottom tab bar. Hidden on md+ (desktop uses the top
- * Nav instead). Fixed to bottom with safe-area padding so it sits
- * above the iPhone home indicator.
+ * Mobile-only bottom tab bar. Hidden on md+ (desktop uses the top Nav
+ * instead). Fixed to bottom with safe-area padding so it sits above the
+ * iPhone home indicator.
  */
 export default function BottomTabBar() {
   const pathname = usePathname();
@@ -22,7 +23,7 @@ export default function BottomTabBar() {
 
   return (
     <nav
-      className="md:hidden fixed bottom-0 left-0 right-0 bg-surface border-t border-line1 z-50"
+      className="md:hidden fixed bottom-0 left-0 right-0 bg-card border-t border-border z-50"
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
       <div className="flex justify-around">
@@ -34,9 +35,12 @@ export default function BottomTabBar() {
             <Link
               key={t.href}
               href={t.href}
-              className={`flex flex-col items-center justify-center py-2 px-3 min-w-[60px] min-h-[56px] ${
-                active ? "text-accent" : "text-textMute"
-              }`}
+              className={cn(
+                "flex flex-col items-center justify-center py-2 px-3 min-w-[60px] min-h-[56px] transition-colors hover:no-underline",
+                active
+                  ? "text-foreground"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
             >
               <Icon className="w-5 h-5 mb-0.5" />
               <span className="text-[10px] font-medium">{t.label}</span>

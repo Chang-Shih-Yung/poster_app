@@ -23,8 +23,10 @@ type Studio = { studio: string; works: number; posters: number };
 
 export default function StudiosClient({
   studios: initialStudios,
+  nav,
 }: {
   studios: Studio[];
+  nav?: React.ReactNode;
 }) {
   const router = useRouter();
   const supabase = createClient();
@@ -100,6 +102,7 @@ export default function StudiosClient({
 
   return (
     <TreeShell
+      nav={nav}
       back={null}
       title="目錄"
       subtitle={`${studios.length} 個分類`}

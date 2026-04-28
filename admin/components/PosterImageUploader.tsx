@@ -2,17 +2,18 @@
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ImagePlus } from "lucide-react";
+import { ImagePlus, AlertTriangle } from "lucide-react";
 import { uploadPosterImage } from "@/lib/imageUpload";
 import { createClient } from "@/lib/supabase/client";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 
 /**
  * Big mobile-friendly upload zone for one poster. Tap → opens system
- * file picker (camera or gallery on phones, file dialog on desktop).
- * Compresses + uploads + writes posters.image_url|thumbnail_url|
- * blurhash + flips is_placeholder = false.
- *
- * Shown on the poster edit page.
+ * file picker (camera or gallery on phones). Compresses + uploads +
+ * writes posters.image_url | thumbnail_url | blurhash + flips
+ * is_placeholder = false.
  */
 export default function PosterImageUploader({
   posterId,
@@ -66,36 +67,43 @@ export default function PosterImageUploader({
 
   return (
     <div className="space-y-3">
-      <div
+      <button
+        type="button"
         onClick={() => !busy && fileRef.current?.click()}
-        className={`relative w-full aspect-[2/3] rounded-lg overflow-hidden border ${
+        disabled={busy}
+        className={cn(
+          "relative w-full aspect-[2/3] rounded-xl overflow-hidden border text-foreground",
           showPlaceholder
-            ? "border-dashed border-line2 bg-surfaceRaised"
-            : "border-line1"
-        } ${!busy ? "cursor-pointer active:opacity-80" : "opacity-60"}`}
+            ? "border-dashed border-input bg-secondary/40"
+            : "border-border",
+          busy ? "opacity-60" : "active:opacity-80 hover:bg-secondary/60 transition-colors"
+        )}
       >
         {currentImageUrl && !showPlaceholder ? (
+          // eslint-disable-next-line @next/next/no-img-element
           <img
             src={currentImageUrl}
             alt=""
             className="w-full h-full object-cover"
           />
         ) : (
-          <div className="absolute inset-0 flex flex-col items-center justify-center text-textMute p-4 text-center">
+          <div className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground p-4 text-center">
             <ImagePlus className="w-10 h-10 mb-3" strokeWidth={1.5} />
-            <div className="text-sm font-medium">點此上傳真實海報圖</div>
-            <div className="text-xs text-textFaint mt-1">
+            <div className="text-sm font-medium text-foreground">
+              點此上傳真實海報圖
+            </div>
+            <div className="text-xs text-muted-foreground mt-1">
               支援 JPG / PNG / HEIC，自動壓縮與產生縮圖
             </div>
           </div>
         )}
 
         {busy && (
-          <div className="absolute inset-0 bg-bg/80 flex items-center justify-center">
+          <div className="absolute inset-0 bg-background/80 flex items-center justify-center">
             <div className="text-sm">{progress ?? "處理中…"}</div>
           </div>
         )}
-      </div>
+      </button>
 
       <input
         ref={fileRef}
@@ -107,19 +115,23 @@ export default function PosterImageUploader({
       />
 
       {currentImageUrl && !showPlaceholder && (
-        <button
+        <Button
+          variant="outline"
           onClick={() => fileRef.current?.click()}
           disabled={busy}
-          className="w-full py-2 text-sm rounded-md border border-line2 text-textMute"
+          className="w-full"
         >
           換一張
-        </button>
+        </Button>
       )}
 
       {error && (
-        <div className="p-3 rounded-md bg-red-900/40 border border-red-700 text-sm">
-          上傳失敗：{error}
-        </div>
+        <Card className="border-destructive/40 bg-destructive/10">
+          <CardContent className="p-3 flex items-start gap-2 text-sm text-destructive">
+            <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+            <span>上傳失敗：{error}</span>
+          </CardContent>
+        </Card>
       )}
     </div>
   );

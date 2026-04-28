@@ -3,7 +3,27 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { REGIONS, RELEASE_TYPES, SIZE_TYPES, CHANNEL_CATEGORIES, WORK_KINDS } from "@/lib/enums";
+import {
+  REGIONS,
+  RELEASE_TYPES,
+  SIZE_TYPES,
+  CHANNEL_CATEGORIES,
+  WORK_KINDS,
+} from "@/lib/enums";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { AlertTriangle, Loader2 } from "lucide-react";
 
 type WorkOption = { id: string; title_zh: string; studio: string | null };
 
@@ -33,7 +53,16 @@ type PosterFormProps = {
   defaultWorkId?: string;
 };
 
-export default function PosterForm({ mode, works, initial, defaultWorkId }: PosterFormProps) {
+// Sentinel "no value" for shadcn Select (Radix Select rejects an empty
+// string as an item value). Translated back to null on submit.
+const NONE = "__none__";
+
+export default function PosterForm({
+  mode,
+  works,
+  initial,
+  defaultWorkId,
+}: PosterFormProps) {
   const router = useRouter();
   const [workId, setWorkId] = useState(initial?.work_id ?? defaultWorkId ?? "");
   const [parentGroupId, setParentGroupId] = useState<string>(
@@ -47,12 +76,16 @@ export default function PosterForm({ mode, works, initial, defaultWorkId }: Post
     initial?.year != null ? String(initial.year) : ""
   );
   const [region, setRegion] = useState(initial?.region ?? "TW");
-  const [releaseType, setReleaseType] = useState(initial?.poster_release_type ?? "");
+  const [releaseType, setReleaseType] = useState(
+    initial?.poster_release_type ?? ""
+  );
   const [sizeType, setSizeType] = useState(initial?.size_type ?? "");
   const [channelCat, setChannelCat] = useState(initial?.channel_category ?? "");
   const [channelName, setChannelName] = useState(initial?.channel_name ?? "");
   const [isExclusive, setIsExclusive] = useState(initial?.is_exclusive ?? false);
-  const [exclusiveName, setExclusiveName] = useState(initial?.exclusive_name ?? "");
+  const [exclusiveName, setExclusiveName] = useState(
+    initial?.exclusive_name ?? ""
+  );
   const [materialType, setMaterialType] = useState(initial?.material_type ?? "");
   const [versionLabel, setVersionLabel] = useState(initial?.version_label ?? "");
   const [sourceUrl, setSourceUrl] = useState(initial?.source_url ?? "");
@@ -60,8 +93,6 @@ export default function PosterForm({ mode, works, initial, defaultWorkId }: Post
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Load poster_groups for the selected work whenever workId changes,
-  // and flatten the tree into an indented option list.
   useEffect(() => {
     if (!workId) {
       setGroupOptions([]);
@@ -92,7 +123,10 @@ export default function PosterForm({ mode, works, initial, defaultWorkId }: Post
 
     const yearTrimmed = year.trim();
     const yearInt = yearTrimmed ? parseInt(yearTrimmed, 10) : null;
-    if (yearTrimmed && (Number.isNaN(yearInt!) || yearInt! < 1900 || yearInt! > 2100)) {
+    if (
+      yearTrimmed &&
+      (Number.isNaN(yearInt!) || yearInt! < 1900 || yearInt! > 2100)
+    ) {
       setError("年份格式錯誤（1900-2100 整數）");
       setSubmitting(false);
       return;
@@ -117,13 +151,9 @@ export default function PosterForm({ mode, works, initial, defaultWorkId }: Post
     };
 
     if (mode === "create") {
-      // is_placeholder defaults to true DB-side; image_url stays NULL until
-      // admin uploads the real scan (Phase 2 work).
-      row.title = posterName.trim() || "(待命名)"; // legacy NOT NULL on posters.title
-      row.status = "approved"; // admin-created rows bypass the review queue
-      row.poster_url = ""; // legacy NOT NULL; placeholder swap happens later
-      // uploader_id is NOT NULL on the legacy posters table — the admin who
-      // creates the row counts as the "uploader" until we refactor to nullable.
+      row.title = posterName.trim() || "(待命名)";
+      row.status = "approved";
+      row.poster_url = "";
       const { data: userData } = await supabase.auth.getUser();
       const uid = userData.user?.id;
       if (!uid) {
@@ -152,196 +182,247 @@ export default function PosterForm({ mode, works, initial, defaultWorkId }: Post
   return (
     <form onSubmit={onSubmit} className="space-y-4">
       {error && (
-        <div className="p-3 rounded-md bg-red-900/40 border border-red-700 text-sm">
-          {error}
-        </div>
+        <Card className="border-destructive/40 bg-destructive/10">
+          <CardContent className="p-3 flex items-start gap-2 text-sm text-destructive">
+            <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+            <span>{error}</span>
+          </CardContent>
+        </Card>
       )}
 
-      <Field label="作品 *" required>
-        <select
-          value={workId}
-          onChange={(e) => setWorkId(e.target.value)}
-          className="w-full"
-          required
-        >
-          <option value="">── 選擇作品 ──</option>
-          {works.map((w) => (
-            <option key={w.id} value={w.id}>
-              {w.studio ? `[${w.studio}] ` : ""}{w.title_zh}
-            </option>
-          ))}
-        </select>
-      </Field>
+      <div className="space-y-1.5">
+        <Label htmlFor="work_id">作品 *</Label>
+        <Select value={workId} onValueChange={setWorkId}>
+          <SelectTrigger id="work_id">
+            <SelectValue placeholder="── 選擇作品 ──" />
+          </SelectTrigger>
+          <SelectContent>
+            {works.map((w) => (
+              <SelectItem key={w.id} value={w.id}>
+                {w.studio ? `[${w.studio}] ` : ""}
+                {w.title_zh}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
 
       {initial?.work_kind && workId && (
         <WorkKindReadOnly workKind={initial.work_kind} />
       )}
 
-      <Field label="所屬群組">
-        <select
-          value={parentGroupId}
-          onChange={(e) => setParentGroupId(e.target.value)}
-          className="w-full"
+      <div className="space-y-1.5">
+        <Label htmlFor="group">所屬群組</Label>
+        <Select
+          value={parentGroupId || NONE}
+          onValueChange={(v) => setParentGroupId(v === NONE ? "" : v)}
           disabled={!workId}
         >
-          <option value="">── 不屬於任何群組 ──</option>
-          {groupOptions.map((g) => (
-            <option key={g.id} value={g.id}>
-              {g.label}
-            </option>
-          ))}
-        </select>
+          <SelectTrigger id="group">
+            <SelectValue placeholder="── 不屬於任何群組 ──" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={NONE}>── 不屬於任何群組 ──</SelectItem>
+            {groupOptions.map((g) => (
+              <SelectItem key={g.id} value={g.id}>
+                {g.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         {!workId && (
-          <span className="block text-xs text-textFaint mt-1">
+          <p className="text-xs text-muted-foreground">
             先選作品才能看到該作品的群組
-          </span>
+          </p>
         )}
-      </Field>
+      </div>
 
-      <Field label="海報名稱">
-        <input
+      <div className="space-y-1.5">
+        <Label htmlFor="poster_name">海報名稱</Label>
+        <Input
+          id="poster_name"
           value={posterName}
           onChange={(e) => setPosterName(e.target.value)}
           placeholder="例：B1 原版 / IMAX 威秀獨家"
-          className="w-full"
         />
-      </Field>
+      </div>
 
       <div className="grid grid-cols-2 gap-3">
-        <Field label="發行年份">
-          <input
+        <div className="space-y-1.5">
+          <Label htmlFor="year">發行年份</Label>
+          <Input
+            id="year"
             type="number"
             min={1900}
             max={2100}
             value={year}
             onChange={(e) => setYear(e.target.value)}
             placeholder="例：2026"
-            className="w-full"
           />
-        </Field>
-        <Field label="地區">
-          <select value={region} onChange={(e) => setRegion(e.target.value)} className="w-full">
-            {REGIONS.map((r) => (
-              <option key={r.value} value={r.value}>{r.label}</option>
-            ))}
-          </select>
-        </Field>
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="region">地區</Label>
+          <Select value={region} onValueChange={setRegion}>
+            <SelectTrigger id="region">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {REGIONS.map((r) => (
+                <SelectItem key={r.value} value={r.value}>
+                  {r.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        <Field label="發行類型">
-          <select value={releaseType} onChange={(e) => setReleaseType(e.target.value)} className="w-full">
-            <option value="">—</option>
-            {RELEASE_TYPES.map((r) => (
-              <option key={r.value} value={r.value}>{r.label}</option>
-            ))}
-          </select>
-        </Field>
-        <Field label="尺寸">
-          <select value={sizeType} onChange={(e) => setSizeType(e.target.value)} className="w-full">
-            <option value="">—</option>
-            {SIZE_TYPES.map((r) => (
-              <option key={r.value} value={r.value}>{r.label}</option>
-            ))}
-          </select>
-        </Field>
+        <div className="space-y-1.5">
+          <Label htmlFor="release_type">發行類型</Label>
+          <Select
+            value={releaseType || NONE}
+            onValueChange={(v) => setReleaseType(v === NONE ? "" : v)}
+          >
+            <SelectTrigger id="release_type">
+              <SelectValue placeholder="—" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={NONE}>—</SelectItem>
+              {RELEASE_TYPES.map((r) => (
+                <SelectItem key={r.value} value={r.value}>
+                  {r.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="size_type">尺寸</Label>
+          <Select
+            value={sizeType || NONE}
+            onValueChange={(v) => setSizeType(v === NONE ? "" : v)}
+          >
+            <SelectTrigger id="size_type">
+              <SelectValue placeholder="—" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={NONE}>—</SelectItem>
+              {SIZE_TYPES.map((r) => (
+                <SelectItem key={r.value} value={r.value}>
+                  {r.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        <Field label="通路類型">
-          <select value={channelCat} onChange={(e) => setChannelCat(e.target.value)} className="w-full">
-            <option value="">—</option>
-            {CHANNEL_CATEGORIES.map((r) => (
-              <option key={r.value} value={r.value}>{r.label}</option>
-            ))}
-          </select>
-        </Field>
-        <Field label="通路名稱">
-          <input
+        <div className="space-y-1.5">
+          <Label htmlFor="channel_cat">通路類型</Label>
+          <Select
+            value={channelCat || NONE}
+            onValueChange={(v) => setChannelCat(v === NONE ? "" : v)}
+          >
+            <SelectTrigger id="channel_cat">
+              <SelectValue placeholder="—" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={NONE}>—</SelectItem>
+              {CHANNEL_CATEGORIES.map((r) => (
+                <SelectItem key={r.value} value={r.value}>
+                  {r.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="channel_name">通路名稱</Label>
+          <Input
+            id="channel_name"
             value={channelName}
             onChange={(e) => setChannelName(e.target.value)}
             placeholder="例：威秀影城、東寶"
-            className="w-full"
           />
-        </Field>
+        </div>
       </div>
 
-      <label className="flex items-center gap-2 text-sm">
+      <label className="flex items-center gap-2 text-sm text-foreground">
         <input
           type="checkbox"
           checked={isExclusive}
           onChange={(e) => setIsExclusive(e.target.checked)}
+          className="h-4 w-4 rounded border-input"
         />
         <span>獨家</span>
       </label>
 
       {isExclusive && (
-        <Field label="獨家名稱">
-          <input
+        <div className="space-y-1.5">
+          <Label htmlFor="exclusive_name">獨家名稱</Label>
+          <Input
+            id="exclusive_name"
             value={exclusiveName}
             onChange={(e) => setExclusiveName(e.target.value)}
             placeholder="例：威秀影城"
-            className="w-full"
           />
-        </Field>
+        </div>
       )}
 
       <div className="grid grid-cols-2 gap-3">
-        <Field label="材質">
-          <input
+        <div className="space-y-1.5">
+          <Label htmlFor="material">材質</Label>
+          <Input
+            id="material"
             value={materialType}
             onChange={(e) => setMaterialType(e.target.value)}
             placeholder="例：霧面紙 / 金箔紙"
-            className="w-full"
           />
-        </Field>
-        <Field label="版本標記">
-          <input
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="version">版本標記</Label>
+          <Input
+            id="version"
             value={versionLabel}
             onChange={(e) => setVersionLabel(e.target.value)}
             placeholder="例：v2、25 週年"
-            className="w-full"
           />
-        </Field>
+        </div>
       </div>
 
-      <Field label="來源網址">
-        <input
+      <div className="space-y-1.5">
+        <Label htmlFor="source_url">來源網址</Label>
+        <Input
+          id="source_url"
           type="url"
           value={sourceUrl}
           onChange={(e) => setSourceUrl(e.target.value)}
-          className="w-full"
         />
-      </Field>
-
-      <Field label="備註">
-        <textarea
-          value={sourceNote}
-          onChange={(e) => setSourceNote(e.target.value)}
-          className="w-full min-h-[60px]"
-        />
-      </Field>
-
-      <div className="pt-4 flex gap-3">
-        <button
-          type="submit"
-          disabled={submitting}
-          className="px-4 py-2 rounded-md bg-accent text-bg font-medium disabled:opacity-50"
-        >
-          {submitting ? "儲存中…" : mode === "create" ? "建立" : "儲存"}
-        </button>
-        <button
-          type="button"
-          onClick={() => router.back()}
-          className="px-4 py-2 rounded-md border border-line2 text-textMute"
-        >
-          取消
-        </button>
       </div>
 
-      <p className="text-xs text-textFaint pt-2">
-        ⓘ 新建海報預設 is_placeholder = true（先用通用剪影顯示）。Phase 2
-        後台會加拖拉上傳真實圖片的功能。
+      <div className="space-y-1.5">
+        <Label htmlFor="source_note">備註</Label>
+        <Textarea
+          id="source_note"
+          value={sourceNote}
+          onChange={(e) => setSourceNote(e.target.value)}
+        />
+      </div>
+
+      <div className="pt-4 flex gap-3">
+        <Button type="submit" disabled={submitting}>
+          {submitting && <Loader2 className="animate-spin" />}
+          {submitting ? "儲存中…" : mode === "create" ? "建立" : "儲存"}
+        </Button>
+        <Button type="button" variant="outline" onClick={() => router.back()}>
+          取消
+        </Button>
+      </div>
+
+      <p className="text-xs text-muted-foreground pt-2">
+        新建海報預設 is_placeholder = true（先用通用剪影顯示）。
       </p>
     </form>
   );
@@ -349,41 +430,21 @@ export default function PosterForm({ mode, works, initial, defaultWorkId }: Post
 
 /**
  * Read-only display of work_kind. The value lives on posters.work_kind
- * (denormalized from works.work_kind for filtering) but the source of truth
- * is the work — DB triggers keep them in lock-step. To change the kind, the
- * admin edits the work, not the poster.
+ * (denormalized from works.work_kind for filtering); source of truth is
+ * the work — DB triggers keep them in lock-step.
  */
 function WorkKindReadOnly({ workKind }: { workKind: string }) {
   const label = WORK_KINDS.find((k) => k.value === workKind)?.label ?? workKind;
   return (
     <div className="flex items-center gap-2">
-      <span className="text-xs uppercase tracking-wider text-textMute">類型</span>
-      <span className="px-2 py-0.5 rounded bg-surfaceRaised text-sm text-textFaint opacity-60">
-        {label}
+      <span className="text-xs uppercase tracking-wider text-muted-foreground">
+        類型
       </span>
+      <Badge variant="muted">{label}</Badge>
     </div>
   );
 }
 
-function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
-  return (
-    <label className="block">
-      <span className="block text-xs uppercase tracking-wider text-textMute mb-1.5">
-        {label}
-      </span>
-      {children}
-    </label>
-  );
-}
-
-/**
- * Flatten a list of poster_groups (with parent_group_id) into a list of
- * { id, label } where label is the FULL PATH from root, e.g.
- * "美麗華 / 2025 / 測試子子群組". Native HTML <select> options can't
- * render true visual indent (browsers strip leading whitespace), so we
- * encode the hierarchy in the label itself — unambiguous and readable
- * regardless of the dropdown's positioning.
- */
 type GroupRow = {
   id: string;
   name: string;

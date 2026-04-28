@@ -11,6 +11,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Loader2, AlertTriangle } from "lucide-react";
 
 /**
@@ -119,19 +126,22 @@ export function FormSheet({
                   disabled={busy}
                 />
               ) : (
-                <select
-                  id={f.key}
+                <Select
                   value={values[f.key] ?? ""}
-                  onChange={(e) => update(f.key, e.target.value)}
+                  onValueChange={(v) => update(f.key, v)}
                   disabled={busy}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-base text-foreground"
                 >
-                  {f.options.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger id={f.key}>
+                    <SelectValue placeholder="請選擇" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {f.options.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>
+                        {o.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               )}
               {f.kind === "text" && f.helper && (
                 <p className="text-xs text-muted-foreground">{f.helper}</p>

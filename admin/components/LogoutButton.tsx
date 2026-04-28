@@ -2,8 +2,16 @@
 
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { LogOut } from "lucide-react";
 
-export default function LogoutButton() {
+export default function LogoutButton({
+  variant = "outline",
+  withIcon = true,
+}: {
+  variant?: "outline" | "ghost" | "secondary" | "quiet";
+  withIcon?: boolean;
+}) {
   const router = useRouter();
 
   async function logout() {
@@ -14,11 +22,9 @@ export default function LogoutButton() {
   }
 
   return (
-    <button
-      onClick={logout}
-      className="text-sm text-textMute hover:text-text"
-    >
+    <Button onClick={logout} variant={variant} size="sm">
+      {withIcon && <LogOut />}
       登出
-    </button>
+    </Button>
   );
 }

@@ -17,6 +17,10 @@ const buttonVariants = cva(
         secondary:
           "bg-secondary text-secondary-foreground shadow-sm hover:bg-secondary/80",
         ghost: "hover:bg-accent hover:text-accent-foreground",
+        // Like ghost but only changes text/icon colour on hover — no
+        // background flash. Used for nav-style icon buttons (theme
+        // toggle, row "more" buttons) where a hover fill feels heavy.
+        quiet: "text-muted-foreground hover:text-foreground",
         link: "text-primary underline-offset-4 hover:underline",
       },
       size: {

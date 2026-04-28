@@ -12,12 +12,16 @@ import BottomTabBar from "@/components/BottomTabBar";
  * folder breadcrumb in the back button instead of a static title.
  */
 export default function TreeShell({
+  nav,
   back,
   title,
   subtitle,
   fab,
   children,
 }: {
+  /** Server-rendered desktop Nav, passed in by the page. Hidden on
+   * mobile via Nav's own classes. */
+  nav?: React.ReactNode;
   /** Where the back chevron points to. `null` means we're at the root
    * and no back arrow is shown. */
   back: { href: string; label: string } | null;
@@ -33,8 +37,9 @@ export default function TreeShell({
 }) {
   return (
     <div className="min-h-screen bg-background text-foreground">
+      {nav}
       <header
-        className="sticky top-0 z-40 bg-background/95 backdrop-blur border-b border-border"
+        className="md:hidden sticky top-0 z-40 bg-background/95 backdrop-blur border-b border-border"
         style={{ paddingTop: "env(safe-area-inset-top)" }}
       >
         <div className="flex items-center gap-1 px-2 py-2 max-w-3xl mx-auto">
@@ -67,7 +72,29 @@ export default function TreeShell({
         </div>
       </header>
 
-      <main className="max-w-3xl mx-auto px-3 sm:px-4 py-3 pb-32">
+      {/* Desktop title block — Nav already handles the breadcrumb back
+       * via its link bar, so we only need the page heading here. */}
+      <div className="hidden md:block max-w-3xl mx-auto px-6 pt-8 pb-4">
+        {back && (
+          <Link
+            href={back.href}
+            className="group inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground hover:no-underline mb-2 transition-colors"
+          >
+            <ChevronLeft className="w-4 h-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+            {back.label}
+          </Link>
+        )}
+        <h1 className="text-2xl font-semibold tracking-tight truncate">
+          {title}
+        </h1>
+        {subtitle && (
+          <p className="text-sm text-muted-foreground mt-1 truncate">
+            {subtitle}
+          </p>
+        )}
+      </div>
+
+      <main className="max-w-3xl mx-auto px-3 sm:px-4 py-3 pb-32 md:px-6">
         {children}
       </main>
 

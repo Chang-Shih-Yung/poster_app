@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import StudiosClient from "./StudiosClient";
 import { NULL_STUDIO_KEY } from "./_components/keys";
+import Nav from "@/components/Nav";
 
 export const dynamic = "force-dynamic";
 
@@ -27,5 +28,7 @@ export default async function TreePage() {
     }
   }
 
-  return <StudiosClient studios={Array.from(map.values())} />;
+  return (
+    <StudiosClient nav={<Nav />} studios={Array.from(map.values())} />
+  );
 }

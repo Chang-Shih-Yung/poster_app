@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import WorkClient from "./WorkClient";
+import Nav from "@/components/Nav";
 
 export const dynamic = "force-dynamic";
 
@@ -87,6 +88,7 @@ export default async function WorkPage({
 
   return (
     <WorkClient
+      nav={<Nav />}
       work={{
         id: work.id as string,
         title_zh: work.title_zh as string,
