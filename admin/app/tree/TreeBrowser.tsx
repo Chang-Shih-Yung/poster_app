@@ -860,7 +860,7 @@ export default function TreeBrowser({ studios: initialStudios }: { studios: Stud
         </div>
       )}
 
-      <ul className="divide-y divide-line1 border-y border-line1 md:border md:rounded-lg md:bg-surface">
+      <ul className="space-y-1.5 px-2 md:px-0">
         {studios.map((s, sIdx) => {
           const open = openStudios.has(s.studio);
           const works = worksByStudio[s.studio];
@@ -904,7 +904,7 @@ export default function TreeBrowser({ studios: initialStudios }: { studios: Stud
                 />
               )}
               {open && works && (
-                <ul>
+                <ul className="mt-1.5 space-y-1.5">
                   {adding === addKey && (
                     <li>
                       <NewWorkInline
@@ -1043,7 +1043,7 @@ function WorkRow(props: {
       )}
 
       {props.open && props.children && (
-        <ul>
+        <ul className="mt-1.5 space-y-1.5">
           {props.adding === addGroupKey && (
             <li>
               <InlineRowEdit
@@ -1201,7 +1201,7 @@ function GroupNodeRow(props: {
       )}
 
       {props.open && props.children && (
-        <ul>
+        <ul className="mt-1.5 space-y-1.5">
           {props.adding === addGroupKey && (
             <li>
               <InlineRowEdit
@@ -1342,7 +1342,7 @@ function PosterRow(props: {
       />
       <Link
         href={`/posters/${p.id}`}
-        className="block hover:bg-surfaceRaised hover:no-underline"
+        className="block hover:no-underline rounded-lg"
       >
         <TreeRow
           depth={props.depth}
@@ -1432,8 +1432,8 @@ function TreeRow({
   return (
     <div
       onClick={onClick}
-      className={`flex items-center w-full min-h-[52px] pr-1 ${
-        onClick ? "cursor-pointer hover:bg-surfaceRaised active:bg-surfaceRaised" : ""
+      className={`flex items-center w-full min-h-[52px] pr-1 rounded-lg bg-surface border border-line1 ${
+        onClick ? "cursor-pointer hover:bg-surfaceRaised hover:border-line2 active:bg-surfaceRaised" : ""
       }`}
       style={{ paddingLeft: `${padding}px` }}
     >
