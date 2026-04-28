@@ -1,6 +1,6 @@
 import PageShell from "@/components/PageShell";
 import PosterForm from "./PosterForm";
-import { createClient } from "@/lib/supabase/server";
+import { getServerSupabase } from "@/lib/auth-cache";
 
 export const dynamic = "force-dynamic";
 
@@ -10,7 +10,7 @@ export default async function NewPosterPage({
   searchParams: Promise<{ work_id?: string }>;
 }) {
   const { work_id } = await searchParams;
-  const supabase = await createClient();
+  const supabase = await getServerSupabase();
   const { data: works } = await supabase
     .from("works")
     .select("id, title_zh, studio")

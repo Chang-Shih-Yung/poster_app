@@ -64,11 +64,13 @@ export function FormSheet({
   const [values, setValues] = React.useState<Record<string, string>>({});
   const [busy, setBusy] = React.useState(false);
   const [errorMsg, setErrorMsg] = React.useState<string | null>(null);
+  const prevOpenRef = React.useRef(false);
 
-  // Re-seed defaults whenever the sheet opens (different rows reuse the
-  // same component instance).
+  // Re-seed defaults only on the false → true transition (sheet just
+  // opened). Using a ref avoids depending on `fields` — which is a new
+  // array every render — and prevents mid-typing resets.
   React.useEffect(() => {
-    if (open) {
+    if (open && !prevOpenRef.current) {
       const next: Record<string, string> = {};
       for (const f of fields) {
         next[f.key] = f.initialValue ?? "";
@@ -76,7 +78,8 @@ export function FormSheet({
       setValues(next);
       setErrorMsg(null);
     }
-  }, [open, fields]);
+    prevOpenRef.current = open;
+  }); // intentionally no deps — runs every render, but only acts on transition
 
   function update(key: string, v: string) {
     setValues((prev) => ({ ...prev, [key]: v }));

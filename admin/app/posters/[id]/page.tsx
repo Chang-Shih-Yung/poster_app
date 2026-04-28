@@ -1,7 +1,7 @@
 import PageShell from "@/components/PageShell";
 import PosterForm from "../new/PosterForm";
 import PosterImageUploader from "@/components/PosterImageUploader";
-import { createClient } from "@/lib/supabase/server";
+import { getServerSupabase } from "@/lib/auth-cache";
 import { notFound } from "next/navigation";
 import { UNNAMED_POSTER } from "@/lib/keys";
 
@@ -13,8 +13,7 @@ export default async function EditPosterPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const supabase = await createClient();
-
+  const supabase = await getServerSupabase();
   const [{ data: poster }, { data: works }] = await Promise.all([
     supabase
       .from("posters")

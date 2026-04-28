@@ -167,6 +167,20 @@ export async function deletePoster(id: string): Promise<ActionResult> {
  * because the new URL replaces the old in the row, so .update().select()
  * can't return the previous value.
  */
+/**
+ * Validate that a URL originates from the project's Supabase Storage
+ * bucket. Blocks arbitrary URL injection via crafted server-action
+ * calls (even if the admin session is compromised, malicious content
+ * can't be served to Flutter app users through poster images).
+ */
+function assertStorageUrl(url: string, label: string) {
+  const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!base) throw new Error("NEXT_PUBLIC_SUPABASE_URL 未設定");
+  if (!url.startsWith(`${base}/storage/v1/`)) {
+    throw new Error(`${label} 必須來自 Supabase Storage（收到：${url.slice(0, 60)}…）`);
+  }
+}
+
 export async function attachImage(
   id: string,
   payload: {
@@ -178,6 +192,8 @@ export async function attachImage(
 ): Promise<ActionResult> {
   try {
     const { supabase, user } = await requireAdmin();
+    assertStorageUrl(payload.poster_url, "poster_url");
+    assertStorageUrl(payload.thumbnail_url, "thumbnail_url");
     const { data: existing, error: lookupErr } = await supabase
       .from("posters")
       .select("work_id, poster_url, thumbnail_url, is_placeholder")
@@ -215,18 +231,45 @@ export async function attachImage(
   }
 }
 
+/**
+ * Whitelist of columns the poster metadata form is allowed to write.
+ * Anything outside this list (e.g. id, work_id, status, is_placeholder,
+ * poster_url, thumbnail_url, created_at) is silently stripped so a
+ * crafted client request can't overwrite protected fields.
+ */
+const POSTER_METADATA_ALLOWED = new Set([
+  "poster_name",
+  "title",
+  "year",
+  "region",
+  "poster_release_type",
+  "size_type",
+  "channel_category",
+  "channel_name",
+  "is_exclusive",
+  "exclusive_name",
+  "material_type",
+  "version_label",
+  "source_url",
+  "source_note",
+  "parent_group_id",
+]);
+
 export async function updatePosterMetadata(
   id: string,
   patch: Record<string, unknown>
 ): Promise<ActionResult> {
   try {
     const { supabase } = await requireAdmin();
-    // One round-trip: update returns the work_id we need for
-    // revalidation. updatePosterMetadata is non-destructive bulk
-    // edit (form save) so no audit log entry is generated here.
+    const safePatch = Object.fromEntries(
+      Object.entries(patch).filter(([k]) => POSTER_METADATA_ALLOWED.has(k))
+    );
+    if (Object.keys(safePatch).length === 0) {
+      throw new Error("沒有可更新的欄位");
+    }
     const { data, error } = await supabase
       .from("posters")
-      .update(patch)
+      .update(safePatch)
       .eq("id", id)
       .select("work_id")
       .maybeSingle();

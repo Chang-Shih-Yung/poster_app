@@ -2,12 +2,13 @@ import Link from "next/link";
 import { FolderTree, Plus, ChevronRight } from "lucide-react";
 import PageShell from "@/components/PageShell";
 import WorkForm from "../new/WorkForm";
-import { createClient } from "@/lib/supabase/server";
+import { getServerSupabase } from "@/lib/auth-cache";
 import { notFound } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { UNNAMED_POSTER } from "@/lib/keys";
+import { groupPath } from "@/lib/groupTree";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +25,7 @@ export default async function EditWorkPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const supabase = await createClient();
+  const supabase = await getServerSupabase();
 
   const [{ data: work }, { data: posters }, { data: groups }] = await Promise.all([
     supabase
@@ -45,33 +46,17 @@ export default async function EditWorkPage({
 
   if (!work) notFound();
 
-  // Build group lookup + a "section path" for each group: walk parents to
-  // produce a label like "復仇者聯盟系列 / 2024" so the editor sees the
-  // immediate context without re-creating the whole tree visually.
+  // Build group lookup for groupPath() — reuses lib/groupTree instead
+  // of duplicating the parent-walk logic.
   const groupById = new Map<
     string,
     { id: string; name: string; parent_group_id: string | null }
   >();
   for (const g of groups ?? []) groupById.set(g.id, g);
 
-  function pathOf(groupId: string | null): string {
-    if (!groupId) return "未掛群組";
-    const parts: string[] = [];
-    let cur: string | null = groupId;
-    let depth = 0;
-    while (cur && depth < 20) {
-      const g = groupById.get(cur);
-      if (!g) break;
-      parts.unshift(g.name);
-      cur = g.parent_group_id;
-      depth++;
-    }
-    return parts.join(" / ") || "未掛群組";
-  }
-
   const sections = new Map<string, typeof posters>();
   for (const p of posters ?? []) {
-    const key = pathOf(p.parent_group_id);
+    const key = groupPath(p.parent_group_id, groupById);
     if (!sections.has(key)) sections.set(key, []);
     sections.get(key)!.push(p);
   }

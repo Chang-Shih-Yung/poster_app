@@ -187,7 +187,10 @@ export default function PosterForm({
             })
           : await updatePosterMetadata(initial!.id, {
               parent_group_id: fromSentinel(values.parent_group_id),
-              title: payload.poster_name, // keep legacy column in sync
+              // DB trigger `sync_poster_title_from_name` handles
+              // INSERT but not UPDATE, so we sync the legacy `title`
+              // column explicitly on edit.
+              title: payload.poster_name,
               ...payload,
             });
       if (!r.ok) {

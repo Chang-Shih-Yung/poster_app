@@ -1,15 +1,15 @@
 import PageShell from "@/components/PageShell";
 import WorksList from "./WorksList";
-import { createClient } from "@/lib/supabase/server";
+import { getServerSupabase } from "@/lib/auth-cache";
 
 export const dynamic = "force-dynamic";
 
 const PAGE_SIZE = 50;
 
 export default async function WorksListPage() {
-  const supabase = await createClient();
   // First page: 50 rows. Subsequent pages come from the loadWorksPage
   // server action via the "載入更多" button below.
+  const supabase = await getServerSupabase();
   const { data: works } = await supabase
     .from("works")
     .select(

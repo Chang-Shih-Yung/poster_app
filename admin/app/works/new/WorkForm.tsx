@@ -42,7 +42,7 @@ export default function WorkForm({ mode, initial }: WorkFormProps) {
     e.preventDefault();
     setError(null);
     if (!titleZh.trim()) {
-      setError("群組名稱必填");
+      setError("作品名稱必填");
       return;
     }
     startTransition(async () => {
@@ -87,7 +87,7 @@ export default function WorkForm({ mode, initial }: WorkFormProps) {
       </div>
 
       <div className="space-y-1.5">
-        <Label htmlFor="title_zh">群組名稱 *</Label>
+        <Label htmlFor="title_zh">作品名稱 *</Label>
         <Input
           id="title_zh"
           value={titleZh}

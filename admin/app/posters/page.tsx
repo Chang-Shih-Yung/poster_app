@@ -1,6 +1,6 @@
 import PageShell from "@/components/PageShell";
 import PostersList from "./PostersList";
-import { createClient } from "@/lib/supabase/server";
+import { getServerSupabase } from "@/lib/auth-cache";
 
 export const dynamic = "force-dynamic";
 
@@ -10,7 +10,7 @@ export default async function PostersListPage({
   searchParams: Promise<{ q?: string; placeholder?: string }>;
 }) {
   const { q, placeholder } = await searchParams;
-  const supabase = await createClient();
+  const supabase = await getServerSupabase();
 
   let query = supabase
     .from("posters")
@@ -24,7 +24,10 @@ export default async function PostersListPage({
     query = query.eq("is_placeholder", true);
   }
   if (q) {
-    query = query.ilike("poster_name", `%${q}%`);
+    // Escape LIKE/ILIKE wildcards so user input can't craft
+    // expensive patterns or match everything with a bare "%".
+    const escaped = q.replaceAll(/[%_\\]/g, String.raw`\$&`);
+    query = query.ilike("poster_name", `%${escaped}%`);
   }
 
   const { data: rows } = await query;
