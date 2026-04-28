@@ -1,34 +1,57 @@
 "use client";
 
 import * as React from "react";
-import { useTransition } from "react";
 import { Pencil, Trash2, FolderPlus } from "lucide-react";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetDescription,
-} from "@/components/ui/sheet";
 import TreeShell from "./_components/TreeShell";
 import TreeRow from "./_components/TreeRow";
-import { SheetMenuList } from "./_components/SheetMenu";
 import FAB from "./_components/FAB";
 import { FormSheet } from "./_components/FormSheet";
+import { ItemActionsBundle, type ItemAction } from "./_components/ItemActionsBundle";
 import { NULL_STUDIO_KEY, encodeStudioParam } from "./_components/keys";
 import { WORK_KINDS } from "@/lib/enums";
-import { renameStudio, deleteStudio } from "@/app/actions/works";
-import { createWork } from "@/app/actions/works";
+import { useTransitionAction } from "@/lib/clientActions";
+import {
+  renameStudio,
+  deleteStudio,
+  createWork,
+} from "@/app/actions/works";
 
 type Studio = { studio: string; works: number; posters: number };
 
-/**
- * Studios are derived from `works.studio`, so this client never owns
- * its own state — it reads `studios` from props (server fetched) and
- * dispatches mutations through server actions. revalidatePath in the
- * action triggers a server re-render; useTransition keeps the prior UI
- * frame visible during the round-trip so there's no flash.
- */
+const STUDIO_ACTIONS: ItemAction<Studio>[] = [
+  {
+    kind: "form",
+    icon: <Pencil className="w-4 h-4" />,
+    label: "重新命名分類",
+    hint: "會把這個分類底下所有作品的 studio 改成新名字",
+    formTitle: "重新命名分類",
+    formDescription: "會更新所有屬於這個分類的作品。",
+    submitLabel: "儲存",
+    fields: (s) => [
+      {
+        key: "name",
+        kind: "text",
+        label: "新分類名稱",
+        placeholder: "例：吉卜力",
+        required: true,
+        initialValue: s.studio === NULL_STUDIO_KEY ? "" : s.studio,
+      },
+    ],
+    run: (s, values) => renameStudio(s.studio, values.name),
+  },
+  {
+    kind: "instant",
+    icon: <Trash2 className="w-4 h-4" />,
+    label: "刪除整個分類",
+    hint: "底下作品與海報全部一併刪除",
+    destructive: true,
+    disabled: false, // overridden per-item below
+    confirm: (s) =>
+      `刪除分類「${s.studio}」？\n底下 ${s.works} 部作品、${s.posters} 張海報全部會被刪除。\n此操作不可復原。`,
+    run: (s) => deleteStudio(s.studio),
+  },
+];
+
 export default function StudiosClient({
   studios,
   nav,
@@ -37,55 +60,16 @@ export default function StudiosClient({
   nav?: React.ReactNode;
 }) {
   const [activeStudio, setActiveStudio] = React.useState<Studio | null>(null);
-  const [renameOpen, setRenameOpen] = React.useState(false);
   const [addOpen, setAddOpen] = React.useState(false);
-  const [, startTransition] = useTransition();
+  const { runFormAction } = useTransitionAction();
 
-  function handleRename(values: Record<string, string>) {
-    const studio = activeStudio;
-    if (!studio) return Promise.resolve();
-    return new Promise<void>((resolve, reject) => {
-      startTransition(async () => {
-        const result = await renameStudio(studio.studio, values.name);
-        if (!result.ok) reject(new Error(result.error));
-        else {
-          setRenameOpen(false);
-          setActiveStudio(null);
-          resolve();
-        }
-      });
-    });
-  }
-
-  function handleDelete(studio: Studio) {
-    if (
-      !confirm(
-        `刪除分類「${studio.studio}」？\n底下 ${studio.works} 部作品、${studio.posters} 張海報全部會被刪除。\n此操作不可復原。`
-      )
-    )
-      return;
-    startTransition(async () => {
-      const result = await deleteStudio(studio.studio);
-      if (!result.ok) alert(result.error);
-    });
-  }
-
-  function handleCreate(values: Record<string, string>) {
-    return new Promise<void>((resolve, reject) => {
-      startTransition(async () => {
-        const result = await createWork({
-          title_zh: values.title,
-          studio: values.studio,
-          work_kind: values.kind || "movie",
-        });
-        if (!result.ok) reject(new Error(result.error));
-        else {
-          setAddOpen(false);
-          resolve();
-        }
-      });
-    });
-  }
+  // The "delete (未分類)" action is disabled — it's a synthetic
+  // bucket, deleting it doesn't make sense at the data layer.
+  const actionsForCurrent: ItemAction<Studio>[] = STUDIO_ACTIONS.map((a) =>
+    a.kind === "instant" && a.label === "刪除整個分類"
+      ? { ...a, disabled: activeStudio?.studio === NULL_STUDIO_KEY }
+      : a
+  );
 
   return (
     <TreeShell
@@ -116,74 +100,16 @@ export default function StudiosClient({
         </ul>
       )}
 
-      <Sheet
-        open={!!activeStudio && !renameOpen}
-        onOpenChange={(v) => {
-          if (!v) setActiveStudio(null);
-        }}
-      >
-        <SheetContent side="bottom">
-          <SheetHeader>
-            <SheetTitle className="truncate">{activeStudio?.studio}</SheetTitle>
-            <SheetDescription>
-              {activeStudio?.works} 部作品 · {activeStudio?.posters} 張海報
-            </SheetDescription>
-          </SheetHeader>
-          {activeStudio && (
-            <div className="mt-3">
-              <SheetMenuList
-                items={[
-                  {
-                    icon: <Pencil className="w-4 h-4" />,
-                    label: "重新命名分類",
-                    hint:
-                      activeStudio.studio === NULL_STUDIO_KEY
-                        ? `會把所有未分類的 ${activeStudio.works} 部作品歸入新分類`
-                        : `會把所有「${activeStudio.studio}」的作品改名`,
-                    onClick: () => setRenameOpen(true),
-                  },
-                  {
-                    icon: <Trash2 className="w-4 h-4" />,
-                    label: "刪除整個分類",
-                    hint: "底下作品與海報全部一併刪除",
-                    destructive: true,
-                    disabled: activeStudio.studio === NULL_STUDIO_KEY,
-                    onClick: () => {
-                      const target = activeStudio;
-                      setActiveStudio(null);
-                      handleDelete(target);
-                    },
-                  },
-                ]}
-              />
-            </div>
-          )}
-        </SheetContent>
-      </Sheet>
-
-      <FormSheet
-        open={renameOpen}
-        onOpenChange={(v) => {
-          setRenameOpen(v);
-          if (!v) setActiveStudio(null);
-        }}
-        title={`重新命名「${activeStudio?.studio ?? ""}」`}
-        description="會更新所有屬於這個分類的作品。"
-        fields={[
-          {
-            key: "name",
-            kind: "text",
-            label: "新分類名稱",
-            placeholder: "例：吉卜力",
-            required: true,
-            initialValue:
-              activeStudio?.studio === NULL_STUDIO_KEY
-                ? ""
-                : activeStudio?.studio ?? "",
-          },
-        ]}
-        submitLabel="儲存"
-        onSubmit={handleRename}
+      <ItemActionsBundle<Studio>
+        item={activeStudio}
+        onClose={() => setActiveStudio(null)}
+        title={activeStudio?.studio ?? ""}
+        description={
+          activeStudio
+            ? `${activeStudio.works} 部作品 · ${activeStudio.posters} 張海報`
+            : undefined
+        }
+        actions={actionsForCurrent}
       />
 
       <FormSheet
@@ -203,7 +129,7 @@ export default function StudiosClient({
             key: "title",
             kind: "text",
             label: "第一個作品",
-            placeholder: "例:神隱少女",
+            placeholder: "例：神隱少女",
             required: true,
           },
           {
@@ -215,7 +141,17 @@ export default function StudiosClient({
           },
         ]}
         submitLabel="建立分類 + 作品"
-        onSubmit={handleCreate}
+        onSubmit={(values) =>
+          runFormAction(
+            () =>
+              createWork({
+                title_zh: values.title,
+                studio: values.studio,
+                work_kind: values.kind || "movie",
+              }),
+            () => setAddOpen(false)
+          )
+        }
       />
 
       {studios.length === 0 && (

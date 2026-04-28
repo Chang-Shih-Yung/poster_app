@@ -1,7 +1,6 @@
 "use client";
 
 import * as React from "react";
-import { useTransition } from "react";
 import { Pencil, Trash2, FolderPlus, FilePlus2, ImagePlus } from "lucide-react";
 import {
   Sheet,
@@ -15,9 +14,14 @@ import TreeRow from "../../_components/TreeRow";
 import { SheetMenuList } from "../../_components/SheetMenu";
 import FAB from "../../_components/FAB";
 import { FormSheet } from "../../_components/FormSheet";
+import {
+  ItemActionsBundle,
+  type ItemAction,
+} from "../../_components/ItemActionsBundle";
 import { encodeStudioParam, NULL_STUDIO_KEY } from "../../_components/keys";
 import { uploadPosterImage } from "@/lib/imageUpload";
 import { describeError } from "@/lib/errors";
+import { useTransitionAction } from "@/lib/clientActions";
 import {
   createGroup,
   renameGroup,
@@ -51,6 +55,36 @@ type Poster = {
   thumbnail_url: string | null;
 };
 
+const groupActions: ItemAction<Group>[] = [
+  {
+    kind: "form",
+    icon: <Pencil className="w-4 h-4" />,
+    label: "重新命名群組",
+    formTitle: "重新命名群組",
+    submitLabel: "儲存",
+    fields: (g) => [
+      {
+        key: "name",
+        kind: "text",
+        label: "群組名稱",
+        required: true,
+        initialValue: g.name,
+      },
+    ],
+    run: (g, values) => renameGroup(g.id, values.name),
+  },
+  {
+    kind: "instant",
+    icon: <Trash2 className="w-4 h-4" />,
+    label: "刪除群組",
+    hint: "海報會被丟回上一層，不會被刪除",
+    destructive: true,
+    confirm: (g) =>
+      `刪除群組「${g.name}」？\n子群組會一併消失，群組內的海報會被丟回上一層（海報本身不刪）。`,
+    run: (g) => deleteGroup(g.id),
+  },
+];
+
 export default function WorkClient({
   work,
   groups,
@@ -64,108 +98,56 @@ export default function WorkClient({
 }) {
   const [activeGroup, setActiveGroup] = React.useState<Group | null>(null);
   const [activePoster, setActivePoster] = React.useState<Poster | null>(null);
-  const [renameGroupOpen, setRenameGroupOpen] = React.useState(false);
-  const [renamePosterOpen, setRenamePosterOpen] = React.useState(false);
   const [addPickerOpen, setAddPickerOpen] = React.useState(false);
   const [addGroupOpen, setAddGroupOpen] = React.useState(false);
   const [addPosterOpen, setAddPosterOpen] = React.useState(false);
-  const [, startTransition] = useTransition();
+  const { runFormAction } = useTransitionAction();
 
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
   const uploadTargetRef = React.useRef<Poster | null>(null);
 
-  /* ─────────────── group mutations ─────────────── */
-  function handleRenameGroup(values: Record<string, string>) {
-    if (!activeGroup) return Promise.resolve();
-    return new Promise<void>((resolve, reject) => {
-      startTransition(async () => {
-        const r = await renameGroup(activeGroup.id, values.name);
-        if (!r.ok) reject(new Error(r.error));
-        else {
-          setRenameGroupOpen(false);
-          setActiveGroup(null);
-          resolve();
-        }
-      });
-    });
-  }
-
-  function handleDeleteGroup(group: Group) {
-    if (
-      !confirm(
-        `刪除群組「${group.name}」？\n子群組會一併消失，群組內的海報會被丟回上一層（海報本身不刪）。`
-      )
-    )
-      return;
-    startTransition(async () => {
-      const r = await deleteGroup(group.id);
-      if (!r.ok) alert(r.error);
-    });
-  }
-
-  function handleCreateGroup(values: Record<string, string>) {
-    return new Promise<void>((resolve, reject) => {
-      startTransition(async () => {
-        const r = await createGroup({
-          work_id: work.id,
-          parent_group_id: null,
-          name: values.name,
-        });
-        if (!r.ok) reject(new Error(r.error));
-        else {
-          setAddGroupOpen(false);
-          resolve();
-        }
-      });
-    });
-  }
-
-  /* ─────────────── poster mutations ─────────────── */
-  function handleRenamePoster(values: Record<string, string>) {
-    if (!activePoster) return Promise.resolve();
-    return new Promise<void>((resolve, reject) => {
-      startTransition(async () => {
-        const r = await renamePoster(activePoster.id, values.name);
-        if (!r.ok) reject(new Error(r.error));
-        else {
-          setRenamePosterOpen(false);
-          setActivePoster(null);
-          resolve();
-        }
-      });
-    });
-  }
-
-  function handleDeletePoster(poster: Poster) {
-    if (!confirm(`刪除海報「${poster.poster_name ?? "(未命名)"}」？此操作不可復原。`))
-      return;
-    startTransition(async () => {
-      const r = await deletePoster(poster.id);
-      if (!r.ok) alert(r.error);
-    });
-  }
-
-  function handleCreatePoster(values: Record<string, string>) {
-    return new Promise<void>((resolve, reject) => {
-      startTransition(async () => {
-        const r = await createPoster({
-          work_id: work.id,
-          parent_group_id: null,
-          poster_name: values.name,
-        });
-        if (!r.ok) reject(new Error(r.error));
-        else {
-          setAddPosterOpen(false);
-          resolve();
-        }
-      });
-    });
-  }
-
-  function pickImageFor(poster: Poster) {
-    uploadTargetRef.current = poster;
-    fileInputRef.current?.click();
-  }
+  const posterActions: ItemAction<Poster>[] = [
+    {
+      kind: "form",
+      icon: <Pencil className="w-4 h-4" />,
+      label: "重新命名海報",
+      formTitle: "重新命名海報",
+      submitLabel: "儲存",
+      fields: (p) => [
+        {
+          key: "name",
+          kind: "text",
+          label: "海報名稱",
+          placeholder: "例：B1 原版",
+          required: true,
+          initialValue: p.poster_name ?? "",
+        },
+      ],
+      run: (p, values) => renamePoster(p.id, values.name),
+    },
+    {
+      kind: "instant",
+      icon: <ImagePlus className="w-4 h-4" />,
+      label: "上傳 / 更換圖片",
+      hint: "選一張新圖，覆蓋既有海報",
+      run: async (p) => {
+        // Trigger file picker; the actual upload + attachImage runs
+        // in handleFile below. The action returns ok immediately —
+        // the upload progress is its own UI.
+        uploadTargetRef.current = p;
+        fileInputRef.current?.click();
+        return { ok: true, data: undefined };
+      },
+    },
+    {
+      kind: "instant",
+      icon: <Trash2 className="w-4 h-4" />,
+      label: "刪除海報",
+      destructive: true,
+      confirm: (p) => `刪除海報「${p.poster_name ?? "(未命名)"}」？此操作不可復原。`,
+      run: (p) => deletePoster(p.id),
+    },
+  ];
 
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -173,7 +155,6 @@ export default function WorkClient({
     if (!file || !target) return;
     try {
       const result = await uploadPosterImage(file, target.id);
-      // attachImage runs the admin-gated DB write + revalidatePath.
       const r = await attachImage(target.id, {
         poster_url: result.posterUrl,
         thumbnail_url: result.thumbnailUrl,
@@ -189,7 +170,6 @@ export default function WorkClient({
     }
   }
 
-  /* ─────────────── render ─────────────── */
   const items = [
     ...groups.map((g) => ({ kind: "group" as const, data: g })),
     ...posters.map((p) => ({ kind: "poster" as const, data: p })),
@@ -248,96 +228,29 @@ export default function WorkClient({
         </ul>
       )}
 
-      <Sheet
-        open={!!activeGroup && !renameGroupOpen}
-        onOpenChange={(v) => {
-          if (!v) setActiveGroup(null);
-        }}
-      >
-        <SheetContent side="bottom">
-          <SheetHeader>
-            <SheetTitle className="truncate">{activeGroup?.name}</SheetTitle>
-            <SheetDescription>
-              {activeGroup?.child_count ?? 0} 張海報
-            </SheetDescription>
-          </SheetHeader>
-          {activeGroup && (
-            <div className="mt-3">
-              <SheetMenuList
-                items={[
-                  {
-                    icon: <Pencil className="w-4 h-4" />,
-                    label: "重新命名群組",
-                    onClick: () => setRenameGroupOpen(true),
-                  },
-                  {
-                    icon: <Trash2 className="w-4 h-4" />,
-                    label: "刪除群組",
-                    hint: "海報會被丟回上一層，不會被刪除",
-                    destructive: true,
-                    onClick: () => {
-                      const target = activeGroup;
-                      setActiveGroup(null);
-                      handleDeleteGroup(target);
-                    },
-                  },
-                ]}
-              />
-            </div>
-          )}
-        </SheetContent>
-      </Sheet>
+      <ItemActionsBundle<Group>
+        item={activeGroup}
+        onClose={() => setActiveGroup(null)}
+        title={activeGroup?.name ?? ""}
+        description={
+          activeGroup ? `${activeGroup.child_count} 張海報` : undefined
+        }
+        actions={groupActions}
+      />
 
-      <Sheet
-        open={!!activePoster && !renamePosterOpen}
-        onOpenChange={(v) => {
-          if (!v) setActivePoster(null);
-        }}
-      >
-        <SheetContent side="bottom">
-          <SheetHeader>
-            <SheetTitle className="truncate">
-              {activePoster?.poster_name ?? "(未命名)"}
-            </SheetTitle>
-            <SheetDescription>
-              {activePoster?.is_placeholder ? "尚未上傳真實圖片" : "海報"}
-            </SheetDescription>
-          </SheetHeader>
-          {activePoster && (
-            <div className="mt-3">
-              <SheetMenuList
-                items={[
-                  {
-                    icon: <Pencil className="w-4 h-4" />,
-                    label: "重新命名海報",
-                    onClick: () => setRenamePosterOpen(true),
-                  },
-                  {
-                    icon: <ImagePlus className="w-4 h-4" />,
-                    label: activePoster.is_placeholder ? "上傳真實圖片" : "更換圖片",
-                    onClick: () => {
-                      const target = activePoster;
-                      setActivePoster(null);
-                      pickImageFor(target);
-                    },
-                  },
-                  {
-                    icon: <Trash2 className="w-4 h-4" />,
-                    label: "刪除海報",
-                    destructive: true,
-                    onClick: () => {
-                      const target = activePoster;
-                      setActivePoster(null);
-                      handleDeletePoster(target);
-                    },
-                  },
-                ]}
-              />
-            </div>
-          )}
-        </SheetContent>
-      </Sheet>
+      <ItemActionsBundle<Poster>
+        item={activePoster}
+        onClose={() => setActivePoster(null)}
+        title={activePoster?.poster_name ?? "(未命名)"}
+        description={
+          activePoster?.is_placeholder ? "尚未上傳真實圖片" : "海報"
+        }
+        actions={posterActions}
+      />
 
+      {/* Add picker: a small Sheet that just chooses between
+       * "new group" and "new poster". Each option triggers its own
+       * FormSheet below. */}
       <Sheet open={addPickerOpen} onOpenChange={setAddPickerOpen}>
         <SheetContent side="bottom">
           <SheetHeader>
@@ -372,47 +285,6 @@ export default function WorkClient({
       </Sheet>
 
       <FormSheet
-        open={renameGroupOpen}
-        onOpenChange={(v) => {
-          setRenameGroupOpen(v);
-          if (!v) setActiveGroup(null);
-        }}
-        title={`重新命名「${activeGroup?.name ?? ""}」`}
-        fields={[
-          {
-            key: "name",
-            kind: "text",
-            label: "群組名稱",
-            required: true,
-            initialValue: activeGroup?.name ?? "",
-          },
-        ]}
-        submitLabel="儲存"
-        onSubmit={handleRenameGroup}
-      />
-
-      <FormSheet
-        open={renamePosterOpen}
-        onOpenChange={(v) => {
-          setRenamePosterOpen(v);
-          if (!v) setActivePoster(null);
-        }}
-        title="重新命名海報"
-        fields={[
-          {
-            key: "name",
-            kind: "text",
-            label: "海報名稱",
-            placeholder: "例：B1 原版",
-            required: true,
-            initialValue: activePoster?.poster_name ?? "",
-          },
-        ]}
-        submitLabel="儲存"
-        onSubmit={handleRenamePoster}
-      />
-
-      <FormSheet
         open={addGroupOpen}
         onOpenChange={setAddGroupOpen}
         title="新增群組"
@@ -427,7 +299,17 @@ export default function WorkClient({
           },
         ]}
         submitLabel="新增"
-        onSubmit={handleCreateGroup}
+        onSubmit={(values) =>
+          runFormAction(
+            () =>
+              createGroup({
+                work_id: work.id,
+                parent_group_id: null,
+                name: values.name,
+              }),
+            () => setAddGroupOpen(false)
+          )
+        }
       />
 
       <FormSheet
@@ -445,7 +327,17 @@ export default function WorkClient({
           },
         ]}
         submitLabel="新增"
-        onSubmit={handleCreatePoster}
+        onSubmit={(values) =>
+          runFormAction(
+            () =>
+              createPoster({
+                work_id: work.id,
+                parent_group_id: null,
+                poster_name: values.name,
+              }),
+            () => setAddPosterOpen(false)
+          )
+        }
       />
     </TreeShell>
   );
