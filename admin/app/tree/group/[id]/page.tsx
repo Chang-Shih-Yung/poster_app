@@ -1,15 +1,14 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { recursivePosterCount } from "@/lib/groupTree";
 import GroupClient from "./GroupClient";
 import Nav from "@/components/Nav";
 
 export const dynamic = "force-dynamic";
 
 /**
- * Group page — children of a poster_group node. Computes recursive
- * poster counts the same way as /tree/work/[id] and resolves the back
- * breadcrumb to either the parent group or the work this group sits in.
+ * Group page — children of a poster_group node. Recursive child counts
+ * come from the SQL function `get_group_recursive_counts`. Back link
+ * resolves to either the parent group (if any) or the host work.
  */
 export default async function GroupPage({
   params,
@@ -29,53 +28,44 @@ export default async function GroupPage({
 
   const workId = group.work_id as string;
 
-  // Resolve back link: if there's a parent group, link to it; else link
-  // to the work. Fetch the parent's name in the same round-trip the
-  // recursive count needs anyway.
-  const [{ data: rootGroups }, { data: rootPosters }, { data: allGroups }, { data: allPosters }, { data: work }, { data: parentGroup }] =
-    await Promise.all([
-      supabase
-        .from("poster_groups")
-        .select("id, name, group_type")
-        .eq("parent_group_id", id)
-        .order("created_at", { ascending: false }),
-      supabase
-        .from("posters")
-        .select("id, poster_name, is_placeholder, thumbnail_url")
-        .eq("parent_group_id", id)
-        .order("created_at", { ascending: false }),
-      supabase
-        .from("poster_groups")
-        .select("id, parent_group_id")
-        .eq("work_id", workId),
-      supabase
-        .from("posters")
-        .select("parent_group_id")
-        .eq("work_id", workId)
-        .is("deleted_at", null),
-      supabase.from("works").select("id, title_zh").eq("id", workId).maybeSingle(),
-      group.parent_group_id
-        ? supabase
-            .from("poster_groups")
-            .select("id, name")
-            .eq("id", group.parent_group_id as string)
-            .maybeSingle()
-        : Promise.resolve({ data: null }),
-    ]);
+  const [
+    { data: rootGroups },
+    { data: rootPosters },
+    { data: counts },
+    { data: work },
+    { data: parentGroup },
+  ] = await Promise.all([
+    supabase
+      .from("poster_groups")
+      .select("id, name, group_type")
+      .eq("parent_group_id", id)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("posters")
+      .select("id, poster_name, is_placeholder, thumbnail_url")
+      .eq("parent_group_id", id)
+      .order("created_at", { ascending: false }),
+    supabase.rpc("get_group_recursive_counts", { p_work_id: workId }),
+    supabase.from("works").select("id, title_zh").eq("id", workId).maybeSingle(),
+    group.parent_group_id
+      ? supabase
+          .from("poster_groups")
+          .select("id, name")
+          .eq("id", group.parent_group_id as string)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
+  ]);
 
-  const allGroupRows = (allGroups ?? []).map((g) => ({
-    id: g.id as string,
-    parent_group_id: (g.parent_group_id as string | null) ?? null,
-  }));
-  const allPosterRows = (allPosters ?? []).map((p) => ({
-    parent_group_id: (p.parent_group_id as string | null) ?? null,
-  }));
+  const countByGroup = new Map<string, number>();
+  for (const row of (counts ?? []) as { group_id: string; total: number }[]) {
+    countByGroup.set(row.group_id, Number(row.total));
+  }
 
   const groups = (rootGroups ?? []).map((g) => ({
     id: g.id as string,
     name: g.name as string,
     group_type: (g.group_type as string | null) ?? null,
-    child_count: recursivePosterCount(g.id as string, allGroupRows, allPosterRows),
+    child_count: countByGroup.get(g.id as string) ?? 0,
   }));
 
   const posters = (rootPosters ?? []).map((p) => ({

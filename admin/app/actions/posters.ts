@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireAdmin, ok, fail, type ActionResult } from "./_internal";
+import { requireAdmin, ok, fail, logAudit, type ActionResult } from "./_internal";
 
 /**
  * Server actions for `posters` rows. Image upload still happens on the
@@ -28,16 +28,18 @@ function revalidatePosterSurfaces(workId?: string, posterId?: string) {
 /**
  * Create a poster row. The minimal form (Sheet "新增海報" inside the
  * tree) supplies just work_id + name; the full PosterForm supplies
- * every metadata field. `uploader_id`, `title`, `poster_url`,
- * `status` are filled server-side because they are legacy NOT NULL
- * columns; the schema cleanup ticket lives in TODOS.md.
+ * every metadata field.
+ *
+ * `title`, `poster_url`, `uploader_id` are NOT NULL legacy columns;
+ * the BEFORE INSERT trigger `fill_legacy_poster_defaults` (migration
+ * 20260428100200) defaults them so callers don't have to. `status`
+ * is set explicitly because admin-created rows bypass the public
+ * submission moderation queue.
  */
 export async function createPoster(input: {
   work_id: string;
   parent_group_id: string | null;
   poster_name: string;
-  // Optional metadata — passed by /posters/new; left unset by the
-  // Sheet form which only collects a name.
   year?: number | null;
   region?: string | null;
   poster_release_type?: string | null;
@@ -59,7 +61,7 @@ export async function createPoster(input: {
   }>
 > {
   try {
-    const { supabase, user } = await requireAdmin();
+    const { supabase } = await requireAdmin();
     if (!input.poster_name.trim()) throw new Error("海報名稱必填");
     const trimmed = input.poster_name.trim();
     const { data, error } = await supabase
@@ -80,15 +82,22 @@ export async function createPoster(input: {
         version_label: input.version_label ?? null,
         source_url: input.source_url ?? null,
         source_note: input.source_note ?? null,
-        title: trimmed, // legacy NOT NULL
         status: "approved",
-        poster_url: "", // legacy NOT NULL — replaced on attachImage
-        uploader_id: user.id,
       })
       .select("id, poster_name, is_placeholder, thumbnail_url")
       .single();
     if (error) throw error;
     revalidatePosterSurfaces(input.work_id);
+    await logAudit({
+      action: "create_poster",
+      target_kind: "poster",
+      target_id: data.id,
+      payload: {
+        work_id: input.work_id,
+        parent_group_id: input.parent_group_id,
+        poster_name: trimmed,
+      },
+    });
     return ok(data);
   } catch (e) {
     return fail(e);
@@ -103,18 +112,27 @@ export async function renamePoster(
     const { supabase } = await requireAdmin();
     if (!poster_name.trim()) throw new Error("名稱不能為空");
     const trimmed = poster_name.trim();
+    // The DB trigger `sync_poster_title_from_name` keeps `title` in
+    // lock-step when poster_name updates, so we don't need to write
+    // both columns from here.
     const { data: existing, error: lookupErr } = await supabase
       .from("posters")
-      .select("work_id")
+      .select("work_id, poster_name")
       .eq("id", id)
       .maybeSingle();
     if (lookupErr) throw lookupErr;
     const { error } = await supabase
       .from("posters")
-      .update({ poster_name: trimmed, title: trimmed })
+      .update({ poster_name: trimmed })
       .eq("id", id);
     if (error) throw error;
     revalidatePosterSurfaces(existing?.work_id ?? undefined, id);
+    await logAudit({
+      action: "rename_poster",
+      target_kind: "poster",
+      target_id: id,
+      payload: { from: existing?.poster_name ?? null, to: trimmed },
+    });
     return ok(undefined);
   } catch (e) {
     return fail(e);
@@ -126,13 +144,21 @@ export async function deletePoster(id: string): Promise<ActionResult> {
     const { supabase } = await requireAdmin();
     const { data: existing, error: lookupErr } = await supabase
       .from("posters")
-      .select("work_id")
+      .select(
+        "id, work_id, parent_group_id, poster_name, region, year, poster_url, thumbnail_url, is_placeholder"
+      )
       .eq("id", id)
       .maybeSingle();
     if (lookupErr) throw lookupErr;
     const { error } = await supabase.from("posters").delete().eq("id", id);
     if (error) throw error;
     revalidatePosterSurfaces(existing?.work_id ?? undefined, id);
+    await logAudit({
+      action: "delete_poster",
+      target_kind: "poster",
+      target_id: id,
+      payload: existing ? { snapshot: existing } : null,
+    });
     return ok(undefined);
   } catch (e) {
     return fail(e);
@@ -158,7 +184,7 @@ export async function attachImage(
     const { supabase } = await requireAdmin();
     const { data: existing, error: lookupErr } = await supabase
       .from("posters")
-      .select("work_id")
+      .select("work_id, poster_url, thumbnail_url, is_placeholder")
       .eq("id", id)
       .maybeSingle();
     if (lookupErr) throw lookupErr;
@@ -174,6 +200,19 @@ export async function attachImage(
       .eq("id", id);
     if (error) throw error;
     revalidatePosterSurfaces(existing?.work_id ?? undefined, id);
+    await logAudit({
+      action: "attach_image",
+      target_kind: "image",
+      target_id: id,
+      payload: {
+        was_placeholder: existing?.is_placeholder ?? null,
+        previous_url: existing?.poster_url ?? null,
+        previous_thumbnail: existing?.thumbnail_url ?? null,
+        new_url: payload.poster_url,
+        new_thumbnail: payload.thumbnail_url,
+        size_bytes: payload.image_size_bytes,
+      },
+    });
     return ok(undefined);
   } catch (e) {
     return fail(e);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import { Pencil, Trash2, Plus, Loader2, AlertTriangle, X } from "lucide-react";
 import { NULL_STUDIO_KEY } from "@/app/tree/_components/keys";
@@ -12,6 +12,7 @@ import {
   renameWork,
   deleteWork,
   createWork,
+  loadWorksPage,
 } from "@/app/actions/works";
 
 type Work = {
@@ -22,11 +23,24 @@ type Work = {
   work_kind: string;
   movie_release_year: number | null;
   poster_count: number;
+  created_at?: string;
 };
 
-export default function WorksList({ initial }: { initial: Work[] }) {
-  // initial is the source of truth — server re-fetches on every action
-  // via revalidatePath, so we don't carry our own mirror state.
+export default function WorksList({
+  initial,
+  initialCursor,
+}: {
+  initial: Work[];
+  initialCursor?: string | null;
+}) {
+  // The first batch comes from the server-rendered page; subsequent
+  // batches are appended via loadWorksPage on "載入更多". A
+  // server-side mutation (rename/delete/create) calls revalidatePath
+  // which re-renders the page → the appended pages disappear, but
+  // that's fine because the user just acted and the new server data
+  // is more authoritative than our accumulated copy.
+  const [rows, setRows] = useState<Work[]>(initial);
+  const [cursor, setCursor] = useState<string | null>(initialCursor ?? null);
   const [editing, setEditing] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -34,6 +48,30 @@ export default function WorksList({ initial }: { initial: Work[] }) {
   const [newStudio, setNewStudio] = useState("");
   const [newTitle, setNewTitle] = useState("");
   const [pending, startTransition] = useTransition();
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  // Reset to the freshly-rendered server batch whenever the server
+  // pushes new initial props down (i.e. after a mutation revalidates).
+  useEffect(() => {
+    setRows(initial);
+    setCursor(initialCursor ?? null);
+  }, [initial, initialCursor]);
+
+  function loadMore() {
+    if (!cursor || loadingMore) return;
+    setLoadingMore(true);
+    setError(null);
+    (async () => {
+      const r = await loadWorksPage({ cursor });
+      if (!r.ok) {
+        setError(r.error);
+      } else {
+        setRows((prev) => [...prev, ...r.data.rows]);
+        setCursor(r.data.nextCursor);
+      }
+      setLoadingMore(false);
+    })();
+  }
 
   function commitRename(work: Work, newTitle: string) {
     if (!newTitle.trim() || newTitle === work.title_zh) {
@@ -82,7 +120,7 @@ export default function WorksList({ initial }: { initial: Work[] }) {
     <div className="px-4 md:px-0">
       <div className="sticky top-[calc(env(safe-area-inset-top,0px)+52px)] md:top-14 z-30 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 -mx-4 md:mx-0 px-4 md:px-0 py-2.5 mb-3 flex items-center justify-between">
         <span className="text-xs text-muted-foreground">
-          {initial.length} 部作品
+          {rows.length} 部作品{cursor ? "（還有更多）" : ""}
         </span>
         <Button size="sm" onClick={() => setAdding(true)}>
           <Plus />
@@ -157,7 +195,7 @@ export default function WorksList({ initial }: { initial: Work[] }) {
         </Card>
       )}
 
-      {initial.length === 0 ? (
+      {rows.length === 0 ? (
         <Card>
           <CardContent className="py-10 text-center text-muted-foreground text-sm">
             <div>還沒有作品。</div>
@@ -173,7 +211,7 @@ export default function WorksList({ initial }: { initial: Work[] }) {
         </Card>
       ) : (
         <WorksSections
-          works={initial}
+          works={rows}
           editing={editing}
           editValue={editValue}
           busy={pending}
@@ -186,6 +224,19 @@ export default function WorksList({ initial }: { initial: Work[] }) {
           onCommitEdit={commitRename}
           onRemove={remove}
         />
+      )}
+
+      {cursor && (
+        <div className="flex justify-center py-6">
+          <Button
+            variant="outline"
+            onClick={loadMore}
+            disabled={loadingMore}
+          >
+            {loadingMore && <Loader2 className="animate-spin" />}
+            {loadingMore ? "載入中…" : "載入更多"}
+          </Button>
+        </div>
       )}
     </div>
   );

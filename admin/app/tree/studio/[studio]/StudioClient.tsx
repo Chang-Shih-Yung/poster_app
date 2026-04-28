@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Pencil, Trash2, Tag } from "lucide-react";
+import { Pencil, Trash2, Tag, Loader2 } from "lucide-react";
 import TreeShell from "../../_components/TreeShell";
 import TreeRow from "../../_components/TreeRow";
 import FAB from "../../_components/FAB";
@@ -13,11 +13,13 @@ import {
 import { NULL_STUDIO_KEY } from "../../_components/keys";
 import { WORK_KINDS } from "@/lib/enums";
 import { useTransitionAction } from "@/lib/clientActions";
+import { Button } from "@/components/ui/button";
 import {
   renameWork,
   changeWorkKind,
   deleteWork,
   createWork,
+  loadWorksPage,
 } from "@/app/actions/works";
 
 type Work = {
@@ -27,6 +29,7 @@ type Work = {
   work_kind: string;
   poster_count: number;
   studio: string | null;
+  created_at?: string;
 };
 
 const WORK_KIND_OPTIONS = WORK_KINDS.map((k) => ({
@@ -84,34 +87,81 @@ const WORK_ACTIONS: ItemAction<Work>[] = [
 
 export default function StudioClient({
   studio,
-  works,
+  works: initial,
+  initialCursor,
   nav,
 }: {
   studio: string;
   works: Work[];
+  initialCursor?: string | null;
   nav?: React.ReactNode;
 }) {
+  const [rows, setRows] = React.useState<Work[]>(initial);
+  const [cursor, setCursor] = React.useState<string | null>(
+    initialCursor ?? null
+  );
   const [activeWork, setActiveWork] = React.useState<Work | null>(null);
   const [addOpen, setAddOpen] = React.useState(false);
+  const [loadingMore, setLoadingMore] = React.useState(false);
+  const [loadError, setLoadError] = React.useState<string | null>(null);
   const { runFormAction } = useTransitionAction();
 
-  const totalPosters = works.reduce((acc, w) => acc + w.poster_count, 0);
+  // Reset accumulator when the server pushes a fresh batch (after a
+  // mutation revalidates).
+  React.useEffect(() => {
+    setRows(initial);
+    setCursor(initialCursor ?? null);
+  }, [initial, initialCursor]);
+
+  function loadMore() {
+    if (!cursor || loadingMore) return;
+    setLoadingMore(true);
+    setLoadError(null);
+    (async () => {
+      const r = await loadWorksPage({
+        cursor,
+        studio: studio === NULL_STUDIO_KEY ? null : studio,
+      });
+      if (!r.ok) {
+        setLoadError(r.error);
+      } else {
+        // Map the action's WorkRow shape (minimal subset) into the
+        // local Work shape used by this list.
+        setRows((prev) => [
+          ...prev,
+          ...r.data.rows.map((w) => ({
+            id: w.id,
+            title_zh: w.title_zh,
+            title_en: w.title_en,
+            work_kind: w.work_kind,
+            poster_count: w.poster_count,
+            studio: w.studio,
+            created_at: w.created_at,
+          })),
+        ]);
+        setCursor(r.data.nextCursor);
+      }
+      setLoadingMore(false);
+    })();
+  }
+
+  const totalPosters = rows.reduce((acc, w) => acc + w.poster_count, 0);
 
   return (
     <TreeShell
       nav={nav}
       back={{ href: "/tree", label: "目錄" }}
       title={studio}
-      subtitle={`${works.length} 部作品 · ${totalPosters} 張海報`}
+      subtitle={`${rows.length} 部作品${cursor ? "（還有更多）" : ""} · ${totalPosters} 張海報`}
       fab={<FAB onClick={() => setAddOpen(true)} label="新增作品" />}
     >
-      {works.length === 0 ? (
+      {rows.length === 0 ? (
         <div className="text-center text-muted-foreground py-12 text-sm">
           這個分類底下還沒有作品。點右下的 + 開始建立。
         </div>
       ) : (
         <ul className="space-y-2">
-          {works.map((w) => {
+          {rows.map((w) => {
             const kindLabel =
               WORK_KINDS.find((k) => k.value === w.work_kind)?.label ?? w.work_kind;
             return (
@@ -175,6 +225,25 @@ export default function StudioClient({
           )
         }
       />
+
+      {cursor && (
+        <div className="flex justify-center py-6">
+          <Button
+            variant="outline"
+            onClick={loadMore}
+            disabled={loadingMore}
+          >
+            {loadingMore && <Loader2 className="animate-spin" />}
+            {loadingMore ? "載入中…" : "載入更多"}
+          </Button>
+        </div>
+      )}
+
+      {loadError && (
+        <div className="text-center py-3 text-sm text-destructive">
+          載入失敗：{loadError}
+        </div>
+      )}
     </TreeShell>
   );
 }
