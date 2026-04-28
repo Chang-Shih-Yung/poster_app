@@ -107,7 +107,7 @@ class _FullBleedFeedState extends State<_FullBleedFeed>
                     fit: StackFit.expand,
                     children: [
                       CachedNetworkImage(
-                        imageUrl: poster.posterUrl,
+                        imageUrl: poster.posterUrl ?? '',
                         fit: BoxFit.cover,
                         placeholder: (_, _) =>
                             ColoredBox(color: AppTheme.surfaceRaised),
@@ -253,7 +253,7 @@ class _FullBleedFeedState extends State<_FullBleedFeed>
           ],
           // Title.
           AppText.headline(
-            poster.title,
+            poster.title ?? poster.posterName ?? '(未命名)',
             color: Colors.white,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
@@ -515,7 +515,7 @@ class _SmallTile extends StatelessWidget {
     return AppPosterRow(
       imageUrl: poster.thumbnailUrl ?? poster.posterUrl,
       posterId: poster.id,
-      title: poster.title,
+      title: poster.title ?? poster.posterName ?? '(未命名)',
       subtitle: [
         if (poster.year != null) '${poster.year}',
         if (poster.director != null) poster.director!,

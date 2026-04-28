@@ -899,7 +899,7 @@ class _PosterTile extends StatelessWidget {
                   width: 40,
                   height: 56,
                   child: CachedNetworkImage(
-                    imageUrl: poster.thumbnailUrl ?? poster.posterUrl,
+                    imageUrl: poster.thumbnailUrl ?? poster.posterUrl ?? '',
                     fit: BoxFit.cover,
                     memCacheWidth: 200,
                     fadeInDuration: const Duration(milliseconds: 180),
@@ -916,7 +916,7 @@ class _PosterTile extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    AppText.bodyBold(poster.title,
+                    AppText.bodyBold(poster.title ?? poster.posterName ?? '(未命名)',
                         maxLines: 1, overflow: TextOverflow.ellipsis),
                     AppText.caption(
                       [

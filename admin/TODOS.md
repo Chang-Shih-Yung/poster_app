@@ -5,23 +5,22 @@ open.
 
 ---
 
-## 1. `posters` legacy NOT NULL columns — drop NOT NULL
+## 1. `posters` legacy NOT NULL columns — **[done]**
 
-**[partially done — trigger-based defaults landed; drop NOT NULL still open]**
+`title`, `poster_url`, `uploader_id` are nullable on the schema and on
+`Poster.fromRow`. Triggers still set sensible defaults (auth.uid() for
+uploader_id; poster_name for title) but the columns no longer lie about
+the data contract — `poster_url IS NULL` now meaningfully says "no
+real image yet" alongside `is_placeholder=true`.
 
-A BEFORE INSERT trigger (`fill_legacy_poster_defaults`) now fills `title`,
-`poster_url`, `uploader_id` automatically, and a BEFORE UPDATE trigger
-(`sync_poster_title_from_name`) keeps `title` in lock-step with `poster_name`.
-The admin server actions stopped touching these columns explicitly. **Open
-follow-up:** drop the NOT NULL constraints outright and update the Flutter
-client (`lib/data/models/poster.dart`) to read these as nullable. That
-requires a coordinated Flutter release because the model casts `as String`
-on these fields today.
+Flutter readers in 9 sites updated to fall back gracefully:
+`p.title ?? p.posterName ?? '(未命名)'`, `p.posterUrl ?? ''`, and
+guarded calls (uploader badge skipped when `uploaderId` is null;
+fullscreen viewer disabled for placeholder posters).
 
-**Migration landed:** `20260428100200_posters_legacy_defaults.sql`
-**Still open:** `ALTER TABLE posters ALTER COLUMN title DROP NOT NULL` plus
-the parallel changes for `poster_url` and `uploader_id`, plus Flutter model
-updates.
+**Migrations landed:**
+- `20260428100200_posters_legacy_defaults.sql` (triggers)
+- `20260428110000_drop_posters_legacy_not_null.sql` (drop NOT NULL)
 
 ---
 

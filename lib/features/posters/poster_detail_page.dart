@@ -200,7 +200,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                               placeholderBuilder: (_, size, _) =>
                                   SizedBox(width: size.width, height: size.height),
                               child: CachedNetworkImage(
-                                imageUrl: p.posterUrl,
+                                imageUrl: p.posterUrl ?? '',
                                 fit: BoxFit.cover,
                                 placeholder: (_, _) => ColoredBox(
                                     color: AppTheme.surfaceRaised),
@@ -351,7 +351,7 @@ class _FujiInline extends ConsumerWidget {
               ? null
               : () => context.push('/work/${p.workId}'),
           child: AppText.headline(
-            p.title,
+            p.title ?? p.posterName ?? '(未命名)',
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
           ),
@@ -385,7 +385,7 @@ class _FujiInline extends ConsumerWidget {
               variant: AppIconButtonVariant.filled,
               onTap: () {
                 HapticFeedback.selectionClick();
-                Clipboard.setData(ClipboardData(text: p.posterUrl));
+                Clipboard.setData(ClipboardData(text: p.posterUrl ?? ''));
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('連結已複製')),
                 );
@@ -399,10 +399,12 @@ class _FujiInline extends ConsumerWidget {
               variant: AppIconButtonVariant.filled,
               onTap: () {
                 HapticFeedback.selectionClick();
+                final url = p.posterUrl;
+                if (url == null) return; // placeholder poster, nothing to enlarge
                 showDialog<void>(
                   context: context,
                   barrierColor: Colors.black.withValues(alpha: 0.92),
-                  builder: (_) => _FullImageViewer(url: p.posterUrl),
+                  builder: (_) => _FullImageViewer(url: url),
                 );
               },
               semanticsLabel: '放大',
@@ -605,11 +607,13 @@ class _RelatedSection extends ConsumerWidget {
                   separatorBuilder: (_, _) => const SizedBox(width: 12),
                   itemBuilder: (context, i) {
                     // Prefetch the next 3 thumbs into the cache so
-                    // they're hot when the user scrolls right.
+                    // they're hot when the user scrolls right. Skip
+                    // posters with no real image yet (placeholders).
                     prefetchAhead(
                       context: context,
                       urls: items
                           .map((p) => p.thumbnailUrl ?? p.posterUrl)
+                          .whereType<String>()
                           .toList(growable: false),
                       currentIndex: i,
                     );
@@ -617,14 +621,17 @@ class _RelatedSection extends ConsumerWidget {
                     return AppPosterTile(
                       imageUrl: p.thumbnailUrl ?? p.posterUrl,
                       fullImageUrl: p.posterUrl,
-      blurhash: p.blurhash,
+                      blurhash: p.blurhash,
                       posterId: p.id,
                       title: p.title,
                       width: 130,
                       height: 200,
                       onTap: () {
-                        precacheImage(NetworkImage(p.posterUrl), context)
-                            .catchError((_) {});
+                        final url = p.posterUrl;
+                        if (url != null) {
+                          precacheImage(NetworkImage(url), context)
+                              .catchError((_) {});
+                        }
                         if (context.mounted) {
                           context.pushReplacement('/poster/${p.id}');
                         }

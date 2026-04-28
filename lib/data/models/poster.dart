@@ -3,9 +3,9 @@ import '../../core/constants/enums.dart';
 class Poster {
   const Poster({
     required this.id,
-    required this.title,
-    required this.posterUrl,
-    required this.uploaderId,
+    this.title,
+    this.posterUrl,
+    this.uploaderId,
     required this.status,
     required this.tags,
     required this.createdAt,
@@ -52,15 +52,19 @@ class Poster {
   factory Poster.fromRow(Map<String, dynamic> row) {
     return Poster(
       id: row['id'] as String,
-      title: row['title'] as String,
+      // 2026-04-28: title / poster_url / uploader_id are nullable in the
+      // schema now. title is still sync'd with poster_name via DB
+      // trigger; poster_url is null while is_placeholder=true; uploader_id
+      // is null only for legacy / system-inserted rows.
+      title: row['title'] as String?,
       year: row['year'] as int?,
       director: row['director'] as String?,
       tags: ((row['tags'] as List?) ?? const [])
           .map((e) => e.toString())
           .toList(growable: false),
-      posterUrl: row['poster_url'] as String,
+      posterUrl: row['poster_url'] as String?,
       thumbnailUrl: row['thumbnail_url'] as String?,
-      uploaderId: row['uploader_id'] as String,
+      uploaderId: row['uploader_id'] as String?,
       status: row['status'] as String,
       reviewNote: row['review_note'] as String?,
       viewCount: (row['view_count'] as num?)?.toInt() ?? 0,
@@ -111,13 +115,20 @@ class Poster {
 
   // V1 fields
   final String id;
-  final String title;
+  /// Legacy column, kept in lock-step with [posterName] via DB trigger.
+  /// Nullable since 2026-04-28; readers should fall back to posterName
+  /// or `'(未命名)'`.
+  final String? title;
   final int? year;
   final String? director;
   final List<String> tags;
-  final String posterUrl;
+  /// Null when [isPlaceholder] is true (no real image uploaded yet).
+  /// Public clients should branch on isPlaceholder before rendering.
+  final String? posterUrl;
   final String? thumbnailUrl;
-  final String uploaderId;
+  /// Null for legacy or system-inserted rows. Most posters have an
+  /// uploader; UI should hide author chrome when this is null.
+  final String? uploaderId;
   final String status;
   final String? reviewNote;
   final int viewCount;

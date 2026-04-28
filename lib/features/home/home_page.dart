@@ -52,7 +52,7 @@ Widget _homePosterImage({
   double? height,
 }) {
   final img = CachedNetworkImage(
-    imageUrl: poster.thumbnailUrl ?? poster.posterUrl,
+    imageUrl: poster.thumbnailUrl ?? poster.posterUrl ?? '',
     fit: BoxFit.cover,
     width: width,
     height: height,
@@ -599,7 +599,7 @@ class _HeroCard extends StatelessWidget {
                         ),
                       const SizedBox(height: 4),
                       AppText.headline(
-                        poster.title,
+                        poster.title ?? poster.posterName ?? '(未命名)',
                         color: Colors.white,
                         weight: FontWeight.w700,
                         maxLines: 2,
@@ -747,20 +747,20 @@ class _FeedCard extends StatelessWidget {
               fit: StackFit.expand,
               children: [
                 AppPosterTile(
-                  imageUrl: poster.thumbnailUrl ?? poster.posterUrl,
+                  imageUrl: poster.thumbnailUrl ?? poster.posterUrl ?? '',
                   fullImageUrl: poster.posterUrl,
                   posterId: poster.id,
                   blurhash: poster.blurhash,
                   showOverlayText: false,
                 ),
-                if (poster.uploaderName != null)
+                if (poster.uploaderName != null && poster.uploaderId != null)
                   Positioned(
                     right: 6,
                     bottom: 6,
                     child: _UploaderBadge(
                       name: poster.uploaderName!,
                       avatarUrl: poster.uploaderAvatar,
-                      userId: poster.uploaderId,
+                      userId: poster.uploaderId!,
                     ),
                   ),
               ],
@@ -784,7 +784,7 @@ class _FeedCard extends StatelessWidget {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           AppText.bodyBold(
-                            poster.title,
+                            poster.title ?? poster.posterName ?? '(未命名)',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -1048,7 +1048,7 @@ class _RankedCard extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   AppText.bodyBold(
-                    p.title,
+                    p.title ?? p.posterName ?? '(未命名)',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
