@@ -55,7 +55,16 @@ export default function TreeShell({
               </span>
             </Link>
           ) : (
-            <div className="px-3 text-sm font-semibold">目錄</div>
+            // Match every other mobile header: when there's no parent
+            // to go back to, the leading slot is the brand mark linking
+            // home, not a redundant "目錄" label (the page H1 already
+            // says "目錄").
+            <Link
+              href="/"
+              className="px-3 min-h-[44px] flex items-center font-semibold text-foreground hover:no-underline"
+            >
+              Poster.
+            </Link>
           )}
           <div className="flex-1" />
           <ThemeToggle />
