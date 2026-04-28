@@ -2,6 +2,9 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useForm, Controller } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { createClient } from "@/lib/supabase/client";
 import {
   REGIONS,
@@ -29,35 +32,63 @@ import { AlertTriangle, Loader2 } from "lucide-react";
 
 type WorkOption = { id: string; title_zh: string; studio: string | null };
 
+type InitialPoster = {
+  id: string;
+  work_id: string | null;
+  work_kind?: string | null;
+  poster_name: string | null;
+  region: string | null;
+  year: number | null;
+  poster_release_type: string | null;
+  size_type: string | null;
+  channel_category: string | null;
+  channel_name: string | null;
+  is_exclusive: boolean;
+  exclusive_name: string | null;
+  material_type: string | null;
+  version_label: string | null;
+  source_url: string | null;
+  source_note: string | null;
+  is_placeholder: boolean;
+  parent_group_id?: string | null;
+};
+
 type PosterFormProps = {
   mode: "create" | "edit";
   works: WorkOption[];
-  initial?: {
-    id: string;
-    work_id: string | null;
-    work_kind?: string | null;
-    poster_name: string | null;
-    region: string | null;
-    year: number | null;
-    poster_release_type: string | null;
-    size_type: string | null;
-    channel_category: string | null;
-    channel_name: string | null;
-    is_exclusive: boolean;
-    exclusive_name: string | null;
-    material_type: string | null;
-    version_label: string | null;
-    source_url: string | null;
-    source_note: string | null;
-    is_placeholder: boolean;
-    parent_group_id?: string | null;
-  };
+  initial?: InitialPoster;
   defaultWorkId?: string;
 };
 
-// Sentinel "no value" for shadcn Select (Radix Select rejects an empty
-// string as an item value). Translated back to null on submit.
+// Sentinel "no value" because Radix Select rejects empty string item
+// values. Translated back to null on submit.
 const NONE = "__none__";
+
+const schema = z.object({
+  work_id: z.string().min(1, "必須指定作品"),
+  parent_group_id: z.string(), // NONE sentinel allowed
+  poster_name: z.string().trim().min(1, "海報名稱必填"),
+  year: z
+    .string()
+    .trim()
+    .refine(
+      (v) => v === "" || (/^\d+$/.test(v) && +v >= 1900 && +v <= 2100),
+      "年份格式錯誤（1900-2100 整數）"
+    ),
+  region: z.string(),
+  poster_release_type: z.string(),
+  size_type: z.string(),
+  channel_category: z.string(),
+  channel_name: z.string(),
+  is_exclusive: z.boolean(),
+  exclusive_name: z.string(),
+  material_type: z.string(),
+  version_label: z.string(),
+  source_url: z.string(),
+  source_note: z.string(),
+});
+
+type FormValues = z.infer<typeof schema>;
 
 export default function PosterForm({
   mode,
@@ -66,38 +97,44 @@ export default function PosterForm({
   defaultWorkId,
 }: PosterFormProps) {
   const router = useRouter();
-  const [workId, setWorkId] = useState(initial?.work_id ?? defaultWorkId ?? "");
-  const [parentGroupId, setParentGroupId] = useState<string>(
-    initial?.parent_group_id ?? ""
-  );
   const [groupOptions, setGroupOptions] = useState<
     { id: string; label: string }[]
   >([]);
-  const [posterName, setPosterName] = useState(initial?.poster_name ?? "");
-  const [year, setYear] = useState<string>(
-    initial?.year != null ? String(initial.year) : ""
-  );
-  const [region, setRegion] = useState(initial?.region ?? "TW");
-  const [releaseType, setReleaseType] = useState(
-    initial?.poster_release_type ?? ""
-  );
-  const [sizeType, setSizeType] = useState(initial?.size_type ?? "");
-  const [channelCat, setChannelCat] = useState(initial?.channel_category ?? "");
-  const [channelName, setChannelName] = useState(initial?.channel_name ?? "");
-  const [isExclusive, setIsExclusive] = useState(initial?.is_exclusive ?? false);
-  const [exclusiveName, setExclusiveName] = useState(
-    initial?.exclusive_name ?? ""
-  );
-  const [materialType, setMaterialType] = useState(initial?.material_type ?? "");
-  const [versionLabel, setVersionLabel] = useState(initial?.version_label ?? "");
-  const [sourceUrl, setSourceUrl] = useState(initial?.source_url ?? "");
-  const [sourceNote, setSourceNote] = useState(initial?.source_note ?? "");
-  const [error, setError] = useState<string | null>(null);
+  const [serverError, setServerError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
-  // Group options come from a Supabase query (depends on selected work),
-  // not an action — it's a read on a public table that the user can
-  // already see, so direct client read is fine.
+  const {
+    register,
+    handleSubmit,
+    control,
+    watch,
+    formState: { errors },
+  } = useForm<FormValues>({
+    resolver: zodResolver(schema),
+    defaultValues: {
+      work_id: initial?.work_id ?? defaultWorkId ?? "",
+      parent_group_id: initial?.parent_group_id ?? NONE,
+      poster_name: initial?.poster_name ?? "",
+      year: initial?.year != null ? String(initial.year) : "",
+      region: initial?.region ?? "TW",
+      poster_release_type: initial?.poster_release_type ?? NONE,
+      size_type: initial?.size_type ?? NONE,
+      channel_category: initial?.channel_category ?? NONE,
+      channel_name: initial?.channel_name ?? "",
+      is_exclusive: initial?.is_exclusive ?? false,
+      exclusive_name: initial?.exclusive_name ?? "",
+      material_type: initial?.material_type ?? "",
+      version_label: initial?.version_label ?? "",
+      source_url: initial?.source_url ?? "",
+      source_note: initial?.source_note ?? "",
+    },
+  });
+
+  const workId = watch("work_id");
+  const isExclusive = watch("is_exclusive");
+
+  // Load groups for the selected work — read on a public table the
+  // user can already see, so direct client read is fine.
   useEffect(() => {
     if (!workId) {
       setGroupOptions([]);
@@ -116,59 +153,44 @@ export default function PosterForm({
     })();
   }, [workId]);
 
-  function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
-    if (!workId) {
-      setError("必須指定作品");
-      return;
-    }
-    if (!posterName.trim()) {
-      setError("海報名稱必填");
-      return;
-    }
-
-    const yearTrimmed = year.trim();
-    const yearInt = yearTrimmed ? parseInt(yearTrimmed, 10) : null;
-    if (
-      yearTrimmed &&
-      (Number.isNaN(yearInt!) || yearInt! < 1900 || yearInt! > 2100)
-    ) {
-      setError("年份格式錯誤（1900-2100 整數）");
-      return;
-    }
+  function onSubmit(values: FormValues) {
+    setServerError(null);
+    const yearInt = values.year ? parseInt(values.year, 10) : null;
+    const fromSentinel = (v: string) => (v === NONE ? null : v || null);
 
     const payload = {
-      poster_name: posterName.trim(),
+      poster_name: values.poster_name.trim(),
       year: yearInt,
-      region: region || "TW",
-      poster_release_type: releaseType || null,
-      size_type: sizeType || null,
-      channel_category: channelCat || null,
-      channel_name: channelName.trim() || null,
-      is_exclusive: isExclusive,
-      exclusive_name: isExclusive ? exclusiveName.trim() || null : null,
-      material_type: materialType.trim() || null,
-      version_label: versionLabel.trim() || null,
-      source_url: sourceUrl.trim() || null,
-      source_note: sourceNote.trim() || null,
+      region: values.region || "TW",
+      poster_release_type: fromSentinel(values.poster_release_type),
+      size_type: fromSentinel(values.size_type),
+      channel_category: fromSentinel(values.channel_category),
+      channel_name: values.channel_name.trim() || null,
+      is_exclusive: values.is_exclusive,
+      exclusive_name: values.is_exclusive
+        ? values.exclusive_name.trim() || null
+        : null,
+      material_type: values.material_type.trim() || null,
+      version_label: values.version_label.trim() || null,
+      source_url: values.source_url.trim() || null,
+      source_note: values.source_note.trim() || null,
     };
 
     startTransition(async () => {
       const r =
         mode === "create"
           ? await createPoster({
-              work_id: workId,
-              parent_group_id: parentGroupId || null,
+              work_id: values.work_id,
+              parent_group_id: fromSentinel(values.parent_group_id),
               ...payload,
             })
           : await updatePosterMetadata(initial!.id, {
-              parent_group_id: parentGroupId || null,
+              parent_group_id: fromSentinel(values.parent_group_id),
               title: payload.poster_name, // keep legacy column in sync
               ...payload,
             });
       if (!r.ok) {
-        setError(r.error);
+        setServerError(r.error);
         return;
       }
       router.push("/posters");
@@ -176,243 +198,263 @@ export default function PosterForm({
   }
 
   return (
-    <form onSubmit={onSubmit} className="space-y-4">
-      {error && (
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+      {serverError && (
         <Card className="border-destructive/40 bg-destructive/10">
           <CardContent className="p-3 flex items-start gap-2 text-sm text-destructive">
             <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
-            <span>{error}</span>
+            <span>{serverError}</span>
           </CardContent>
         </Card>
       )}
 
-      <div className="space-y-1.5">
-        <Label htmlFor="work_id">作品 *</Label>
-        <Select value={workId} onValueChange={setWorkId}>
-          <SelectTrigger id="work_id">
-            <SelectValue placeholder="── 選擇作品 ──" />
-          </SelectTrigger>
-          <SelectContent>
-            {works.map((w) => (
-              <SelectItem key={w.id} value={w.id}>
-                {w.studio ? `[${w.studio}] ` : ""}
-                {w.title_zh}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+      <FormField label="作品 *" error={errors.work_id?.message}>
+        <Controller
+          control={control}
+          name="work_id"
+          render={({ field }) => (
+            <Select
+              value={field.value}
+              onValueChange={field.onChange}
+              disabled={pending}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="── 選擇作品 ──" />
+              </SelectTrigger>
+              <SelectContent>
+                {works.map((w) => (
+                  <SelectItem key={w.id} value={w.id}>
+                    {w.studio ? `[${w.studio}] ` : ""}
+                    {w.title_zh}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        />
+      </FormField>
 
       {initial?.work_kind && workId && (
         <WorkKindReadOnly workKind={initial.work_kind} />
       )}
 
-      <div className="space-y-1.5">
-        <Label htmlFor="group">所屬群組</Label>
-        <Select
-          value={parentGroupId || NONE}
-          onValueChange={(v) => setParentGroupId(v === NONE ? "" : v)}
-          disabled={!workId}
-        >
-          <SelectTrigger id="group">
-            <SelectValue placeholder="── 不屬於任何群組 ──" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={NONE}>── 不屬於任何群組 ──</SelectItem>
-            {groupOptions.map((g) => (
-              <SelectItem key={g.id} value={g.id}>
-                {g.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        {!workId && (
-          <p className="text-xs text-muted-foreground">
-            先選作品才能看到該作品的群組
-          </p>
-        )}
-      </div>
-
-      <div className="space-y-1.5">
-        <Label htmlFor="poster_name">海報名稱</Label>
-        <Input
-          id="poster_name"
-          value={posterName}
-          onChange={(e) => setPosterName(e.target.value)}
-          placeholder="例：B1 原版 / IMAX 威秀獨家"
+      <FormField
+        label="所屬群組"
+        helper={!workId ? "先選作品才能看到該作品的群組" : undefined}
+      >
+        <Controller
+          control={control}
+          name="parent_group_id"
+          render={({ field }) => (
+            <Select
+              value={field.value}
+              onValueChange={field.onChange}
+              disabled={!workId || pending}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="── 不屬於任何群組 ──" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NONE}>── 不屬於任何群組 ──</SelectItem>
+                {groupOptions.map((g) => (
+                  <SelectItem key={g.id} value={g.id}>
+                    {g.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
         />
-      </div>
+      </FormField>
+
+      <FormField label="海報名稱" error={errors.poster_name?.message}>
+        <Input
+          {...register("poster_name")}
+          placeholder="例：B1 原版 / IMAX 威秀獨家"
+          disabled={pending}
+        />
+      </FormField>
 
       <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1.5">
-          <Label htmlFor="year">發行年份</Label>
+        <FormField label="發行年份" error={errors.year?.message}>
           <Input
-            id="year"
             type="number"
             min={1900}
             max={2100}
-            value={year}
-            onChange={(e) => setYear(e.target.value)}
+            {...register("year")}
             placeholder="例：2026"
+            disabled={pending}
           />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="region">地區</Label>
-          <Select value={region} onValueChange={setRegion}>
-            <SelectTrigger id="region">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {REGIONS.map((r) => (
-                <SelectItem key={r.value} value={r.value}>
-                  {r.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        </FormField>
+        <FormField label="地區">
+          <Controller
+            control={control}
+            name="region"
+            render={({ field }) => (
+              <Select
+                value={field.value}
+                onValueChange={field.onChange}
+                disabled={pending}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {REGIONS.map((r) => (
+                    <SelectItem key={r.value} value={r.value}>
+                      {r.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          />
+        </FormField>
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1.5">
-          <Label htmlFor="release_type">發行類型</Label>
-          <Select
-            value={releaseType || NONE}
-            onValueChange={(v) => setReleaseType(v === NONE ? "" : v)}
-          >
-            <SelectTrigger id="release_type">
-              <SelectValue placeholder="—" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={NONE}>—</SelectItem>
-              {RELEASE_TYPES.map((r) => (
-                <SelectItem key={r.value} value={r.value}>
-                  {r.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="size_type">尺寸</Label>
-          <Select
-            value={sizeType || NONE}
-            onValueChange={(v) => setSizeType(v === NONE ? "" : v)}
-          >
-            <SelectTrigger id="size_type">
-              <SelectValue placeholder="—" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={NONE}>—</SelectItem>
-              {SIZE_TYPES.map((r) => (
-                <SelectItem key={r.value} value={r.value}>
-                  {r.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        <FormField label="發行類型">
+          <Controller
+            control={control}
+            name="poster_release_type"
+            render={({ field }) => (
+              <Select
+                value={field.value}
+                onValueChange={field.onChange}
+                disabled={pending}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="—" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NONE}>—</SelectItem>
+                  {RELEASE_TYPES.map((r) => (
+                    <SelectItem key={r.value} value={r.value}>
+                      {r.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          />
+        </FormField>
+        <FormField label="尺寸">
+          <Controller
+            control={control}
+            name="size_type"
+            render={({ field }) => (
+              <Select
+                value={field.value}
+                onValueChange={field.onChange}
+                disabled={pending}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="—" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NONE}>—</SelectItem>
+                  {SIZE_TYPES.map((r) => (
+                    <SelectItem key={r.value} value={r.value}>
+                      {r.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          />
+        </FormField>
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1.5">
-          <Label htmlFor="channel_cat">通路類型</Label>
-          <Select
-            value={channelCat || NONE}
-            onValueChange={(v) => setChannelCat(v === NONE ? "" : v)}
-          >
-            <SelectTrigger id="channel_cat">
-              <SelectValue placeholder="—" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={NONE}>—</SelectItem>
-              {CHANNEL_CATEGORIES.map((r) => (
-                <SelectItem key={r.value} value={r.value}>
-                  {r.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="channel_name">通路名稱</Label>
+        <FormField label="通路類型">
+          <Controller
+            control={control}
+            name="channel_category"
+            render={({ field }) => (
+              <Select
+                value={field.value}
+                onValueChange={field.onChange}
+                disabled={pending}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="—" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NONE}>—</SelectItem>
+                  {CHANNEL_CATEGORIES.map((r) => (
+                    <SelectItem key={r.value} value={r.value}>
+                      {r.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          />
+        </FormField>
+        <FormField label="通路名稱">
           <Input
-            id="channel_name"
-            value={channelName}
-            onChange={(e) => setChannelName(e.target.value)}
+            {...register("channel_name")}
             placeholder="例：威秀影城、東寶"
+            disabled={pending}
           />
-        </div>
+        </FormField>
       </div>
 
       <label className="flex items-center gap-2 text-sm text-foreground">
         <input
           type="checkbox"
-          checked={isExclusive}
-          onChange={(e) => setIsExclusive(e.target.checked)}
+          {...register("is_exclusive")}
           className="h-4 w-4 rounded border-input"
         />
         <span>獨家</span>
       </label>
 
       {isExclusive && (
-        <div className="space-y-1.5">
-          <Label htmlFor="exclusive_name">獨家名稱</Label>
+        <FormField label="獨家名稱">
           <Input
-            id="exclusive_name"
-            value={exclusiveName}
-            onChange={(e) => setExclusiveName(e.target.value)}
+            {...register("exclusive_name")}
             placeholder="例：威秀影城"
+            disabled={pending}
           />
-        </div>
+        </FormField>
       )}
 
       <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1.5">
-          <Label htmlFor="material">材質</Label>
+        <FormField label="材質">
           <Input
-            id="material"
-            value={materialType}
-            onChange={(e) => setMaterialType(e.target.value)}
+            {...register("material_type")}
             placeholder="例：霧面紙 / 金箔紙"
+            disabled={pending}
           />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="version">版本標記</Label>
+        </FormField>
+        <FormField label="版本標記">
           <Input
-            id="version"
-            value={versionLabel}
-            onChange={(e) => setVersionLabel(e.target.value)}
+            {...register("version_label")}
             placeholder="例：v2、25 週年"
+            disabled={pending}
           />
-        </div>
+        </FormField>
       </div>
 
-      <div className="space-y-1.5">
-        <Label htmlFor="source_url">來源網址</Label>
-        <Input
-          id="source_url"
-          type="url"
-          value={sourceUrl}
-          onChange={(e) => setSourceUrl(e.target.value)}
-        />
-      </div>
+      <FormField label="來源網址">
+        <Input type="url" {...register("source_url")} disabled={pending} />
+      </FormField>
 
-      <div className="space-y-1.5">
-        <Label htmlFor="source_note">備註</Label>
-        <Textarea
-          id="source_note"
-          value={sourceNote}
-          onChange={(e) => setSourceNote(e.target.value)}
-        />
-      </div>
+      <FormField label="備註">
+        <Textarea {...register("source_note")} disabled={pending} />
+      </FormField>
 
       <div className="pt-4 flex gap-3">
         <Button type="submit" disabled={pending}>
           {pending && <Loader2 className="animate-spin" />}
           {pending ? "儲存中…" : mode === "create" ? "建立" : "儲存"}
         </Button>
-        <Button type="button" variant="outline" onClick={() => router.back()}>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => router.back()}
+          disabled={pending}
+        >
           取消
         </Button>
       </div>
@@ -425,12 +467,36 @@ export default function PosterForm({
 }
 
 /**
- * Read-only display of work_kind. The value lives on posters.work_kind
- * (denormalized from works.work_kind for filtering); source of truth is
- * the work — DB triggers keep them in lock-step.
+ * Single label + control + error/helper line. Centralises the
+ * spacing rule so every field on the form sits in the same rhythm.
  */
+function FormField({
+  label,
+  helper,
+  error,
+  children,
+}: {
+  label: string;
+  helper?: string;
+  error?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <Label>{label}</Label>
+      {children}
+      {error ? (
+        <p className="text-xs text-destructive">{error}</p>
+      ) : helper ? (
+        <p className="text-xs text-muted-foreground">{helper}</p>
+      ) : null}
+    </div>
+  );
+}
+
 function WorkKindReadOnly({ workKind }: { workKind: string }) {
-  const label = WORK_KINDS.find((k) => k.value === workKind)?.label ?? workKind;
+  const label =
+    WORK_KINDS.find((k) => k.value === workKind)?.label ?? workKind;
   return (
     <div className="flex items-center gap-2">
       <span className="text-xs uppercase tracking-wider text-muted-foreground">
@@ -440,4 +506,3 @@ function WorkKindReadOnly({ workKind }: { workKind: string }) {
     </div>
   );
 }
-

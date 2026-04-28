@@ -15,10 +15,12 @@ export default async function StudioPage({
   const studio = decodeURIComponent(rawParam);
   const supabase = await createClient();
 
+  // Same defensive cap as /works — TODOS.md tracks cursor pagination.
   const q = supabase
     .from("works")
     .select("id, title_zh, title_en, work_kind, poster_count, studio")
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .limit(500);
   const { data: works } =
     studio === NULL_STUDIO_KEY ? await q.is("studio", null) : await q.eq("studio", studio);
 
