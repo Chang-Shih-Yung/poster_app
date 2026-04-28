@@ -867,7 +867,10 @@ export default function TreeBrowser({ studios: initialStudios }: { studios: Stud
           const editKey = `studio:${s.studio}`;
           const addKey = `studio:${s.studio}:add`;
           return (
-            <li key={s.studio}>
+            <li
+              key={s.studio}
+              className="rounded-lg border border-line1 bg-surface overflow-hidden"
+            >
               {editing === editKey ? (
                 <InlineRowEdit
                   depth={0}
@@ -904,7 +907,7 @@ export default function TreeBrowser({ studios: initialStudios }: { studios: Stud
                 />
               )}
               {open && works && (
-                <ul className="mt-1.5 space-y-1.5">
+                <ul className="border-t border-line1">
                   {adding === addKey && (
                     <li>
                       <NewWorkInline
@@ -1043,7 +1046,7 @@ function WorkRow(props: {
       )}
 
       {props.open && props.children && (
-        <ul className="mt-1.5 space-y-1.5">
+        <ul>
           {props.adding === addGroupKey && (
             <li>
               <InlineRowEdit
@@ -1201,7 +1204,7 @@ function GroupNodeRow(props: {
       )}
 
       {props.open && props.children && (
-        <ul className="mt-1.5 space-y-1.5">
+        <ul>
           {props.adding === addGroupKey && (
             <li>
               <InlineRowEdit
@@ -1432,8 +1435,8 @@ function TreeRow({
   return (
     <div
       onClick={onClick}
-      className={`flex items-center w-full min-h-[52px] pr-1 rounded-lg bg-surface border border-line1 ${
-        onClick ? "cursor-pointer hover:bg-surfaceRaised hover:border-line2 active:bg-surfaceRaised" : ""
+      className={`flex items-center w-full min-h-[52px] pr-1 ${
+        onClick ? "cursor-pointer hover:bg-surfaceRaised active:bg-surfaceRaised" : ""
       }`}
       style={{ paddingLeft: `${padding}px` }}
     >
