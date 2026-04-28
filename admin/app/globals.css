@@ -2,11 +2,67 @@
 @tailwind components;
 @tailwind utilities;
 
+/* shadcn theme tokens — drive components on /tree (and any new screen
+ * we migrate later). The rest of the admin still uses the legacy hex
+ * palette below, which is why html/body keeps its hard-coded dark
+ * baseline — flipping the toggle only re-paints surfaces that actually
+ * read from these CSS variables. */
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 240 10% 3.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 3.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 3.9%;
+    --primary: 240 5.9% 10%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 240 4.8% 95.9%;
+    --secondary-foreground: 240 5.9% 10%;
+    --muted: 240 4.8% 95.9%;
+    --muted-foreground: 240 3.8% 46.1%;
+    --accent: 240 4.8% 95.9%;
+    --accent-foreground: 240 5.9% 10%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 5.9% 90%;
+    --input: 240 5.9% 90%;
+    --ring: 240 5.9% 10%;
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 220 15% 8%;
+    --foreground: 210 17% 92%;
+    --card: 215 14% 11%;
+    --card-foreground: 210 17% 92%;
+    --popover: 215 14% 11%;
+    --popover-foreground: 210 17% 92%;
+    --primary: 210 17% 92%;
+    --primary-foreground: 220 15% 8%;
+    --secondary: 215 14% 16%;
+    --secondary-foreground: 210 17% 92%;
+    --muted: 215 14% 16%;
+    --muted-foreground: 213 7% 56%;
+    --accent: 215 14% 16%;
+    --accent-foreground: 210 17% 92%;
+    --destructive: 0 62.8% 50%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 215 14% 20%;
+    --input: 215 14% 20%;
+    --ring: 213 7% 56%;
+  }
+}
+
 html, body {
   background: #0d1116;
   color: #e6edf3;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, "Noto Sans TC", sans-serif;
 }
+
+/* When the user opts a subtree into shadcn theming (e.g. the new tree
+ * pages), `bg-background text-foreground` on the page root overrides
+ * the dark hard-coded body and the chosen theme takes hold. */
 
 * {
   border-color: #2a323c;
