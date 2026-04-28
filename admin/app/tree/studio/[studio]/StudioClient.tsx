@@ -28,6 +28,7 @@ type Work = {
   title_en: string | null;
   work_kind: string;
   poster_count: number;
+  placeholder_count: number;
   studio: string | null;
   created_at?: string;
 };
@@ -135,6 +136,7 @@ export default function StudioClient({
             title_en: w.title_en,
             work_kind: w.work_kind,
             poster_count: w.poster_count,
+            placeholder_count: w.placeholder_count,
             studio: w.studio,
             created_at: w.created_at,
           })),
@@ -146,13 +148,20 @@ export default function StudioClient({
   }
 
   const totalPosters = rows.reduce((acc, w) => acc + w.poster_count, 0);
+  const totalPlaceholders = rows.reduce((acc, w) => acc + w.placeholder_count, 0);
 
   return (
     <TreeShell
       nav={nav}
       back={{ href: "/tree", label: "目錄" }}
       title={studio}
-      subtitle={`${rows.length} 部作品${cursor ? "（還有更多）" : ""} · ${totalPosters} 張海報`}
+      subtitle={[
+        `${rows.length} 部作品${cursor ? "（還有更多）" : ""}`,
+        `${totalPosters} 張海報`,
+        totalPlaceholders > 0 ? `${totalPlaceholders} 待補圖` : null,
+      ]
+        .filter(Boolean)
+        .join(" · ")}
       fab={<FAB onClick={() => setAddOpen(true)} label="新增作品" />}
     >
       {rows.length === 0 ? (
@@ -170,7 +179,14 @@ export default function StudioClient({
                 kind="folder"
                 href={`/tree/work/${w.id}`}
                 title={w.title_zh}
-                subtitle={w.title_en ?? undefined}
+                subtitle={[
+                  w.title_en,
+                  w.placeholder_count > 0
+                    ? `${w.placeholder_count} 待補圖`
+                    : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · ") || undefined}
                 count={w.poster_count}
                 countLabel="張海報"
                 badge={kindLabel}
@@ -186,7 +202,16 @@ export default function StudioClient({
         onClose={() => setActiveWork(null)}
         title={activeWork?.title_zh ?? ""}
         description={
-          activeWork ? `${activeWork.poster_count} 張海報` : undefined
+          activeWork
+            ? [
+                `${activeWork.poster_count} 張海報`,
+                activeWork.placeholder_count > 0
+                  ? `${activeWork.placeholder_count} 待補圖`
+                  : null,
+              ]
+                .filter(Boolean)
+                .join(" · ")
+            : undefined
         }
         actions={WORK_ACTIONS}
       />

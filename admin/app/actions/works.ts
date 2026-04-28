@@ -14,6 +14,7 @@ export type WorkRow = {
   work_kind: string;
   movie_release_year: number | null;
   poster_count: number;
+  placeholder_count: number;
   created_at: string;
 };
 
@@ -31,7 +32,7 @@ export async function loadWorksPage(opts: {
     let q = supabase
       .from("works")
       .select(
-        "id, studio, title_zh, title_en, work_kind, movie_release_year, poster_count, created_at"
+        "id, studio, title_zh, title_en, work_kind, movie_release_year, poster_count, placeholder_count, created_at"
       )
       .order("created_at", { ascending: false })
       .order("id", { ascending: false })
@@ -98,7 +99,7 @@ export async function createWork(input: {
   }>
 > {
   try {
-    const { supabase } = await requireAdmin();
+    const { supabase, user } = await requireAdmin();
     if (!input.title_zh.trim()) throw new Error("作品名稱必填");
     const { data, error } = await supabase
       .from("works")
@@ -111,6 +112,16 @@ export async function createWork(input: {
       .single();
     if (error) throw error;
     revalidateWorkSurfaces();
+    await logAudit(supabase, user, {
+      action: "create_work",
+      target_kind: "work",
+      target_id: data.id,
+      payload: {
+        title_zh: input.title_zh.trim(),
+        studio: input.studio,
+        work_kind: input.work_kind,
+      },
+    });
     return ok(data);
   } catch (e) {
     return fail(e);
@@ -170,6 +181,17 @@ export async function changeWorkKind(
   }
 }
 
+/** Runtime whitelist for updateWork — TypeScript types are erased
+ *  after compilation, so a crafted JSON payload could include extra
+ *  fields (e.g. poster_count, created_at). This strips them. */
+const WORK_UPDATE_ALLOWED = new Set([
+  "studio",
+  "title_zh",
+  "title_en",
+  "work_kind",
+  "movie_release_year",
+]);
+
 export async function updateWork(
   id: string,
   patch: {
@@ -181,10 +203,22 @@ export async function updateWork(
   }
 ): Promise<ActionResult> {
   try {
-    const { supabase } = await requireAdmin();
-    const { error } = await supabase.from("works").update(patch).eq("id", id);
+    const { supabase, user } = await requireAdmin();
+    const safePatch = Object.fromEntries(
+      Object.entries(patch).filter(([k]) => WORK_UPDATE_ALLOWED.has(k))
+    );
+    if (Object.keys(safePatch).length === 0) {
+      throw new Error("沒有可更新的欄位");
+    }
+    const { error } = await supabase.from("works").update(safePatch).eq("id", id);
     if (error) throw error;
     revalidateWorkSurfaces(id);
+    await logAudit(supabase, user, {
+      action: "update_work",
+      target_kind: "work",
+      target_id: id,
+      payload: patch,
+    });
     return ok(undefined);
   } catch (e) {
     return fail(e);
@@ -255,6 +289,10 @@ export async function renameStudio(
   }
 }
 
+/** Hard cap for bulk studio deletion — a safety net against
+ *  accidental wipes when confirm() is bypassed via direct fetch. */
+const STUDIO_DELETE_MAX = 50;
+
 export async function deleteStudio(studio: string): Promise<ActionResult> {
   try {
     const { supabase, user } = await requireAdmin();
@@ -263,12 +301,18 @@ export async function deleteStudio(studio: string): Promise<ActionResult> {
         "「未分類」是虛擬分類，無法直接刪除；請改名讓裡面的作品有歸屬"
       );
     }
-    // Same as deleteWork: snapshot is the only post-mortem the audit
-    // log gives us, so the extra round-trip is justified.
+    // Snapshot before deletion — also serves as a server-side count
+    // guard so a crafted request that skips the client confirm()
+    // dialog can't wipe unbounded data.
     const { data: before } = await supabase
       .from("works")
       .select("id, title_zh, poster_count")
       .eq("studio", studio);
+    if ((before?.length ?? 0) > STUDIO_DELETE_MAX) {
+      throw new Error(
+        `分類底下有 ${before!.length} 部作品，超過安全上限 ${STUDIO_DELETE_MAX}。請先個別刪除或搬移作品。`
+      );
+    }
     const { error } = await supabase.from("works").delete().eq("studio", studio);
     if (error) throw error;
     revalidateWorkSurfaces();

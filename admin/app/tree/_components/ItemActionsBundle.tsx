@@ -8,6 +8,16 @@ import {
   SheetTitle,
   SheetDescription,
 } from "@/components/ui/sheet";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { SheetMenuList, type SheetMenuItem } from "./SheetMenu";
 import { FormSheet, type FormField } from "./FormSheet";
 import { useTransitionAction } from "@/lib/clientActions";
@@ -24,7 +34,9 @@ import type { ActionResult } from "@/app/actions/_internal";
  *   { kind: "form" }    Opens a FormSheet with the supplied fields.
  *                       Resolves the action with the trimmed values.
  *   { kind: "instant" } Fires straight away. Optional confirm() turns
- *                       it into "are-you-sure" before the action runs.
+ *                       it into a shadcn AlertDialog before the action
+ *                       runs (replaces the old window.confirm() which
+ *                       is silently ignored in iOS Safari PWA mode).
  *
  * The `item` prop drives everything — set to non-null to open the
  * menu, set to null (via `onClose`) to dismiss. Forms keep the menu
@@ -59,6 +71,12 @@ export type ItemInstantAction<T> = {
 
 export type ItemAction<T> = ItemFormAction<T> | ItemInstantAction<T>;
 
+type ConfirmState<T> = {
+  action: ItemInstantAction<T>;
+  item: T;
+  message: string;
+};
+
 export function ItemActionsBundle<T>({
   item,
   onClose,
@@ -73,6 +91,7 @@ export function ItemActionsBundle<T>({
   actions: ItemAction<T>[];
 }) {
   const [formIdx, setFormIdx] = React.useState<number | null>(null);
+  const [confirmState, setConfirmState] = React.useState<ConfirmState<T> | null>(null);
   const { runFormAction, runAction } = useTransitionAction();
 
   // Closing the menu also closes any open form, since both reference
@@ -87,10 +106,13 @@ export function ItemActionsBundle<T>({
       ? (actions[formIdx] as ItemFormAction<T>)
       : null;
 
+  // Sheet is open when item is set AND we're not in form or confirm mode.
+  const sheetOpen = item != null && formIdx == null && confirmState == null;
+
   return (
     <>
       <Sheet
-        open={item != null && formIdx == null}
+        open={sheetOpen}
         onOpenChange={(v) => {
           if (!v) closeAll();
         }}
@@ -120,13 +142,15 @@ export function ItemActionsBundle<T>({
                       setFormIdx(idx);
                       return;
                     }
-                    // instant: confirm if requested, then fire.
+                    // instant: close sheet first, then either show
+                    // AlertDialog (if confirm defined) or fire directly.
                     const target = item;
+                    onClose();
                     if (a.confirm) {
                       const msg = a.confirm(target);
-                      if (msg && !confirm(msg)) return;
+                      setConfirmState({ action: a, item: target, message: msg });
+                      return;
                     }
-                    onClose();
                     runAction(() => a.run(target));
                   },
                 }))}
@@ -135,6 +159,40 @@ export function ItemActionsBundle<T>({
           )}
         </SheetContent>
       </Sheet>
+
+      {/* Destructive confirmation — replaces window.confirm() which is
+          silently ignored in iOS Safari PWA mode. */}
+      <AlertDialog
+        open={confirmState != null}
+        onOpenChange={(v) => {
+          if (!v) setConfirmState(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>確認操作</AlertDialogTitle>
+            <AlertDialogDescription className="whitespace-pre-line">
+              {confirmState?.message}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setConfirmState(null)}>
+              取消
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (!confirmState) return;
+                const { action, item: target } = confirmState;
+                setConfirmState(null);
+                runAction(() => action.run(target));
+              }}
+            >
+              確認刪除
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {activeForm && item != null && (
         <FormSheet

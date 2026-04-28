@@ -3,6 +3,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { Pencil, Trash2, FolderPlus, FilePlus2, ImagePlus } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import {
   Sheet,
   SheetContent,
@@ -47,6 +48,7 @@ type Group = {
   name: string;
   group_type: string | null;
   child_count: number;
+  placeholder_count: number;
 };
 
 type Poster = {
@@ -78,10 +80,10 @@ const childGroupActions: ItemAction<Group>[] = [
     kind: "instant",
     icon: <Trash2 className="w-4 h-4" />,
     label: "刪除群組",
-    hint: "海報會被丟回上一層，不會被刪除",
+    hint: "海報會回到作品頂層，不會被刪除",
     destructive: true,
     confirm: (g) =>
-      `刪除群組「${g.name}」？\n子群組會一併消失，群組內的海報會被丟回上一層（海報本身不刪）。`,
+      `刪除群組「${g.name}」？\n子群組會一併消失，群組內的海報會回到作品頂層（不放進任何群組），海報本身不刪。`,
     run: (g) => deleteGroup(g.id),
   },
 ];
@@ -103,6 +105,17 @@ export default function GroupClient({
   const [activeGroup, setActiveGroup] = React.useState<Group | null>(null);
   const [activePoster, setActivePoster] = React.useState<Poster | null>(null);
   const [selfActive, setSelfActive] = React.useState(false);
+  const [filter, setFilter] = React.useState("");
+
+  // After a successful upload, navigate to the next placeholder in this group.
+  function handleUploadSuccess(uploadedId: string) {
+    const nextPlaceholder = posters.find(
+      (p) => p.id !== uploadedId && p.is_placeholder
+    );
+    if (nextPlaceholder) {
+      router.push(`/posters/${nextPlaceholder.id}`);
+    }
+  }
   const addSheets = useAddSheets<"group" | "poster">();
   const image = useImageAttach();
   const { runFormAction } = useTransitionAction();
@@ -131,10 +144,10 @@ export default function GroupClient({
       kind: "instant",
       icon: <Trash2 className="w-4 h-4" />,
       label: "刪除群組",
-      hint: "海報會被丟回上一層",
+      hint: "海報會回到作品頂層，不會被刪除",
       destructive: true,
       confirm: (g) =>
-        `刪除群組「${g.name}」？\n子群組會一併消失，群組內的海報會被丟回上一層（海報本身不刪）。`,
+        `刪除群組「${g.name}」？\n子群組會一併消失，群組內的海報會回到作品頂層（不放進任何群組），海報本身不刪。`,
       run: async (g) => {
         const r = await deleteGroup(g.id);
         if (r.ok) router.push(back.href);
@@ -168,7 +181,7 @@ export default function GroupClient({
       label: "上傳 / 更換圖片",
       hint: "選一張新圖，覆蓋既有海報",
       run: async (p) => {
-        image.pickFor(p);
+        image.pickFor(p, handleUploadSuccess);
         return { ok: true, data: undefined };
       },
     },
@@ -187,6 +200,16 @@ export default function GroupClient({
     ...groups.map((g) => ({ kind: "group" as const, data: g })),
     ...posters.map((p) => ({ kind: "poster" as const, data: p })),
   ];
+
+  const filteredItems = filter.trim()
+    ? items.filter((it) => {
+        const label =
+          it.kind === "group"
+            ? it.data.name
+            : (it.data.poster_name ?? "");
+        return label.toLowerCase().includes(filter.trim().toLowerCase());
+      })
+    : items;
 
   return (
     <TreeShell
@@ -212,20 +235,43 @@ export default function GroupClient({
         className="hidden"
         onChange={image.handleFile}
       />
+
+      {items.length >= 8 && (
+        <div className="mb-3">
+          <Input
+            placeholder="搜尋子群組或海報…"
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            className="h-9 text-sm"
+          />
+        </div>
+      )}
+
       {items.length === 0 ? (
         <div className="text-center text-muted-foreground py-12 text-sm">
-          這個群組還是空的。
+          這個群組還是空的。點右下的 + 開始新增。
+        </div>
+      ) : filteredItems.length === 0 ? (
+        <div className="text-center text-muted-foreground py-12 text-sm">
+          找不到「{filter}」。
         </div>
       ) : (
         <ul className="space-y-2">
-          {items.map((it) =>
+          {filteredItems.map((it) =>
             it.kind === "group" ? (
               <TreeRow
                 key={`g:${it.data.id}`}
                 kind="folder"
                 href={`/tree/group/${it.data.id}`}
                 title={it.data.name}
-                subtitle={it.data.group_type ?? undefined}
+                subtitle={[
+                  it.data.group_type,
+                  it.data.placeholder_count > 0
+                    ? `${it.data.placeholder_count} 待補圖`
+                    : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · ") || undefined}
                 count={it.data.child_count}
                 countLabel="張海報"
                 onMore={() => setActiveGroup(it.data)}
@@ -237,6 +283,7 @@ export default function GroupClient({
                 href={`/posters/${it.data.id}`}
                 thumbnailUrl={it.data.thumbnail_url}
                 title={it.data.poster_name ?? UNNAMED_POSTER}
+                subtitle={image.uploading && image.uploadTargetId === it.data.id ? "上傳中…" : undefined}
                 placeholder={it.data.is_placeholder}
                 onMore={() => setActivePoster(it.data)}
               />

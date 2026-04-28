@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { getServerSupabase } from "@/lib/auth-cache";
 import WorkClient from "./WorkClient";
 import Nav from "@/components/Nav";
 
@@ -17,7 +17,7 @@ export default async function WorkPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const supabase = await createClient();
+  const supabase = await getServerSupabase();
 
   const [
     { data: work },
@@ -47,16 +47,24 @@ export default async function WorkPage({
 
   if (!work) notFound();
 
-  const countByGroup = new Map<string, number>();
-  for (const row of (counts ?? []) as { group_id: string; total: number }[]) {
-    countByGroup.set(row.group_id, Number(row.total));
+  const countByGroup = new Map<string, { total: number; placeholder: number }>();
+  for (const row of (counts ?? []) as {
+    group_id: string;
+    total: number;
+    placeholder_total: number;
+  }[]) {
+    countByGroup.set(row.group_id, {
+      total: Number(row.total),
+      placeholder: Number(row.placeholder_total),
+    });
   }
 
   const groups = (rootGroups ?? []).map((g) => ({
     id: g.id as string,
     name: g.name as string,
     group_type: (g.group_type as string | null) ?? null,
-    child_count: countByGroup.get(g.id as string) ?? 0,
+    child_count: countByGroup.get(g.id as string)?.total ?? 0,
+    placeholder_count: countByGroup.get(g.id as string)?.placeholder ?? 0,
   }));
 
   const posters = (rootPosters ?? []).map((p) => ({

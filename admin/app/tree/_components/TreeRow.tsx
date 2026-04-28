@@ -108,7 +108,7 @@ export default function TreeRow({
             e.stopPropagation();
             onMore();
           }}
-          className="shrink-0 w-10 h-10 flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground transition-colors"
+          className="shrink-0 w-11 h-11 flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground transition-colors"
           title="更多選項"
           aria-label="更多選項"
         >

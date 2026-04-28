@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { getServerSupabase } from "@/lib/auth-cache";
 import StudioClient from "./StudioClient";
 import { NULL_STUDIO_KEY } from "@/lib/keys";
 import Nav from "@/components/Nav";
@@ -15,14 +15,14 @@ export default async function StudioPage({
 }) {
   const { studio: rawParam } = await params;
   const studio = decodeURIComponent(rawParam);
-  const supabase = await createClient();
+  const supabase = await getServerSupabase();
 
   // First page only; the StudioClient calls loadWorksPage(studio) for
   // subsequent batches via "載入更多".
   const q = supabase
     .from("works")
     .select(
-      "id, title_zh, title_en, work_kind, poster_count, studio, created_at"
+      "id, title_zh, title_en, work_kind, poster_count, placeholder_count, studio, created_at"
     )
     .order("created_at", { ascending: false })
     .order("id", { ascending: false })

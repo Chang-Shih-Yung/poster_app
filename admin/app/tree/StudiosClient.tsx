@@ -4,6 +4,7 @@ import * as React from "react";
 import { Pencil, Trash2, FolderPlus } from "lucide-react";
 import TreeShell from "./_components/TreeShell";
 import TreeRow from "./_components/TreeRow";
+import { Input } from "@/components/ui/input";
 import FAB from "./_components/FAB";
 import { FormSheet } from "./_components/FormSheet";
 import { ItemActionsBundle, type ItemAction } from "./_components/ItemActionsBundle";
@@ -16,7 +17,7 @@ import {
   createWork,
 } from "@/app/actions/works";
 
-type Studio = { studio: string; works: number; posters: number };
+type Studio = { studio: string; works: number; posters: number; placeholders: number };
 
 const STUDIO_ACTIONS: ItemAction<Studio>[] = [
   {
@@ -47,7 +48,7 @@ const STUDIO_ACTIONS: ItemAction<Studio>[] = [
     destructive: true,
     disabled: false, // overridden per-item below
     confirm: (s) =>
-      `刪除分類「${s.studio}」？\n底下 ${s.works} 部作品、${s.posters} 張海報全部會被刪除。\n此操作不可復原。`,
+      `刪除分類「${s.studio}」？\n底下 ${s.works} 部作品、${s.posters} 張海報全部會被刪除。此操作不可復原。`,
     run: (s) => deleteStudio(s.studio),
   },
 ];
@@ -61,7 +62,14 @@ export default function StudiosClient({
 }) {
   const [activeStudio, setActiveStudio] = React.useState<Studio | null>(null);
   const [addOpen, setAddOpen] = React.useState(false);
+  const [filter, setFilter] = React.useState("");
   const { runFormAction } = useTransitionAction();
+
+  const filtered = filter.trim()
+    ? studios.filter((s) =>
+        s.studio.toLowerCase().includes(filter.trim().toLowerCase())
+      )
+    : studios;
 
   // The "delete (未分類)" action is disabled — it's a synthetic
   // bucket, deleting it doesn't make sense at the data layer.
@@ -79,13 +87,28 @@ export default function StudiosClient({
       subtitle={`${studios.length} 個分類`}
       fab={<FAB onClick={() => setAddOpen(true)} label="新增分類" />}
     >
+      {studios.length >= 8 && (
+        <div className="mb-3">
+          <Input
+            placeholder="搜尋分類…"
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            className="h-9 text-sm"
+          />
+        </div>
+      )}
+
       {studios.length === 0 ? (
         <div className="text-center text-muted-foreground py-12 text-sm">
           還沒有任何分類。點右下的 + 開始建立。
         </div>
+      ) : filtered.length === 0 ? (
+        <div className="text-center text-muted-foreground py-12 text-sm">
+          找不到「{filter}」。
+        </div>
       ) : (
         <ul className="space-y-2">
-          {studios.map((s) => (
+          {filtered.map((s) => (
             <TreeRow
               key={s.studio}
               kind="folder"
@@ -93,7 +116,12 @@ export default function StudiosClient({
               title={s.studio}
               count={s.works}
               countLabel="作品"
-              subtitle={`${s.posters} 張海報`}
+              subtitle={[
+                `${s.posters} 張海報`,
+                s.placeholders > 0 ? `${s.placeholders} 待補圖` : null,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
               onMore={() => setActiveStudio(s)}
             />
           ))}
@@ -106,7 +134,15 @@ export default function StudiosClient({
         title={activeStudio?.studio ?? ""}
         description={
           activeStudio
-            ? `${activeStudio.works} 部作品 · ${activeStudio.posters} 張海報`
+            ? [
+                `${activeStudio.works} 部作品`,
+                `${activeStudio.posters} 張海報`,
+                activeStudio.placeholders > 0
+                  ? `${activeStudio.placeholders} 待補圖`
+                  : null,
+              ]
+                .filter(Boolean)
+                .join(" · ")
             : undefined
         }
         actions={actionsForCurrent}

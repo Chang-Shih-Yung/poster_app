@@ -1,6 +1,7 @@
 "use client";
 
 import { useTransition } from "react";
+import { toast } from "sonner";
 import type { ActionResult } from "@/app/actions/_internal";
 
 /**
@@ -49,7 +50,7 @@ export function useTransitionAction() {
       const r = await actionFn();
       if (!r.ok) {
         if (opts?.onError) opts.onError(r.error);
-        else alert(r.error);
+        else toast.error(r.error);
         return;
       }
       opts?.onSuccess?.();
