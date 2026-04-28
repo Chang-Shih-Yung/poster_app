@@ -18,7 +18,7 @@ export default function FAB({
       onClick={onClick}
       title={label}
       aria-label={label}
-      className="w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center hover:opacity-90 transition-opacity"
+      className="w-14 h-14 rounded-full bg-primary/20 text-primary shadow-lg flex items-center justify-center hover:bg-primary/30 transition-colors backdrop-blur-sm"
     >
       <Plus className="w-6 h-6" />
     </button>
