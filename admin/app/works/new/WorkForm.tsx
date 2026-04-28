@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 import { WORK_KINDS } from "@/lib/enums";
+import { createWork, updateWork } from "@/app/actions/works";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -35,40 +35,33 @@ export default function WorkForm({ mode, initial }: WorkFormProps) {
   const [titleZh, setTitleZh] = useState(initial?.title_zh ?? "");
   const [titleEn, setTitleEn] = useState(initial?.title_en ?? "");
   const [workKind, setWorkKind] = useState(initial?.work_kind ?? "movie");
-  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
 
-  async function onSubmit(e: React.FormEvent) {
+  function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     if (!titleZh.trim()) {
       setError("群組名稱必填");
       return;
     }
-    setSubmitting(true);
-
-    const supabase = createClient();
-    const row = {
-      studio: studio.trim() || null,
-      title_zh: titleZh.trim(),
-      title_en: titleEn.trim() || null,
-      work_kind: workKind,
-    };
-
-    const { error } =
-      mode === "create"
-        ? await supabase.from("works").insert(row)
-        : await supabase.from("works").update(row).eq("id", initial!.id);
-
-    setSubmitting(false);
-
-    if (error) {
-      setError(error.message);
-      return;
-    }
-
-    router.push("/works");
-    router.refresh();
+    startTransition(async () => {
+      const payload = {
+        studio: studio.trim() || null,
+        title_zh: titleZh.trim(),
+        title_en: titleEn.trim() || null,
+        work_kind: workKind,
+      };
+      const r =
+        mode === "create"
+          ? await createWork(payload)
+          : await updateWork(initial!.id, payload);
+      if (!r.ok) {
+        setError(r.error);
+        return;
+      }
+      router.push("/works");
+    });
   }
 
   return (
@@ -89,6 +82,7 @@ export default function WorkForm({ mode, initial }: WorkFormProps) {
           value={studio}
           onChange={(e) => setStudio(e.target.value)}
           placeholder="例：漫威 / 吉卜力 / 新海誠 作品"
+          disabled={pending}
         />
       </div>
 
@@ -100,6 +94,7 @@ export default function WorkForm({ mode, initial }: WorkFormProps) {
           onChange={(e) => setTitleZh(e.target.value)}
           placeholder="例：復仇者系列 / 神隱少女"
           required
+          disabled={pending}
         />
       </div>
 
@@ -110,12 +105,13 @@ export default function WorkForm({ mode, initial }: WorkFormProps) {
           value={titleEn}
           onChange={(e) => setTitleEn(e.target.value)}
           placeholder="例：Avengers / Spirited Away"
+          disabled={pending}
         />
       </div>
 
       <div className="space-y-1.5">
         <Label htmlFor="work_kind">類型</Label>
-        <Select value={workKind} onValueChange={setWorkKind}>
+        <Select value={workKind} onValueChange={setWorkKind} disabled={pending}>
           <SelectTrigger id="work_kind">
             <SelectValue placeholder="請選擇" />
           </SelectTrigger>
@@ -135,11 +131,16 @@ export default function WorkForm({ mode, initial }: WorkFormProps) {
       </p>
 
       <div className="pt-4 flex gap-3">
-        <Button type="submit" disabled={submitting}>
-          {submitting && <Loader2 className="animate-spin" />}
-          {submitting ? "儲存中…" : mode === "create" ? "建立" : "儲存"}
+        <Button type="submit" disabled={pending}>
+          {pending && <Loader2 className="animate-spin" />}
+          {pending ? "儲存中…" : mode === "create" ? "建立" : "儲存"}
         </Button>
-        <Button type="button" variant="outline" onClick={() => router.back()}>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => router.back()}
+          disabled={pending}
+        >
           取消
         </Button>
       </div>

@@ -1,19 +1,19 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import { ImagePlus, AlertTriangle } from "lucide-react";
 import { uploadPosterImage } from "@/lib/imageUpload";
-import { createClient } from "@/lib/supabase/client";
+import { describeError } from "@/lib/errors";
+import { attachImage } from "@/app/actions/posters";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
 /**
  * Big mobile-friendly upload zone for one poster. Tap → opens system
- * file picker (camera or gallery on phones). Compresses + uploads +
- * writes posters.image_url | thumbnail_url | blurhash + flips
- * is_placeholder = false.
+ * file picker (camera or gallery on phones). Compresses + uploads to
+ * Storage on the client, then calls the admin-gated attachImage
+ * server action to flip is_placeholder + revalidate the surfaces.
  */
 export default function PosterImageUploader({
   posterId,
@@ -24,7 +24,6 @@ export default function PosterImageUploader({
   currentImageUrl: string | null;
   isPlaceholder: boolean;
 }) {
-  const router = useRouter();
   const fileRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -39,23 +38,16 @@ export default function PosterImageUploader({
       setProgress("壓縮中…");
       const result = await uploadPosterImage(file, posterId);
       setProgress("寫入 DB…");
-      const supabase = createClient();
-      const { error: dbError } = await supabase
-        .from("posters")
-        .update({
-          poster_url: result.posterUrl,
-          thumbnail_url: result.thumbnailUrl,
-          blurhash: result.blurhash,
-          image_size_bytes: result.imageSizeBytes,
-          is_placeholder: false,
-        })
-        .eq("id", posterId);
-      if (dbError) throw dbError;
+      const r = await attachImage(posterId, {
+        poster_url: result.posterUrl,
+        thumbnail_url: result.thumbnailUrl,
+        blurhash: result.blurhash,
+        image_size_bytes: result.imageSizeBytes,
+      });
+      if (!r.ok) throw new Error(r.error);
       setProgress("完成");
-      router.refresh();
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      setError(message);
+      setError(describeError(err));
     } finally {
       setBusy(false);
       setProgress(null);

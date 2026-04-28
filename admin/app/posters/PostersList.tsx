@@ -1,22 +1,19 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { Pencil, Trash2, ImagePlus, Loader2, AlertTriangle, X } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
 import { uploadPosterImage } from "@/lib/imageUpload";
 import { describeError } from "@/lib/errors";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-
-/**
- * Flat list of every poster in the catalogue with inline rename, inline
- * image upload, and trash. Mirrors the leaf-poster row affordances from
- * the tree, just decoupled from the tree's hierarchy.
- */
+import {
+  renamePoster,
+  deletePoster,
+  attachImage,
+} from "@/app/actions/posters";
 
 type Poster = {
   id: string;
@@ -40,56 +37,30 @@ export default function PostersList({
   query: string;
   placeholderOnly: boolean;
 }) {
-  const router = useRouter();
-  const [posters, setPosters] = useState<Poster[]>(initial);
   const [editing, setEditing] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
-  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const supabase = createClient();
+  const [pending, startTransition] = useTransition();
 
-  async function rename(p: Poster, newName: string) {
+  function commitRename(p: Poster, newName: string) {
     if (!newName.trim() || newName === p.poster_name) {
       setEditing(null);
       return;
     }
-    setBusy(true);
-    setError(null);
-    try {
-      const { error } = await supabase
-        .from("posters")
-        .update({ poster_name: newName.trim(), title: newName.trim() })
-        .eq("id", p.id);
-      if (error) throw error;
-      setPosters((list) =>
-        list.map((x) =>
-          x.id === p.id ? { ...x, poster_name: newName.trim() } : x
-        )
-      );
-      setEditing(null);
-      router.refresh();
-    } catch (e) {
-      setError(describeError(e));
-    } finally {
-      setBusy(false);
-    }
+    startTransition(async () => {
+      const r = await renamePoster(p.id, newName);
+      if (!r.ok) setError(r.error);
+      else setEditing(null);
+    });
   }
 
-  async function remove(p: Poster) {
+  function remove(p: Poster) {
     if (!confirm(`刪除海報「${p.poster_name ?? "(未命名)"}」？此操作不可復原。`))
       return;
-    setBusy(true);
-    setError(null);
-    try {
-      const { error } = await supabase.from("posters").delete().eq("id", p.id);
-      if (error) throw error;
-      setPosters((list) => list.filter((x) => x.id !== p.id));
-      router.refresh();
-    } catch (e) {
-      setError(describeError(e));
-    } finally {
-      setBusy(false);
-    }
+    startTransition(async () => {
+      const r = await deletePoster(p.id);
+      if (!r.ok) setError(r.error);
+    });
   }
 
   return (
@@ -97,7 +68,7 @@ export default function PostersList({
       <div className="sticky top-[calc(env(safe-area-inset-top,0px)+52px)] md:top-14 z-30 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 -mx-4 md:mx-0 px-4 md:px-0 py-2.5 mb-3 space-y-2">
         <div className="flex items-center justify-between">
           <span className="text-xs text-muted-foreground">
-            {posters.length} 張海報
+            {initial.length} 張海報
           </span>
           {placeholderOnly && (
             <Button asChild variant="link" size="sm">
@@ -141,7 +112,7 @@ export default function PostersList({
       <Card>
         <CardContent className="p-0">
           <ul className="divide-y divide-border">
-            {posters.map((p) => (
+            {initial.map((p) => (
               <PosterRow
                 key={p.id}
                 poster={p}
@@ -153,26 +124,12 @@ export default function PostersList({
                   setEditing(p.id);
                 }}
                 onCancelEdit={() => setEditing(null)}
-                onCommit={() => rename(p, editValue)}
+                onCommit={() => commitRename(p, editValue)}
                 onDelete={() => remove(p)}
-                onUploaded={(updated) => {
-                  setPosters((list) =>
-                    list.map((x) =>
-                      x.id === p.id
-                        ? {
-                            ...x,
-                            thumbnail_url: updated.thumbnail_url,
-                            poster_url: updated.poster_url,
-                            is_placeholder: false,
-                          }
-                        : x
-                    )
-                  );
-                }}
-                busy={busy}
+                busy={pending}
               />
             ))}
-            {posters.length === 0 && (
+            {initial.length === 0 && (
               <li className="px-4 py-10 text-center text-muted-foreground text-sm">
                 沒有符合條件的海報
               </li>
@@ -193,7 +150,6 @@ function PosterRow({
   onCancelEdit,
   onCommit,
   onDelete,
-  onUploaded,
   busy,
 }: {
   poster: Poster;
@@ -204,14 +160,11 @@ function PosterRow({
   onCancelEdit: () => void;
   onCommit: () => void;
   onDelete: () => void;
-  onUploaded: (u: { thumbnail_url: string; poster_url: string }) => void;
   busy: boolean;
 }) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
-  const supabase = createClient();
-  const router = useRouter();
 
   if (isEditing) {
     return (
@@ -250,22 +203,13 @@ function PosterRow({
     setUploading(true);
     try {
       const result = await uploadPosterImage(file, p.id);
-      const { error } = await supabase
-        .from("posters")
-        .update({
-          poster_url: result.posterUrl,
-          thumbnail_url: result.thumbnailUrl,
-          blurhash: result.blurhash,
-          image_size_bytes: result.imageSizeBytes,
-          is_placeholder: false,
-        })
-        .eq("id", p.id);
-      if (error) throw error;
-      onUploaded({
+      const r = await attachImage(p.id, {
         poster_url: result.posterUrl,
         thumbnail_url: result.thumbnailUrl,
+        blurhash: result.blurhash,
+        image_size_bytes: result.imageSizeBytes,
       });
-      router.refresh();
+      if (!r.ok) throw new Error(r.error);
     } catch (err) {
       setUploadError(describeError(err));
     } finally {

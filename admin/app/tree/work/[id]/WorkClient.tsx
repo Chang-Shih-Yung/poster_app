@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { useRouter } from "next/navigation";
+import { useTransition } from "react";
 import { Pencil, Trash2, FolderPlus, FilePlus2, ImagePlus } from "lucide-react";
 import {
   Sheet,
@@ -15,10 +15,20 @@ import TreeRow from "../../_components/TreeRow";
 import { SheetMenuList } from "../../_components/SheetMenu";
 import FAB from "../../_components/FAB";
 import { FormSheet } from "../../_components/FormSheet";
-import { describeError } from "@/lib/errors";
 import { encodeStudioParam, NULL_STUDIO_KEY } from "../../_components/keys";
-import { createClient } from "@/lib/supabase/client";
 import { uploadPosterImage } from "@/lib/imageUpload";
+import { describeError } from "@/lib/errors";
+import {
+  createGroup,
+  renameGroup,
+  deleteGroup,
+} from "@/app/actions/groups";
+import {
+  createPoster,
+  renamePoster,
+  deletePoster,
+  attachImage,
+} from "@/app/actions/posters";
 
 type WorkInfo = {
   id: string;
@@ -41,14 +51,10 @@ type Poster = {
   thumbnail_url: string | null;
 };
 
-type Item =
-  | { kind: "group"; data: Group }
-  | { kind: "poster"; data: Poster };
-
 export default function WorkClient({
   work,
-  groups: initialGroups,
-  posters: initialPosters,
+  groups,
+  posters,
   nav,
 }: {
   work: WorkInfo;
@@ -56,11 +62,6 @@ export default function WorkClient({
   posters: Poster[];
   nav?: React.ReactNode;
 }) {
-  const router = useRouter();
-  const supabase = createClient();
-  const [groups, setGroups] = React.useState<Group[]>(initialGroups);
-  const [posters, setPosters] = React.useState<Poster[]>(initialPosters);
-
   const [activeGroup, setActiveGroup] = React.useState<Group | null>(null);
   const [activePoster, setActivePoster] = React.useState<Poster | null>(null);
   const [renameGroupOpen, setRenameGroupOpen] = React.useState(false);
@@ -68,112 +69,97 @@ export default function WorkClient({
   const [addPickerOpen, setAddPickerOpen] = React.useState(false);
   const [addGroupOpen, setAddGroupOpen] = React.useState(false);
   const [addPosterOpen, setAddPosterOpen] = React.useState(false);
+  const [, startTransition] = useTransition();
 
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
   const uploadTargetRef = React.useRef<Poster | null>(null);
 
   /* ─────────────── group mutations ─────────────── */
-  async function renameGroup(values: Record<string, string>) {
-    if (!activeGroup) return;
-    const newName = values.name.trim();
-    if (!newName || newName === activeGroup.name) return;
-    const { error } = await supabase
-      .from("poster_groups")
-      .update({ name: newName })
-      .eq("id", activeGroup.id);
-    if (error) throw error;
-    setGroups((list) =>
-      list.map((g) => (g.id === activeGroup.id ? { ...g, name: newName } : g))
-    );
-    router.refresh();
+  function handleRenameGroup(values: Record<string, string>) {
+    if (!activeGroup) return Promise.resolve();
+    return new Promise<void>((resolve, reject) => {
+      startTransition(async () => {
+        const r = await renameGroup(activeGroup.id, values.name);
+        if (!r.ok) reject(new Error(r.error));
+        else {
+          setRenameGroupOpen(false);
+          setActiveGroup(null);
+          resolve();
+        }
+      });
+    });
   }
 
-  async function deleteGroup(group: Group) {
+  function handleDeleteGroup(group: Group) {
     if (
       !confirm(
         `刪除群組「${group.name}」？\n子群組會一併消失，群組內的海報會被丟回上一層（海報本身不刪）。`
       )
     )
       return;
-    const { error } = await supabase
-      .from("poster_groups")
-      .delete()
-      .eq("id", group.id);
-    if (error) {
-      alert(describeError(error));
-      return;
-    }
-    setGroups((list) => list.filter((g) => g.id !== group.id));
-    router.refresh();
+    startTransition(async () => {
+      const r = await deleteGroup(group.id);
+      if (!r.ok) alert(r.error);
+    });
   }
 
-  async function createGroup(values: Record<string, string>) {
-    const name = values.name.trim();
-    if (!name) return;
-    const { data, error } = await supabase
-      .from("poster_groups")
-      .insert({ work_id: work.id, parent_group_id: null, name })
-      .select("id, name, group_type")
-      .single();
-    if (error) throw error;
-    setGroups((list) => [
-      { ...(data as { id: string; name: string; group_type: string | null }), child_count: 0 },
-      ...list,
-    ]);
-    router.refresh();
+  function handleCreateGroup(values: Record<string, string>) {
+    return new Promise<void>((resolve, reject) => {
+      startTransition(async () => {
+        const r = await createGroup({
+          work_id: work.id,
+          parent_group_id: null,
+          name: values.name,
+        });
+        if (!r.ok) reject(new Error(r.error));
+        else {
+          setAddGroupOpen(false);
+          resolve();
+        }
+      });
+    });
   }
 
   /* ─────────────── poster mutations ─────────────── */
-  async function renamePoster(values: Record<string, string>) {
-    if (!activePoster) return;
-    const newName = values.name.trim();
-    if (!newName || newName === activePoster.poster_name) return;
-    const { error } = await supabase
-      .from("posters")
-      .update({ poster_name: newName, title: newName })
-      .eq("id", activePoster.id);
-    if (error) throw error;
-    setPosters((list) =>
-      list.map((p) =>
-        p.id === activePoster.id ? { ...p, poster_name: newName } : p
-      )
-    );
-    router.refresh();
+  function handleRenamePoster(values: Record<string, string>) {
+    if (!activePoster) return Promise.resolve();
+    return new Promise<void>((resolve, reject) => {
+      startTransition(async () => {
+        const r = await renamePoster(activePoster.id, values.name);
+        if (!r.ok) reject(new Error(r.error));
+        else {
+          setRenamePosterOpen(false);
+          setActivePoster(null);
+          resolve();
+        }
+      });
+    });
   }
 
-  async function deletePoster(poster: Poster) {
-    if (!confirm(`刪除海報「${poster.poster_name ?? "(未命名)"}」？此操作不可復原。`)) return;
-    const { error } = await supabase.from("posters").delete().eq("id", poster.id);
-    if (error) {
-      alert(describeError(error));
+  function handleDeletePoster(poster: Poster) {
+    if (!confirm(`刪除海報「${poster.poster_name ?? "(未命名)"}」？此操作不可復原。`))
       return;
-    }
-    setPosters((list) => list.filter((p) => p.id !== poster.id));
-    router.refresh();
+    startTransition(async () => {
+      const r = await deletePoster(poster.id);
+      if (!r.ok) alert(r.error);
+    });
   }
 
-  async function createPoster(values: Record<string, string>) {
-    const name = values.name.trim();
-    if (!name) return;
-    const { data: userData } = await supabase.auth.getUser();
-    const uid = userData.user?.id;
-    if (!uid) throw new Error("尚未登入或 session 已失效");
-    const { data, error } = await supabase
-      .from("posters")
-      .insert({
-        work_id: work.id,
-        parent_group_id: null,
-        poster_name: name,
-        title: name, // legacy NOT NULL
-        status: "approved",
-        poster_url: "", // legacy NOT NULL — replaced when admin uploads image
-        uploader_id: uid,
-      })
-      .select("id, poster_name, is_placeholder, thumbnail_url")
-      .single();
-    if (error) throw error;
-    setPosters((list) => [data as Poster, ...list]);
-    router.refresh();
+  function handleCreatePoster(values: Record<string, string>) {
+    return new Promise<void>((resolve, reject) => {
+      startTransition(async () => {
+        const r = await createPoster({
+          work_id: work.id,
+          parent_group_id: null,
+          poster_name: values.name,
+        });
+        if (!r.ok) reject(new Error(r.error));
+        else {
+          setAddPosterOpen(false);
+          resolve();
+        }
+      });
+    });
   }
 
   function pickImageFor(poster: Poster) {
@@ -187,25 +173,14 @@ export default function WorkClient({
     if (!file || !target) return;
     try {
       const result = await uploadPosterImage(file, target.id);
-      const { error } = await supabase
-        .from("posters")
-        .update({
-          poster_url: result.posterUrl,
-          thumbnail_url: result.thumbnailUrl,
-          blurhash: result.blurhash,
-          image_size_bytes: result.imageSizeBytes,
-          is_placeholder: false,
-        })
-        .eq("id", target.id);
-      if (error) throw error;
-      setPosters((list) =>
-        list.map((p) =>
-          p.id === target.id
-            ? { ...p, thumbnail_url: result.thumbnailUrl, is_placeholder: false }
-            : p
-        )
-      );
-      router.refresh();
+      // attachImage runs the admin-gated DB write + revalidatePath.
+      const r = await attachImage(target.id, {
+        poster_url: result.posterUrl,
+        thumbnail_url: result.thumbnailUrl,
+        blurhash: result.blurhash,
+        image_size_bytes: result.imageSizeBytes,
+      });
+      if (!r.ok) throw new Error(r.error);
     } catch (err) {
       alert(describeError(err));
     } finally {
@@ -215,7 +190,7 @@ export default function WorkClient({
   }
 
   /* ─────────────── render ─────────────── */
-  const items: Item[] = [
+  const items = [
     ...groups.map((g) => ({ kind: "group" as const, data: g })),
     ...posters.map((p) => ({ kind: "poster" as const, data: p })),
   ];
@@ -273,7 +248,6 @@ export default function WorkClient({
         </ul>
       )}
 
-      {/* group action sheet */}
       <Sheet
         open={!!activeGroup && !renameGroupOpen}
         onOpenChange={(v) => {
@@ -304,7 +278,7 @@ export default function WorkClient({
                     onClick: () => {
                       const target = activeGroup;
                       setActiveGroup(null);
-                      void deleteGroup(target);
+                      handleDeleteGroup(target);
                     },
                   },
                 ]}
@@ -314,7 +288,6 @@ export default function WorkClient({
         </SheetContent>
       </Sheet>
 
-      {/* poster action sheet */}
       <Sheet
         open={!!activePoster && !renamePosterOpen}
         onOpenChange={(v) => {
@@ -355,7 +328,7 @@ export default function WorkClient({
                     onClick: () => {
                       const target = activePoster;
                       setActivePoster(null);
-                      void deletePoster(target);
+                      handleDeletePoster(target);
                     },
                   },
                 ]}
@@ -365,7 +338,6 @@ export default function WorkClient({
         </SheetContent>
       </Sheet>
 
-      {/* add picker — group vs poster */}
       <Sheet open={addPickerOpen} onOpenChange={setAddPickerOpen}>
         <SheetContent side="bottom">
           <SheetHeader>
@@ -416,7 +388,7 @@ export default function WorkClient({
           },
         ]}
         submitLabel="儲存"
-        onSubmit={renameGroup}
+        onSubmit={handleRenameGroup}
       />
 
       <FormSheet
@@ -437,7 +409,7 @@ export default function WorkClient({
           },
         ]}
         submitLabel="儲存"
-        onSubmit={renamePoster}
+        onSubmit={handleRenamePoster}
       />
 
       <FormSheet
@@ -455,7 +427,7 @@ export default function WorkClient({
           },
         ]}
         submitLabel="新增"
-        onSubmit={createGroup}
+        onSubmit={handleCreateGroup}
       />
 
       <FormSheet
@@ -473,7 +445,7 @@ export default function WorkClient({
           },
         ]}
         submitLabel="新增"
-        onSubmit={createPoster}
+        onSubmit={handleCreatePoster}
       />
     </TreeShell>
   );

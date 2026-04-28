@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import {
@@ -11,6 +11,7 @@ import {
   WORK_KINDS,
 } from "@/lib/enums";
 import { flattenGroupTree } from "@/lib/groupTree";
+import { createPoster, updatePosterMetadata } from "@/app/actions/posters";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -91,9 +92,12 @@ export default function PosterForm({
   const [versionLabel, setVersionLabel] = useState(initial?.version_label ?? "");
   const [sourceUrl, setSourceUrl] = useState(initial?.source_url ?? "");
   const [sourceNote, setSourceNote] = useState(initial?.source_note ?? "");
-  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
 
+  // Group options come from a Supabase query (depends on selected work),
+  // not an action — it's a read on a public table that the user can
+  // already see, so direct client read is fine.
   useEffect(() => {
     if (!workId) {
       setGroupOptions([]);
@@ -112,15 +116,17 @@ export default function PosterForm({
     })();
   }, [workId]);
 
-  async function onSubmit(e: React.FormEvent) {
+  function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     if (!workId) {
       setError("必須指定作品");
       return;
     }
-    setSubmitting(true);
-    const supabase = createClient();
+    if (!posterName.trim()) {
+      setError("海報名稱必填");
+      return;
+    }
 
     const yearTrimmed = year.trim();
     const yearInt = yearTrimmed ? parseInt(yearTrimmed, 10) : null;
@@ -129,14 +135,11 @@ export default function PosterForm({
       (Number.isNaN(yearInt!) || yearInt! < 1900 || yearInt! > 2100)
     ) {
       setError("年份格式錯誤（1900-2100 整數）");
-      setSubmitting(false);
       return;
     }
 
-    const row: Record<string, unknown> = {
-      work_id: workId,
-      parent_group_id: parentGroupId || null,
-      poster_name: posterName.trim() || null,
+    const payload = {
+      poster_name: posterName.trim(),
       year: yearInt,
       region: region || "TW",
       poster_release_type: releaseType || null,
@@ -151,33 +154,25 @@ export default function PosterForm({
       source_note: sourceNote.trim() || null,
     };
 
-    if (mode === "create") {
-      row.title = posterName.trim() || "(待命名)";
-      row.status = "approved";
-      row.poster_url = "";
-      const { data: userData } = await supabase.auth.getUser();
-      const uid = userData.user?.id;
-      if (!uid) {
-        setError("尚未登入或 session 已失效");
-        setSubmitting(false);
+    startTransition(async () => {
+      const r =
+        mode === "create"
+          ? await createPoster({
+              work_id: workId,
+              parent_group_id: parentGroupId || null,
+              ...payload,
+            })
+          : await updatePosterMetadata(initial!.id, {
+              parent_group_id: parentGroupId || null,
+              title: payload.poster_name, // keep legacy column in sync
+              ...payload,
+            });
+      if (!r.ok) {
+        setError(r.error);
         return;
       }
-      row.uploader_id = uid;
-    }
-
-    const { error } =
-      mode === "create"
-        ? await supabase.from("posters").insert(row)
-        : await supabase.from("posters").update(row).eq("id", initial!.id);
-
-    setSubmitting(false);
-    if (error) {
-      setError(error.message);
-      return;
-    }
-
-    router.push("/posters");
-    router.refresh();
+      router.push("/posters");
+    });
   }
 
   return (
@@ -413,9 +408,9 @@ export default function PosterForm({
       </div>
 
       <div className="pt-4 flex gap-3">
-        <Button type="submit" disabled={submitting}>
-          {submitting && <Loader2 className="animate-spin" />}
-          {submitting ? "儲存中…" : mode === "create" ? "建立" : "儲存"}
+        <Button type="submit" disabled={pending}>
+          {pending && <Loader2 className="animate-spin" />}
+          {pending ? "儲存中…" : mode === "create" ? "建立" : "儲存"}
         </Button>
         <Button type="button" variant="outline" onClick={() => router.back()}>
           取消

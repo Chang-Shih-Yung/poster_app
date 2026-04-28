@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { useRouter } from "next/navigation";
+import { useTransition } from "react";
 import { Pencil, Trash2, Tag } from "lucide-react";
 import {
   Sheet,
@@ -15,10 +15,14 @@ import TreeRow from "../../_components/TreeRow";
 import { SheetMenuList } from "../../_components/SheetMenu";
 import FAB from "../../_components/FAB";
 import { FormSheet } from "../../_components/FormSheet";
-import { describeError } from "@/lib/errors";
 import { NULL_STUDIO_KEY } from "../../_components/keys";
-import { createClient } from "@/lib/supabase/client";
 import { WORK_KINDS } from "@/lib/enums";
+import {
+  renameWork,
+  changeWorkKind,
+  deleteWork,
+  createWork,
+} from "@/app/actions/works";
 
 type Work = {
   id: string;
@@ -31,80 +35,77 @@ type Work = {
 
 export default function StudioClient({
   studio,
-  works: initialWorks,
+  works,
   nav,
 }: {
   studio: string;
   works: Work[];
   nav?: React.ReactNode;
 }) {
-  const router = useRouter();
-  const supabase = createClient();
-  const [works, setWorks] = React.useState<Work[]>(initialWorks);
   const [activeWork, setActiveWork] = React.useState<Work | null>(null);
   const [renameOpen, setRenameOpen] = React.useState(false);
   const [kindOpen, setKindOpen] = React.useState(false);
   const [addOpen, setAddOpen] = React.useState(false);
+  const [, startTransition] = useTransition();
 
-  async function renameWork(values: Record<string, string>) {
-    if (!activeWork) return;
-    const newName = values.name.trim();
-    if (!newName || newName === activeWork.title_zh) return;
-    const { error } = await supabase
-      .from("works")
-      .update({ title_zh: newName })
-      .eq("id", activeWork.id);
-    if (error) throw error;
-    setWorks((list) =>
-      list.map((w) => (w.id === activeWork.id ? { ...w, title_zh: newName } : w))
-    );
-    router.refresh();
+  function handleRename(values: Record<string, string>) {
+    if (!activeWork) return Promise.resolve();
+    return new Promise<void>((resolve, reject) => {
+      startTransition(async () => {
+        const result = await renameWork(activeWork.id, values.name);
+        if (!result.ok) reject(new Error(result.error));
+        else {
+          setRenameOpen(false);
+          setActiveWork(null);
+          resolve();
+        }
+      });
+    });
   }
 
-  async function changeKind(values: Record<string, string>) {
-    if (!activeWork) return;
-    const kind = values.kind;
-    if (!kind || kind === activeWork.work_kind) return;
-    const { error } = await supabase
-      .from("works")
-      .update({ work_kind: kind })
-      .eq("id", activeWork.id);
-    if (error) throw error;
-    setWorks((list) =>
-      list.map((w) => (w.id === activeWork.id ? { ...w, work_kind: kind } : w))
-    );
-    router.refresh();
+  function handleChangeKind(values: Record<string, string>) {
+    if (!activeWork) return Promise.resolve();
+    return new Promise<void>((resolve, reject) => {
+      startTransition(async () => {
+        const result = await changeWorkKind(activeWork.id, values.kind);
+        if (!result.ok) reject(new Error(result.error));
+        else {
+          setKindOpen(false);
+          setActiveWork(null);
+          resolve();
+        }
+      });
+    });
   }
 
-  async function deleteWork(work: Work) {
+  function handleDelete(work: Work) {
     if (
       !confirm(
         `刪除作品「${work.title_zh}」？\n底下的所有群組跟海報都會一起被刪除（${work.poster_count} 張海報）。\n此操作不可復原。`
       )
     )
       return;
-    const { error } = await supabase.from("works").delete().eq("id", work.id);
-    if (error) {
-      alert(describeError(error));
-      return;
-    }
-    setWorks((list) => list.filter((w) => w.id !== work.id));
-    router.refresh();
+    startTransition(async () => {
+      const result = await deleteWork(work.id);
+      if (!result.ok) alert(result.error);
+    });
   }
 
-  async function createWork(values: Record<string, string>) {
-    const title = values.title.trim();
-    const kind = values.kind || "movie";
-    if (!title) return;
-    const studioValue = studio === NULL_STUDIO_KEY ? null : studio;
-    const { data, error } = await supabase
-      .from("works")
-      .insert({ title_zh: title, studio: studioValue, work_kind: kind })
-      .select("id, title_zh, title_en, work_kind, poster_count, studio")
-      .single();
-    if (error) throw error;
-    setWorks((list) => [data as Work, ...list]);
-    router.refresh();
+  function handleCreate(values: Record<string, string>) {
+    return new Promise<void>((resolve, reject) => {
+      startTransition(async () => {
+        const result = await createWork({
+          title_zh: values.title,
+          studio: studio === NULL_STUDIO_KEY ? null : studio,
+          work_kind: values.kind || "movie",
+        });
+        if (!result.ok) reject(new Error(result.error));
+        else {
+          setAddOpen(false);
+          resolve();
+        }
+      });
+    });
   }
 
   const totalPosters = works.reduce((acc, w) => acc + w.poster_count, 0);
@@ -181,7 +182,7 @@ export default function StudioClient({
                     onClick: () => {
                       const target = activeWork;
                       setActiveWork(null);
-                      void deleteWork(target);
+                      handleDelete(target);
                     },
                   },
                 ]}
@@ -209,7 +210,7 @@ export default function StudioClient({
           },
         ]}
         submitLabel="儲存"
-        onSubmit={renameWork}
+        onSubmit={handleRename}
       />
 
       <FormSheet
@@ -229,7 +230,7 @@ export default function StudioClient({
           },
         ]}
         submitLabel="儲存"
-        onSubmit={changeKind}
+        onSubmit={handleChangeKind}
       />
 
       <FormSheet
@@ -254,7 +255,7 @@ export default function StudioClient({
           },
         ]}
         submitLabel="新增"
-        onSubmit={createWork}
+        onSubmit={handleCreate}
       />
     </TreeShell>
   );

@@ -1,22 +1,18 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useTransition } from "react";
 import Link from "next/link";
 import { Pencil, Trash2, Plus, Loader2, AlertTriangle, X } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
-import { describeError } from "@/lib/errors";
 import { NULL_STUDIO_KEY } from "@/app/tree/_components/keys";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-
-/**
- * Flat list of every work in the catalogue, with inline rename + delete +
- * count badge — same affordances as the tree, but without the parent
- * context. Useful for "show me everything I've created" cleanup work.
- */
+import {
+  renameWork,
+  deleteWork,
+  createWork,
+} from "@/app/actions/works";
 
 type Work = {
   id: string;
@@ -29,103 +25,64 @@ type Work = {
 };
 
 export default function WorksList({ initial }: { initial: Work[] }) {
-  const router = useRouter();
-  const [works, setWorks] = useState<Work[]>(initial);
+  // initial is the source of truth — server re-fetches on every action
+  // via revalidatePath, so we don't carry our own mirror state.
   const [editing, setEditing] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
-  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [newStudio, setNewStudio] = useState("");
   const [newTitle, setNewTitle] = useState("");
+  const [pending, startTransition] = useTransition();
 
-  const supabase = createClient();
-
-  async function rename(work: Work, newTitle: string) {
+  function commitRename(work: Work, newTitle: string) {
     if (!newTitle.trim() || newTitle === work.title_zh) {
       setEditing(null);
       return;
     }
-    setBusy(true);
-    setError(null);
-    try {
-      const { error } = await supabase
-        .from("works")
-        .update({ title_zh: newTitle.trim() })
-        .eq("id", work.id);
-      if (error) throw error;
-      setWorks((list) =>
-        list.map((w) =>
-          w.id === work.id ? { ...w, title_zh: newTitle.trim() } : w
-        )
-      );
-      setEditing(null);
-      router.refresh();
-    } catch (e) {
-      setError(describeError(e));
-    } finally {
-      setBusy(false);
-    }
+    startTransition(async () => {
+      const r = await renameWork(work.id, newTitle);
+      if (!r.ok) setError(r.error);
+      else setEditing(null);
+    });
   }
 
-  async function remove(work: Work) {
+  function remove(work: Work) {
     if (
       !confirm(
         `刪除作品「${work.title_zh}」？\n底下所有群組與海報（${work.poster_count} 張）都會一起刪除。\n此操作不可復原。`
       )
     )
       return;
-    setBusy(true);
-    setError(null);
-    try {
-      const { error } = await supabase
-        .from("works")
-        .delete()
-        .eq("id", work.id);
-      if (error) throw error;
-      setWorks((list) => list.filter((w) => w.id !== work.id));
-      router.refresh();
-    } catch (e) {
-      setError(describeError(e));
-    } finally {
-      setBusy(false);
-    }
+    startTransition(async () => {
+      const r = await deleteWork(work.id);
+      if (!r.ok) setError(r.error);
+    });
   }
 
-  async function createNew() {
+  function createNew() {
     if (!newTitle.trim()) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const { data, error } = await supabase
-        .from("works")
-        .insert({
-          title_zh: newTitle.trim(),
-          studio: newStudio.trim() || null,
-          work_kind: "movie",
-        })
-        .select(
-          "id, studio, title_zh, title_en, work_kind, movie_release_year, poster_count"
-        )
-        .single();
-      if (error) throw error;
-      setWorks((list) => [data as Work, ...list]);
+    startTransition(async () => {
+      const r = await createWork({
+        title_zh: newTitle,
+        studio: newStudio.trim() || null,
+        work_kind: "movie",
+      });
+      if (!r.ok) {
+        setError(r.error);
+        return;
+      }
       setAdding(false);
       setNewStudio("");
       setNewTitle("");
-      router.refresh();
-    } catch (e) {
-      setError(describeError(e));
-    } finally {
-      setBusy(false);
-    }
+    });
   }
 
   return (
     <div className="px-4 md:px-0">
       <div className="sticky top-[calc(env(safe-area-inset-top,0px)+52px)] md:top-14 z-30 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 -mx-4 md:mx-0 px-4 md:px-0 py-2.5 mb-3 flex items-center justify-between">
         <span className="text-xs text-muted-foreground">
-          {works.length} 部作品
+          {initial.length} 部作品
         </span>
         <Button size="sm" onClick={() => setAdding(true)}>
           <Plus />
@@ -141,13 +98,13 @@ export default function WorksList({ initial }: { initial: Work[] }) {
               value={newStudio}
               onChange={(e) => setNewStudio(e.target.value)}
               placeholder="（選填）所屬分類"
-              disabled={busy}
+              disabled={pending}
             />
             <Input
               value={newTitle}
               onChange={(e) => setNewTitle(e.target.value)}
               placeholder="作品名稱（中文）"
-              disabled={busy}
+              disabled={pending}
               onKeyDown={(e) => {
                 if (e.key === "Enter") createNew();
                 if (e.key === "Escape") {
@@ -161,10 +118,10 @@ export default function WorksList({ initial }: { initial: Work[] }) {
               <Button
                 size="sm"
                 onClick={createNew}
-                disabled={busy || !newTitle.trim()}
+                disabled={pending || !newTitle.trim()}
               >
-                {busy && <Loader2 className="animate-spin" />}
-                {busy ? "建立中" : "建立"}
+                {pending && <Loader2 className="animate-spin" />}
+                {pending ? "建立中" : "建立"}
               </Button>
               <Button
                 size="sm"
@@ -174,7 +131,7 @@ export default function WorksList({ initial }: { initial: Work[] }) {
                   setNewStudio("");
                   setNewTitle("");
                 }}
-                disabled={busy}
+                disabled={pending}
               >
                 取消
               </Button>
@@ -200,7 +157,7 @@ export default function WorksList({ initial }: { initial: Work[] }) {
         </Card>
       )}
 
-      {works.length === 0 ? (
+      {initial.length === 0 ? (
         <Card>
           <CardContent className="py-10 text-center text-muted-foreground text-sm">
             <div>還沒有作品。</div>
@@ -216,17 +173,17 @@ export default function WorksList({ initial }: { initial: Work[] }) {
         </Card>
       ) : (
         <WorksSections
-          works={works}
+          works={initial}
           editing={editing}
           editValue={editValue}
-          busy={busy}
+          busy={pending}
           onStartEdit={(w) => {
             setEditValue(w.title_zh);
             setEditing(w.id);
           }}
           onCancelEdit={() => setEditing(null)}
           onChangeEdit={setEditValue}
-          onCommitEdit={rename}
+          onCommitEdit={commitRename}
           onRemove={remove}
         />
       )}

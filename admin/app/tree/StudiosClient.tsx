@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { useRouter } from "next/navigation";
+import { useTransition } from "react";
 import { Pencil, Trash2, FolderPlus } from "lucide-react";
 import {
   Sheet,
@@ -15,90 +15,76 @@ import TreeRow from "./_components/TreeRow";
 import { SheetMenuList } from "./_components/SheetMenu";
 import FAB from "./_components/FAB";
 import { FormSheet } from "./_components/FormSheet";
-import { describeError } from "@/lib/errors";
 import { NULL_STUDIO_KEY, encodeStudioParam } from "./_components/keys";
-import { createClient } from "@/lib/supabase/client";
 import { WORK_KINDS } from "@/lib/enums";
+import { renameStudio, deleteStudio } from "@/app/actions/works";
+import { createWork } from "@/app/actions/works";
 
 type Studio = { studio: string; works: number; posters: number };
 
+/**
+ * Studios are derived from `works.studio`, so this client never owns
+ * its own state — it reads `studios` from props (server fetched) and
+ * dispatches mutations through server actions. revalidatePath in the
+ * action triggers a server re-render; useTransition keeps the prior UI
+ * frame visible during the round-trip so there's no flash.
+ */
 export default function StudiosClient({
-  studios: initialStudios,
+  studios,
   nav,
 }: {
   studios: Studio[];
   nav?: React.ReactNode;
 }) {
-  const router = useRouter();
-  const supabase = createClient();
-  const [studios, setStudios] = React.useState<Studio[]>(initialStudios);
   const [activeStudio, setActiveStudio] = React.useState<Studio | null>(null);
   const [renameOpen, setRenameOpen] = React.useState(false);
   const [addOpen, setAddOpen] = React.useState(false);
+  const [, startTransition] = useTransition();
 
-  async function renameStudio(values: Record<string, string>) {
+  function handleRename(values: Record<string, string>) {
     const studio = activeStudio;
-    if (!studio) return;
-    const newName = values.name.trim();
-    if (!newName || newName === studio.studio) return;
-    const q = supabase.from("works").update({ studio: newName });
-    const { error } =
-      studio.studio === NULL_STUDIO_KEY
-        ? await q.is("studio", null)
-        : await q.eq("studio", studio.studio);
-    if (error) throw error;
-    setStudios((list) =>
-      list.map((s) => (s.studio === studio.studio ? { ...s, studio: newName } : s))
-    );
-    router.refresh();
+    if (!studio) return Promise.resolve();
+    return new Promise<void>((resolve, reject) => {
+      startTransition(async () => {
+        const result = await renameStudio(studio.studio, values.name);
+        if (!result.ok) reject(new Error(result.error));
+        else {
+          setRenameOpen(false);
+          setActiveStudio(null);
+          resolve();
+        }
+      });
+    });
   }
 
-  async function deleteStudio(studio: Studio) {
-    if (studio.studio === NULL_STUDIO_KEY) {
-      alert(
-        `「未分類」是虛擬分類（不是真實的 studio），無法直接刪除。\n\n要清空的話請改名（例如「吉卜力」）讓裡面的作品有歸屬。`
-      );
-      return;
-    }
+  function handleDelete(studio: Studio) {
     if (
       !confirm(
         `刪除分類「${studio.studio}」？\n底下 ${studio.works} 部作品、${studio.posters} 張海報全部會被刪除。\n此操作不可復原。`
       )
     )
       return;
-    const { error } = await supabase
-      .from("works")
-      .delete()
-      .eq("studio", studio.studio);
-    if (error) {
-      alert(describeError(error));
-      return;
-    }
-    setStudios((list) => list.filter((s) => s.studio !== studio.studio));
-    router.refresh();
+    startTransition(async () => {
+      const result = await deleteStudio(studio.studio);
+      if (!result.ok) alert(result.error);
+    });
   }
 
-  async function createStudio(values: Record<string, string>) {
-    const studio = values.studio.trim();
-    const title = values.title.trim();
-    const kind = values.kind || "movie";
-    if (!studio || !title) return;
-    const { error } = await supabase.from("works").insert({
-      title_zh: title,
-      studio,
-      work_kind: kind,
+  function handleCreate(values: Record<string, string>) {
+    return new Promise<void>((resolve, reject) => {
+      startTransition(async () => {
+        const result = await createWork({
+          title_zh: values.title,
+          studio: values.studio,
+          work_kind: values.kind || "movie",
+        });
+        if (!result.ok) reject(new Error(result.error));
+        else {
+          setAddOpen(false);
+          resolve();
+        }
+      });
     });
-    if (error) throw error;
-    setStudios((list) => {
-      const existing = list.find((s) => s.studio === studio);
-      if (existing) {
-        return list.map((s) =>
-          s.studio === studio ? { ...s, works: s.works + 1 } : s
-        );
-      }
-      return [...list, { studio, works: 1, posters: 0 }];
-    });
-    router.refresh();
   }
 
   return (
@@ -165,7 +151,7 @@ export default function StudiosClient({
                     onClick: () => {
                       const target = activeStudio;
                       setActiveStudio(null);
-                      void deleteStudio(target);
+                      handleDelete(target);
                     },
                   },
                 ]}
@@ -175,8 +161,6 @@ export default function StudiosClient({
         </SheetContent>
       </Sheet>
 
-      {/* Rename sheet — separate from action sheet so its open state can
-       * survive after the parent action sheet closes. */}
       <FormSheet
         open={renameOpen}
         onOpenChange={(v) => {
@@ -199,12 +183,9 @@ export default function StudiosClient({
           },
         ]}
         submitLabel="儲存"
-        onSubmit={renameStudio}
+        onSubmit={handleRename}
       />
 
-      {/* New studio sheet — needs studio + first work title + kind because
-       * a studio is just a string column on works (no row exists if no
-       * work uses it). */}
       <FormSheet
         open={addOpen}
         onOpenChange={setAddOpen}
@@ -222,7 +203,7 @@ export default function StudiosClient({
             key: "title",
             kind: "text",
             label: "第一個作品",
-            placeholder: "例：神隱少女",
+            placeholder: "例:神隱少女",
             required: true,
           },
           {
@@ -234,10 +215,9 @@ export default function StudiosClient({
           },
         ]}
         submitLabel="建立分類 + 作品"
-        onSubmit={createStudio}
+        onSubmit={handleCreate}
       />
 
-      {/* Empty-state quick action — only visible when no studios exist */}
       {studios.length === 0 && (
         <div className="mt-2 flex justify-center">
           <button
