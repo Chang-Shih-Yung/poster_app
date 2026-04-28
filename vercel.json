@@ -3,7 +3,7 @@
   "outputDirectory": "build/web",
   "installCommand": "echo skip",
   "buildCommand": "bash scripts/vercel-build.sh",
-  "ignoreCommand": "git diff --quiet HEAD^ HEAD -- ':(exclude)admin'",
+  "ignoreCommand": "git diff --quiet HEAD^ HEAD -- lib test pubspec.yaml pubspec.lock web android ios scripts",
   "framework": null,
   "cleanUrls": true,
   "trailingSlash": false,
