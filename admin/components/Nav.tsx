@@ -3,6 +3,7 @@ import { getCurrentUser } from "@/lib/auth-cache";
 import LogoutButton from "./LogoutButton";
 import { ThemeToggle } from "./ThemeToggle";
 import { Separator } from "./ui/separator";
+import GlobalSearch from "./GlobalSearch";
 
 export default async function Nav() {
   // Memoised per-request via lib/auth-cache. The page server component
@@ -12,13 +13,8 @@ export default async function Nav() {
 
   return (
     <nav className="hidden md:flex items-center justify-between px-6 py-3 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 sticky top-0 z-30">
-      <div className="flex items-center gap-6">
-        <Link
-          href="/"
-          className="font-semibold text-foreground hover:no-underline"
-        >
-          Poster. Admin
-        </Link>
+      <div className="flex items-center gap-4">
+        <GlobalSearch />
         <Separator orientation="vertical" className="h-4" />
         <NavLink href="/tree">目錄</NavLink>
         <NavLink href="/works">所有作品</NavLink>

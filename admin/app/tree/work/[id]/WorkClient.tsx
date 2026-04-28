@@ -3,6 +3,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { Pencil, Trash2, FolderPlus, FilePlus2, ImagePlus } from "lucide-react";
+import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import {
   Sheet,
@@ -12,7 +13,7 @@ import {
   SheetDescription,
 } from "@/components/ui/sheet";
 import TreeShell from "../../_components/TreeShell";
-import TreeRow from "../../_components/TreeRow";
+import DndTreeList, { type DndGroup, type DndPoster } from "../../_components/DndTreeList";
 import { SheetMenuList } from "../../_components/SheetMenu";
 import FAB from "../../_components/FAB";
 import { FormSheet } from "../../_components/FormSheet";
@@ -28,11 +29,13 @@ import {
   createGroup,
   renameGroup,
   deleteGroup,
+  moveGroup,
 } from "@/app/actions/groups";
 import {
   createPoster,
   renamePoster,
   deletePoster,
+  movePoster,
 } from "@/app/actions/posters";
 
 type WorkInfo = {
@@ -42,20 +45,9 @@ type WorkInfo = {
   work_kind: string;
 };
 
-type Group = {
-  id: string;
-  name: string;
-  group_type: string | null;
-  child_count: number;
-  placeholder_count: number;
-};
-
-type Poster = {
-  id: string;
-  poster_name: string | null;
-  is_placeholder: boolean;
-  thumbnail_url: string | null;
-};
+// Re-export aliases so DndTreeList types line up with prop names here.
+type Group = DndGroup;
+type Poster = DndPoster;
 
 const groupActions: ItemAction<Group>[] = [
   {
@@ -158,22 +150,35 @@ export default function WorkClient({
     },
   ];
 
-  const items = [
+  const allItems = [
     ...groups.map((g) => ({ kind: "group" as const, data: g })),
     ...posters.map((p) => ({ kind: "poster" as const, data: p })),
   ];
 
   const filteredItems = filter.trim()
-    ? items.filter((it) => {
+    ? allItems.filter((it) => {
         const label =
           it.kind === "group"
             ? it.data.name
             : (it.data.poster_name ?? "");
         return label.toLowerCase().includes(filter.trim().toLowerCase());
       })
-    : items;
+    : allItems;
 
   const studioKey = work.studio ?? NULL_STUDIO_KEY;
+
+  // DnD move handlers
+  async function handleMoveGroup(groupId: string, newParentGroupId: string | null) {
+    const r = await moveGroup(groupId, newParentGroupId);
+    if (!r.ok) toast.error(r.error ?? "移動失敗");
+    else toast.success("已移動群組");
+  }
+
+  async function handleMovePoster(posterId: string, newParentGroupId: string | null) {
+    const r = await movePoster(posterId, newParentGroupId);
+    if (!r.ok) toast.error(r.error ?? "移動失敗");
+    else toast.success("已移動海報");
+  }
 
   return (
     <TreeShell
@@ -193,7 +198,7 @@ export default function WorkClient({
         className="hidden"
         onChange={image.handleFile}
       />
-      {items.length >= 8 && (
+      {allItems.length >= 8 && (
         <div className="mb-3">
           <Input
             placeholder="搜尋群組或海報…"
@@ -204,7 +209,7 @@ export default function WorkClient({
         </div>
       )}
 
-      {items.length === 0 ? (
+      {allItems.length === 0 ? (
         <div className="text-center text-muted-foreground py-12 text-sm">
           這個作品還沒有任何群組或海報。點右下的 + 開始新增。
         </div>
@@ -213,40 +218,16 @@ export default function WorkClient({
           找不到「{filter}」。
         </div>
       ) : (
-        <ul className="space-y-2">
-          {filteredItems.map((it) =>
-            it.kind === "group" ? (
-              <TreeRow
-                key={`g:${it.data.id}`}
-                kind="folder"
-                href={`/tree/group/${it.data.id}`}
-                title={it.data.name}
-                subtitle={[
-                  it.data.group_type,
-                  it.data.placeholder_count > 0
-                    ? `${it.data.placeholder_count} 待補圖`
-                    : null,
-                ]
-                  .filter(Boolean)
-                  .join(" · ") || undefined}
-                count={it.data.child_count}
-                countLabel="張海報"
-                onMore={() => setActiveGroup(it.data)}
-              />
-            ) : (
-              <TreeRow
-                key={`p:${it.data.id}`}
-                kind="poster"
-                href={`/posters/${it.data.id}`}
-                thumbnailUrl={it.data.thumbnail_url}
-                title={it.data.poster_name ?? UNNAMED_POSTER}
-                subtitle={image.uploading && image.uploadTargetId === it.data.id ? "上傳中…" : undefined}
-                placeholder={it.data.is_placeholder}
-                onMore={() => setActivePoster(it.data)}
-              />
-            )
-          )}
-        </ul>
+        <DndTreeList
+          items={filteredItems}
+          rootParentId={null}
+          rootZoneLabel="移到作品頂層（不放在任何群組）"
+          onMoveGroup={handleMoveGroup}
+          onMovePoster={handleMovePoster}
+          onGroupMore={setActiveGroup}
+          onPosterMore={setActivePoster}
+          uploadingPosterId={image.uploading ? image.uploadTargetId : null}
+        />
       )}
 
       <ItemActionsBundle<Group>

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
 import { Button } from "./ui/button";
 import { ThemeToggle } from "./ThemeToggle";
+import GlobalSearch from "./GlobalSearch";
 
 /**
  * Mobile-only top header. Optional back chevron + parent label
@@ -57,17 +58,20 @@ export default function MobileHeader({
             </Button>
           )
         ) : (
-          <Link
-            href="/"
-            className="px-3 min-h-[44px] flex items-center font-semibold text-foreground hover:no-underline"
-          >
-            Poster.
-          </Link>
+          <div className="px-2 min-h-[44px] flex items-center gap-1">
+            <Link
+              href="/"
+              className="font-semibold text-foreground hover:no-underline text-sm"
+            >
+              Poster.
+            </Link>
+          </div>
         )}
         <h1 className="text-base font-semibold truncate ml-1">{title}</h1>
       </div>
       <div className="flex items-center gap-1">
         {action}
+        <GlobalSearch />
         <ThemeToggle />
       </div>
     </header>

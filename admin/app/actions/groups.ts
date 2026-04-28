@@ -92,6 +92,86 @@ export async function renameGroup(
   }
 }
 
+/**
+ * Move a group to a different parent (or to work root if newParentGroupId is null).
+ * Guards against circular references — you cannot move a group inside one of its
+ * own descendants.
+ */
+export async function moveGroup(
+  id: string,
+  newParentGroupId: string | null
+): Promise<ActionResult> {
+  try {
+    const { supabase, user } = await requireAdmin();
+
+    // Fetch current state for audit + revalidation.
+    const { data: existing, error: lookupErr } = await supabase
+      .from("poster_groups")
+      .select("work_id, parent_group_id, name")
+      .eq("id", id)
+      .maybeSingle();
+    if (lookupErr) throw lookupErr;
+    if (!existing) throw new Error("找不到此群組");
+
+    // No-op: already at the target parent.
+    if (existing.parent_group_id === newParentGroupId) return ok(undefined);
+
+    // Circular-dependency guard: walk the subtree rooted at `id` via a
+    // recursive CTE and reject if `newParentGroupId` is a descendant.
+    if (newParentGroupId !== null) {
+      const { data: subtree, error: treeErr } = await supabase
+        .from("poster_groups")
+        .select("id")
+        .or(`id.eq.${id},parent_group_id.eq.${id}`);
+      if (treeErr) throw treeErr;
+
+      // Full BFS using in-memory rows (adequate for typical group tree depth).
+      const descendantIds = new Set<string>();
+      const queue = [id];
+      while (queue.length) {
+        const cur = queue.shift()!;
+        descendantIds.add(cur);
+        // Fetch children of `cur`.
+        const { data: children } = await supabase
+          .from("poster_groups")
+          .select("id")
+          .eq("parent_group_id", cur)
+          .eq("work_id", existing.work_id);
+        for (const c of children ?? []) queue.push(c.id as string);
+      }
+      if (descendantIds.has(newParentGroupId)) {
+        throw new Error("無法將群組移到自己的子群組內");
+      }
+    }
+
+    const { error } = await supabase
+      .from("poster_groups")
+      .update({ parent_group_id: newParentGroupId })
+      .eq("id", id);
+    if (error) throw error;
+
+    revalidateGroupSurfaces(existing.work_id ?? undefined, id);
+    if (existing.parent_group_id)
+      revalidateGroupSurfaces(undefined, existing.parent_group_id);
+    if (newParentGroupId)
+      revalidateGroupSurfaces(undefined, newParentGroupId);
+
+    await logAudit(supabase, user, {
+      action: "move_group",
+      target_kind: "group",
+      target_id: id,
+      payload: {
+        from_parent: existing.parent_group_id,
+        to_parent: newParentGroupId,
+        work_id: existing.work_id,
+      },
+    });
+    return ok(undefined);
+  } catch (e) {
+    return fail(e);
+  }
+}
+
 export async function deleteGroup(id: string): Promise<ActionResult> {
   try {
     const { supabase, user } = await requireAdmin();

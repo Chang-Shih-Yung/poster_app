@@ -132,6 +132,49 @@ export async function renamePoster(
   }
 }
 
+/**
+ * Move a poster to a different group (or to work root if newParentGroupId is null).
+ */
+export async function movePoster(
+  id: string,
+  newParentGroupId: string | null
+): Promise<ActionResult> {
+  try {
+    const { supabase, user } = await requireAdmin();
+    const { data: existing, error: lookupErr } = await supabase
+      .from("posters")
+      .select("work_id, parent_group_id, poster_name")
+      .eq("id", id)
+      .maybeSingle();
+    if (lookupErr) throw lookupErr;
+    if (!existing) throw new Error("找不到此海報");
+
+    // No-op: already at the target parent.
+    if (existing.parent_group_id === newParentGroupId) return ok(undefined);
+
+    const { error } = await supabase
+      .from("posters")
+      .update({ parent_group_id: newParentGroupId })
+      .eq("id", id);
+    if (error) throw error;
+
+    revalidatePosterSurfaces(existing.work_id ?? undefined, id);
+    await logAudit(supabase, user, {
+      action: "move_poster",
+      target_kind: "poster",
+      target_id: id,
+      payload: {
+        from_parent: existing.parent_group_id,
+        to_parent: newParentGroupId,
+        work_id: existing.work_id,
+      },
+    });
+    return ok(undefined);
+  } catch (e) {
+    return fail(e);
+  }
+}
+
 export async function deletePoster(id: string): Promise<ActionResult> {
   try {
     const { supabase, user } = await requireAdmin();

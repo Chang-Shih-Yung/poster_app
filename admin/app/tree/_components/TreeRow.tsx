@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Folder, FileImage, MoreVertical } from "lucide-react";
+import { Folder, FileImage, MoreVertical, GripVertical } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /**
@@ -9,7 +9,8 @@ import { cn } from "@/lib/utils";
  * leaf posters that route elsewhere), the trailing ⋯ button is a
  * separate clickable element so it doesn't trigger navigation.
  *
- * The kind chip + count line keeps text dense without hiding info.
+ * Optional drag-and-drop props let the parent (WorkClient / GroupClient)
+ * attach @dnd-kit handles without duplicating layout logic.
  */
 export default function TreeRow({
   href,
@@ -22,6 +23,12 @@ export default function TreeRow({
   badge,
   placeholder,
   onMore,
+  // DnD support
+  innerRef,
+  dragListeners,
+  dragAttributes,
+  isDragging,
+  isDropTarget,
 }: {
   /** Where tapping the row body navigates. */
   href: string;
@@ -41,6 +48,19 @@ export default function TreeRow({
   /** Click handler for the trailing ⋯ button. Stops propagation so the
    * row's link doesn't fire. */
   onMore: () => void;
+  // Optional DnD props
+  /** Callback ref from useDraggable/useDroppable to attach to the <li>. */
+  innerRef?: (node: HTMLLIElement | null) => void;
+  /** Event listeners from useDraggable – spread on the drag handle button. */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  dragListeners?: Record<string, any>;
+  /** Aria/data attributes from useDraggable. */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  dragAttributes?: Record<string, any>;
+  /** True while this item is being dragged — dims the row. */
+  isDragging?: boolean;
+  /** True when another item is being dragged over this row. */
+  isDropTarget?: boolean;
 }) {
   const Body = (
     <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -94,11 +114,35 @@ export default function TreeRow({
   );
 
   return (
-    <li className="rounded-xl border border-border bg-card">
+    <li
+      ref={innerRef}
+      className={cn(
+        "rounded-xl border bg-card transition-all duration-150",
+        isDragging
+          ? "opacity-30 border-border"
+          : isDropTarget
+          ? "border-primary ring-2 ring-primary ring-offset-1 bg-primary/5"
+          : "border-border"
+      )}
+    >
       <div className="flex items-center pr-1">
+        {/* Drag handle — only rendered when dragListeners are provided */}
+        {dragListeners && (
+          <button
+            {...dragListeners}
+            {...dragAttributes}
+            className="shrink-0 w-8 h-12 flex items-center justify-center text-muted-foreground/40 hover:text-muted-foreground touch-none cursor-grab active:cursor-grabbing transition-colors"
+            aria-label="拖移"
+            tabIndex={-1}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <GripVertical className="w-4 h-4" />
+          </button>
+        )}
         <Link
           href={href}
           className="flex-1 min-w-0 flex items-center gap-2 px-3 py-3 hover:no-underline"
+          style={{ paddingLeft: dragListeners ? "4px" : undefined }}
         >
           {Body}
         </Link>
