@@ -3,6 +3,7 @@
   "outputDirectory": "build/web",
   "installCommand": "echo skip",
   "buildCommand": "bash scripts/vercel-build.sh",
+  "ignoreCommand": "git diff --quiet HEAD^ HEAD -- ':(exclude)admin'",
   "framework": null,
   "cleanUrls": true,
   "trailingSlash": false,
