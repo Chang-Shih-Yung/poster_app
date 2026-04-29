@@ -102,52 +102,58 @@ export function isReady(d: DraftPoster): boolean {
   return d.status === "idle" && !!d.name.trim() && !!d.work_id;
 }
 
-/** Files we can reliably preview AND upload in non-Safari browsers.
- * HEIC/HEIF: Safari decodes natively, but desktop Chrome/Firefox can't —
- * the canvas-based browser-image-compression pipeline blows up. We
- * reject at file-pick time so the user gets a useful message instead
- * of a cryptic "Failed to compress" error mid-batch.
- *
- * Returns `null` if the file is acceptable, or a Chinese error string
- * if it should be rejected.
- */
+/** Detect HEIC/HEIF input (mime, mime variant, or extension fallback for
+ * browsers that don't set type). HEIC is iPhone's default still format. */
+export function isHeic(file: File): boolean {
+  return (
+    file.type === "image/heic" ||
+    file.type === "image/heif" ||
+    /\.(heic|heif)$/i.test(file.name)
+  );
+}
+
+/** Hard rejections at file-pick time. HEIC is no longer here — we now
+ * convert it client-side via heic2any (see BatchImport.addFiles). */
 export function rejectionReason(file: File): string | null {
   if (file.size === 0) return "檔案大小為 0，無法上傳";
   if (file.size > 50 * 1024 * 1024) {
     return `檔案太大（${Math.round(file.size / 1024 / 1024)}MB），上限 50MB`;
   }
-  // Some browsers report HEIC as image/heic, others image/heif, others
-  // empty (just the .heic extension). Also reject by extension as a fallback.
-  const isHeic =
-    file.type === "image/heic" ||
-    file.type === "image/heif" ||
-    /\.(heic|heif)$/i.test(file.name);
-  if (isHeic) {
-    // Detect whether the browser actually encodes HEIC.
-    //   - Safari returns "data:image/heic;..."
-    //   - Chrome/Firefox silently fall back to PNG → "data:image/png;..."
-    //   - jsdom returns null
-    // Anything other than a heic-prefixed data URL means we can't decode.
-    let canDecodeHeic = false;
-    if (typeof document !== "undefined") {
-      try {
-        const dataUrl = document
-          .createElement("canvas")
-          .toDataURL("image/heic");
-        canDecodeHeic =
-          typeof dataUrl === "string" &&
-          dataUrl.startsWith("data:image/heic");
-      } catch {
-        // Some test environments throw on toDataURL — treat as "can't decode".
-        canDecodeHeic = false;
-      }
-    }
-    if (!canDecodeHeic) {
-      return "此瀏覽器不支援 HEIC（iPhone 拍照預設格式）。請改用 Safari、或在手機相簿匯出時選 JPEG。";
-    }
-  }
+  // HEIC bypasses the type check below — it'll be converted to JPEG.
+  if (isHeic(file)) return null;
   if (!file.type.startsWith("image/")) {
     return `不支援的檔案類型：${file.type || "未知"}`;
   }
   return null;
+}
+
+/**
+ * Promise.all with a concurrency limit. Useful for batch uploads where
+ * 60 parallel requests would (a) saturate the user's bandwidth and
+ * (b) trip Supabase rate limits.
+ *
+ * Mapper is expected to handle its own errors — exceptions propagate
+ * and abort the whole batch, which is usually NOT what callers want.
+ * BatchImport's submit logic wraps each mapper invocation in try/catch.
+ */
+export async function pMap<T, R>(
+  items: readonly T[],
+  mapper: (item: T, index: number) => Promise<R>,
+  concurrency: number
+): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  if (items.length === 0) return results;
+  let cursor = 0;
+  async function worker() {
+    while (cursor < items.length) {
+      const i = cursor++;
+      results[i] = await mapper(items[i], i);
+    }
+  }
+  const workers = Array.from(
+    { length: Math.min(Math.max(1, concurrency), items.length) },
+    () => worker()
+  );
+  await Promise.all(workers);
+  return results;
 }

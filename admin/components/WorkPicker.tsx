@@ -48,6 +48,9 @@ export function WorkPicker({
       emptyText="找不到符合的作品"
       disabled={disabled}
       triggerClassName={triggerClassName}
+      // 500 rows is the comfort zone for cmdk + Popover on a mid-tier
+      // mobile device. Beyond that admin should narrow with search.
+      maxResults={500}
     />
   );
 }

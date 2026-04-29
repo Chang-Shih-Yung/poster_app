@@ -2,8 +2,10 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import {
   NONE,
   fromSentinel,
+  isHeic,
   isReady,
   newDraft,
+  pMap,
   rejectionReason,
   type DraftPoster,
 } from "./_shared";
@@ -109,10 +111,28 @@ describe("isReady", () => {
   });
 });
 
+describe("isHeic", () => {
+  it("detects HEIC by mime type", () => {
+    expect(isHeic(fakeFile("a.heic", 1024, "image/heic"))).toBe(true);
+  });
+  it("detects HEIF mime type", () => {
+    expect(isHeic(fakeFile("a.heif", 1024, "image/heif"))).toBe(true);
+  });
+  it("falls back to extension when mime type is empty", () => {
+    expect(isHeic(fakeFile("a.HEIC", 1024, ""))).toBe(true);
+    expect(isHeic(fakeFile("a.heif", 1024, ""))).toBe(true);
+  });
+  it("returns false for non-HEIC inputs", () => {
+    expect(isHeic(fakeFile("a.jpg", 1024, "image/jpeg"))).toBe(false);
+    expect(isHeic(fakeFile("a.png", 1024, "image/png"))).toBe(false);
+  });
+});
+
 describe("rejectionReason", () => {
   it("rejects empty files", () => {
-    const f = fakeFile("zero.jpg", 0, "image/jpeg");
-    expect(rejectionReason(f)).toMatch(/檔案大小為 0/);
+    expect(rejectionReason(fakeFile("zero.jpg", 0, "image/jpeg"))).toMatch(
+      /檔案大小為 0/
+    );
   });
 
   it("rejects files > 50MB", () => {
@@ -120,21 +140,6 @@ describe("rejectionReason", () => {
     const reason = rejectionReason(big);
     expect(reason).toMatch(/檔案太大/);
     expect(reason).toMatch(/上限 50MB/);
-  });
-
-  it("rejects HEIC by mime type when canvas can't decode", () => {
-    const f = fakeFile("photo.HEIC", 1024, "image/heic");
-    expect(rejectionReason(f)).toMatch(/不支援 HEIC/);
-  });
-
-  it("rejects HEIC by extension even when type is empty", () => {
-    const f = fakeFile("photo.heic", 1024, "");
-    expect(rejectionReason(f)).toMatch(/不支援 HEIC/);
-  });
-
-  it("rejects HEIF", () => {
-    const f = fakeFile("photo.heif", 1024, "image/heif");
-    expect(rejectionReason(f)).toMatch(/不支援 HEIC/);
   });
 
   it("rejects non-image types", () => {
@@ -146,5 +151,63 @@ describe("rejectionReason", () => {
     expect(rejectionReason(fakeFile("a.jpg", 1024, "image/jpeg"))).toBeNull();
     expect(rejectionReason(fakeFile("a.png", 1024, "image/png"))).toBeNull();
     expect(rejectionReason(fakeFile("a.webp", 1024, "image/webp"))).toBeNull();
+  });
+
+  it("does NOT reject HEIC — it's converted instead, not blocked", () => {
+    expect(rejectionReason(fakeFile("a.heic", 1024, "image/heic"))).toBeNull();
+    expect(rejectionReason(fakeFile("a.heif", 1024, "image/heif"))).toBeNull();
+  });
+});
+
+describe("pMap", () => {
+  it("returns empty array for empty input", async () => {
+    const r = await pMap([], async (x) => x, 3);
+    expect(r).toEqual([]);
+  });
+
+  it("preserves input order in results", async () => {
+    const out = await pMap(
+      [10, 20, 30, 40, 50],
+      async (n) => {
+        // Random delays to scramble completion order
+        await new Promise((r) => setTimeout(r, Math.random() * 10));
+        return n * 2;
+      },
+      3
+    );
+    expect(out).toEqual([20, 40, 60, 80, 100]);
+  });
+
+  it("respects concurrency limit", async () => {
+    let inflight = 0;
+    let peak = 0;
+    await pMap(
+      Array.from({ length: 12 }, (_, i) => i),
+      async () => {
+        inflight++;
+        peak = Math.max(peak, inflight);
+        await new Promise((r) => setTimeout(r, 5));
+        inflight--;
+      },
+      3
+    );
+    expect(peak).toBeLessThanOrEqual(3);
+    expect(peak).toBeGreaterThan(0);
+  });
+
+  it("clamps concurrency to items.length when concurrency > items", async () => {
+    let inflight = 0;
+    let peak = 0;
+    await pMap(
+      [1, 2],
+      async () => {
+        inflight++;
+        peak = Math.max(peak, inflight);
+        await new Promise((r) => setTimeout(r, 5));
+        inflight--;
+      },
+      10
+    );
+    expect(peak).toBeLessThanOrEqual(2);
   });
 });

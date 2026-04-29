@@ -28,17 +28,24 @@ import {
   ImagePlus,
   Loader2,
   AlertTriangle,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
   NONE,
   fromSentinel,
+  isHeic,
   isReady,
   newDraft,
+  pMap,
   rejectionReason,
   type DraftPoster,
 } from "./_shared";
 import { DraftCard } from "./DraftCard";
+import { useUnsavedChangesGuard } from "@/components/useUnsavedChangesGuard";
+
+// Tunables
+const SUBMIT_CONCURRENCY = 3;
 
 /**
  * Batch import flow (cards version):
@@ -72,6 +79,10 @@ export default function BatchImport({
 
   const [drafts, setDrafts] = useState<DraftPoster[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  const [convertingHeic, setConvertingHeic] = useState(0); // count of files in flight
+  // Tracks the live submit so the cancel button can abort still-pending tasks.
+  // Cleared back to null when submit settles.
+  const abortRef = useRef<AbortController | null>(null);
 
   // Groups cache: workId → flat group list. Shared across the apply
   // bar and every DraftCard, so N cards on the same work share one
@@ -154,30 +165,25 @@ export default function BatchImport({
     };
   }, []);
 
-  // 2. beforeunload: warn before navigating away if there are unsaved
-  //    drafts that aren't already in flight or done. Mobile back-button
-  //    eats the whole batch otherwise.
-  useEffect(() => {
-    const hasUnsavedWork = drafts.some(
-      (d) =>
-        d.status === "idle" &&
-        // empty card with default name "" is fine — only block if user
-        // has filled anything in.
-        (d.name.trim() ||
-          d.work_id ||
-          d.year ||
-          d.poster_release_date ||
-          d.size_type !== NONE)
-    );
-    if (!hasUnsavedWork) return;
-    function handler(e: BeforeUnloadEvent) {
-      e.preventDefault();
-      // Modern browsers ignore the message but show their own confirm.
-      e.returnValue = "";
-    }
-    window.addEventListener("beforeunload", handler);
-    return () => window.removeEventListener("beforeunload", handler);
-  }, [drafts]);
+  // 2. Navigation guard: warn before any departure (browser, tab close,
+  //    in-app `<Link>` click, mobile swipe-back) if drafts have unsaved
+  //    metadata that isn't already in-flight. Mobile users tapping
+  //    BottomTabBar by accident would lose 5 cards otherwise.
+  const hasUnsavedWork = drafts.some(
+    (d) =>
+      d.status === "idle" &&
+      (d.name.trim() ||
+        d.work_id ||
+        d.year ||
+        d.poster_release_date ||
+        d.size_type !== NONE)
+  );
+  // Don't guard while we're actively submitting — the user wants to
+  // wait, not be prompted.
+  useUnsavedChangesGuard(
+    hasUnsavedWork && !submitting,
+    "批量新增有未儲存的內容，確定離開？"
+  );
 
   // ─── Helpers ──────────────────────────────────────────────────────
   function updateDraft(localId: string, patch: Partial<DraftPoster>) {
@@ -194,17 +200,68 @@ export default function BatchImport({
     });
   }
 
-  function addFiles(files: FileList | null) {
+  /**
+   * Convert a HEIC file to JPEG via heic2any (lazy-loaded so the
+   * ~1MB wasm/lib doesn't bloat the initial bundle for non-iPhone users).
+   * Returns a new File preserving the original name (with .jpg suffix).
+   */
+  async function convertHeicToJpeg(file: File): Promise<File> {
+    const { default: heic2any } = await import("heic2any");
+    const out = await heic2any({
+      blob: file,
+      toType: "image/jpeg",
+      quality: 0.9,
+    });
+    const blob = Array.isArray(out) ? out[0] : (out as Blob);
+    const newName = file.name.replace(/\.(heic|heif)$/i, ".jpg");
+    return new File([blob], newName, { type: "image/jpeg" });
+  }
+
+  async function addFiles(files: FileList | null) {
     if (!files || files.length === 0) return;
     const accepted: File[] = [];
     const rejected: { file: File; reason: string }[] = [];
-    for (const f of Array.from(files)) {
+
+    // Pass 1: HEIC conversion. Done sequentially per file (heic2any is
+    // CPU-heavy and parallelizing makes mobile devices unresponsive).
+    const heicFiles = Array.from(files).filter(isHeic);
+    const otherFiles = Array.from(files).filter((f) => !isHeic(f));
+
+    if (heicFiles.length > 0) {
+      setConvertingHeic(heicFiles.length);
+      const tid = toast.loading(
+        `正在轉換 ${heicFiles.length} 張 HEIC 照片…（每張約 4–8 秒）`
+      );
+      try {
+        for (const f of heicFiles) {
+          try {
+            const converted = await convertHeicToJpeg(f);
+            const reason = rejectionReason(converted);
+            if (reason) rejected.push({ file: f, reason });
+            else accepted.push(converted);
+          } catch (e) {
+            rejected.push({
+              file: f,
+              reason: `HEIC 轉檔失敗：${describeError(e)}`,
+            });
+          } finally {
+            setConvertingHeic((c) => Math.max(0, c - 1));
+          }
+        }
+      } finally {
+        toast.dismiss(tid);
+        setConvertingHeic(0);
+      }
+    }
+
+    // Pass 2: non-HEIC, fast path.
+    for (const f of otherFiles) {
       const reason = rejectionReason(f);
       if (reason) rejected.push({ file: f, reason });
       else accepted.push(f);
     }
+
     if (rejected.length > 0) {
-      // One toast per reason class to avoid spam — group by reason.
       const grouped = new Map<string, string[]>();
       for (const r of rejected) {
         const list = grouped.get(r.reason) ?? [];
@@ -232,8 +289,6 @@ export default function BatchImport({
       ...prev,
       ...accepted.map((f) => newDraft(f, defaults)),
     ]);
-    // Pre-fetch groups for the work so the cards don't lag when the
-    // user expands them.
     if (applyWorkId) loadGroupsFor(applyWorkId);
   }
 
@@ -272,6 +327,12 @@ export default function BatchImport({
     toast.success("已套用到全部卡片");
   }
 
+  function cancelSubmit() {
+    if (!abortRef.current) return;
+    abortRef.current.abort();
+    toast.message("已要求取消尚未開始的卡片，目前處理中的會跑完");
+  }
+
   async function submitAll() {
     const toSubmit = drafts.filter(isReady);
     if (toSubmit.length === 0) {
@@ -279,14 +340,26 @@ export default function BatchImport({
       return;
     }
     setSubmitting(true);
+    abortRef.current = new AbortController();
+    const signal = abortRef.current.signal;
     const tid = toast.loading(`建立 ${toSubmit.length} 張海報中…`);
 
     let fullSuccessCount = 0;
     let imageFailedCount = 0;
     let fullFailureCount = 0;
+    let cancelledCount = 0;
 
-    await Promise.all(
-      toSubmit.map(async (draft) => {
+    // pMap caps concurrency so we don't fire 60 parallel requests.
+    // Cancellation is checked at the START of each task — once a task
+    // has called createPoster, the DB row exists and we let it finish
+    // (cancelling halfway leaves orphaned image_failed rows).
+    await pMap(
+      toSubmit,
+      async (draft) => {
+        if (signal.aborted) {
+          cancelledCount++;
+          return;
+        }
         let posterId: string | null = null;
         try {
           updateDraft(draft.localId, { status: "creating" });
@@ -355,23 +428,34 @@ export default function BatchImport({
           });
           fullFailureCount++;
         }
-      })
+      },
+      SUBMIT_CONCURRENCY
     );
 
     toast.dismiss(tid);
     setSubmitting(false);
+    abortRef.current = null;
 
-    if (fullFailureCount === 0 && imageFailedCount === 0) {
+    const cancelSuffix =
+      cancelledCount > 0 ? `，${cancelledCount} 張已取消（仍可再按建立）` : "";
+    if (
+      fullFailureCount === 0 &&
+      imageFailedCount === 0 &&
+      cancelledCount === 0
+    ) {
       toast.success(`${fullSuccessCount} 張海報已建立！`);
       setTimeout(() => router.push("/posters"), 1200);
+    } else if (fullFailureCount === 0 && imageFailedCount === 0) {
+      // Only cancellations — stay on page so user can resume.
+      toast.message(`${fullSuccessCount} 張完成${cancelSuffix}`);
     } else if (fullFailureCount === 0) {
       toast.warning(
-        `${fullSuccessCount} 張完整成功，${imageFailedCount} 張海報已建立但圖片上傳失敗（請至「所有海報」重試圖片）`,
+        `${fullSuccessCount} 張完整成功，${imageFailedCount} 張海報已建立但圖片上傳失敗（請至「所有海報」重試圖片）${cancelSuffix}`,
         { duration: 12000 }
       );
     } else {
       toast.error(
-        `${fullSuccessCount} 張成功${imageFailedCount > 0 ? `，${imageFailedCount} 張缺圖片` : ""}，${fullFailureCount} 張完全失敗（請查看標紅卡片）`,
+        `${fullSuccessCount} 張成功${imageFailedCount > 0 ? `，${imageFailedCount} 張缺圖片` : ""}，${fullFailureCount} 張完全失敗（請查看標紅卡片）${cancelSuffix}`,
         { duration: 12000 }
       );
     }
@@ -585,9 +669,31 @@ export default function BatchImport({
         ))}
       </div>
 
+      {/* ── Progress bar (only while submitting) ──────────────────── */}
+      {submitting && (
+        <SubmitProgress
+          done={doneCount}
+          imageFailed={
+            drafts.filter((d) => d.status === "image_failed").length
+          }
+          errored={drafts.filter((d) => d.status === "error").length}
+          total={
+            doneCount +
+            busyCount +
+            drafts.filter(
+              (d) => d.status === "image_failed" || d.status === "error"
+            ).length +
+            // remaining "idle" cards inside the submit batch are still
+            // queued (pMap hasn't picked them up yet)
+            idleDrafts.filter(isReady).length
+          }
+          onCancel={cancelSubmit}
+        />
+      )}
+
       {/* ── Footer ────────────────────────────────────────────────── */}
       <div className="space-y-3 pt-2">
-        {(doneCount > 0 || errorCount > 0 || busyCount > 0) && (
+        {!submitting && (doneCount > 0 || errorCount > 0 || busyCount > 0) && (
           <div className="flex gap-3 text-sm flex-wrap">
             {busyCount > 0 && (
               <span className="flex items-center gap-1 text-muted-foreground">
@@ -612,18 +718,25 @@ export default function BatchImport({
           <Button
             onClick={submitAll}
             disabled={
-              submitting || readyCount === 0 || incompleteCount > 0
+              submitting ||
+              readyCount === 0 ||
+              incompleteCount > 0 ||
+              convertingHeic > 0
             }
             className="flex-1"
           >
             {submitting && <Loader2 className="animate-spin" />}
-            {submitting ? "建立中…" : `建立全部 (${readyCount} 張)`}
+            {submitting
+              ? "建立中…"
+              : convertingHeic > 0
+                ? `轉換 HEIC 中（剩 ${convertingHeic}）…`
+                : `建立全部 (${readyCount} 張)`}
           </Button>
           <Button
             type="button"
             variant="outline"
             onClick={() => addMoreRef.current?.click()}
-            disabled={submitting}
+            disabled={submitting || convertingHeic > 0}
           >
             繼續新增照片
           </Button>
@@ -643,5 +756,76 @@ export default function BatchImport({
           )}
       </div>
     </div>
+  );
+}
+
+/**
+ * Live progress strip shown while submitAll is running. Splits the
+ * "finished" count into success / image_failed / error so the user
+ * sees what's happening at a glance.
+ *
+ * Cancel button is exposed here (rather than the main button row)
+ * because that's where the user's eye is during a long submit.
+ */
+function SubmitProgress({
+  done,
+  imageFailed,
+  errored,
+  total,
+  onCancel,
+}: {
+  done: number;
+  imageFailed: number;
+  errored: number;
+  total: number;
+  onCancel: () => void;
+}) {
+  const finished = done + imageFailed + errored;
+  const pct = total > 0 ? Math.round((finished / total) * 100) : 0;
+  return (
+    <Card className="border-primary/40 bg-primary/5">
+      <CardContent className="p-3 space-y-2">
+        <div className="flex items-center justify-between gap-2 text-sm">
+          <span className="font-medium">
+            建立中 {finished} / {total}（{pct}%）
+          </span>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onCancel}
+            className="h-7 text-xs"
+          >
+            <X className="w-3 h-3" />
+            取消尚未開始的
+          </Button>
+        </div>
+        {/* progress bar */}
+        <div className="h-1.5 w-full bg-secondary rounded overflow-hidden">
+          <div
+            className="h-full bg-primary transition-[width] duration-300"
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+        {/* breakdown — only show non-zero buckets */}
+        <div className="flex gap-3 text-xs flex-wrap text-muted-foreground">
+          {done > 0 && (
+            <span className="flex items-center gap-1 text-green-600">
+              <CheckCircle2 className="w-3 h-3" /> {done} 完成
+            </span>
+          )}
+          {imageFailed > 0 && (
+            <span className="flex items-center gap-1 text-amber-600">
+              <AlertTriangle className="w-3 h-3" /> {imageFailed} 圖片失敗
+            </span>
+          )}
+          {errored > 0 && (
+            <span className="flex items-center gap-1 text-destructive">
+              <AlertTriangle className="w-3 h-3" /> {errored} 失敗
+            </span>
+          )}
+        </div>
+      </CardContent>
+    </Card>
   );
 }

@@ -19,21 +19,11 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 
-/**
- * A single row inside a searchable dropdown. `label` is what the user
- * sees in both the trigger and the row; `searchText` (optional) is what
- * cmdk uses for matching when the user types — useful when we want to
- * search by parent path even though the row only shows the leaf name.
- *
- * `separatorBefore` lets the caller mark visual breaks (e.g. between
- * top-level group blocks) without a separate Group wrapper.
- */
 export type SearchableItem = {
   value: string;
   label: string;
   searchText?: string;
   separatorBefore?: boolean;
-  // Optional left indent in rem for showing tree depth visually
   indentRem?: number;
 };
 
@@ -53,6 +43,12 @@ type Props = {
   /** Render an extra footer area inside the popover (e.g. "+ 新增…").
    * Receives a `close` callback so the action can dismiss the popover. */
   footer?: (close: () => void) => React.ReactNode;
+  /** Cap the number of rows actually rendered in the dropdown. With
+   * 1000+ items cmdk's default behavior (render all + display:none the
+   * non-matches) becomes laggy. We do our own filter on `searchText`
+   * and cap to maxResults; if the user's query matches more, we show
+   * a hint to type more characters. */
+  maxResults?: number;
 };
 
 export function SearchableSelect({
@@ -67,12 +63,39 @@ export function SearchableSelect({
   triggerClassName,
   contentClassName,
   footer,
+  maxResults,
 }: Props) {
   const [open, setOpen] = React.useState(false);
+  const [search, setSearch] = React.useState("");
   const selected = items.find((i) => i.value === value);
 
+  // Filter + cap. Done in JS rather than via cmdk's internal filter so
+  // we can ALSO truncate, which cmdk can't do (it always renders every
+  // item and toggles `display:none`).
+  const { visible, hiddenCount } = React.useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const filtered = q
+      ? items.filter((i) =>
+          (i.searchText ?? i.label).toLowerCase().includes(q)
+        )
+      : items;
+    if (maxResults && filtered.length > maxResults) {
+      return {
+        visible: filtered.slice(0, maxResults),
+        hiddenCount: filtered.length - maxResults,
+      };
+    }
+    return { visible: filtered, hiddenCount: 0 };
+  }, [items, search, maxResults]);
+
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover
+      open={open}
+      onOpenChange={(o) => {
+        setOpen(o);
+        if (!o) setSearch(""); // reset search when closing
+      }}
+    >
       <PopoverTrigger asChild>
         <Button
           type="button"
@@ -99,28 +122,24 @@ export function SearchableSelect({
           contentClassName
         )}
       >
-        <Command
-          // cmdk default filter searches all of `value` + every item's
-          // text content. We force it to use our `searchText` when set
-          // so we can search by parent path while displaying only the
-          // leaf name.
-          filter={(value, search, keywords) => {
-            const haystack = (
-              keywords?.join(" ") ?? value
-            ).toLowerCase();
-            return haystack.includes(search.toLowerCase()) ? 1 : 0;
-          }}
-        >
-          <CommandInput placeholder={searchPlaceholder} />
+        {/* shouldFilter={false}: we do our own filter above. cmdk still
+            handles keyboard nav + selection + scrolling. */}
+        <Command shouldFilter={false}>
+          <CommandInput
+            placeholder={searchPlaceholder}
+            value={search}
+            onValueChange={setSearch}
+          />
           <CommandList>
-            <CommandEmpty>{emptyText}</CommandEmpty>
+            {visible.length === 0 && (
+              <CommandEmpty>{emptyText}</CommandEmpty>
+            )}
             <CommandGroup>
-              {items.map((item, idx) => (
+              {visible.map((item, idx) => (
                 <React.Fragment key={item.value}>
                   {item.separatorBefore && idx > 0 && <CommandSeparator />}
                   <CommandItem
                     value={item.value}
-                    keywords={[item.searchText ?? item.label]}
                     onSelect={() => {
                       onChange(item.value);
                       setOpen(false);
@@ -142,6 +161,11 @@ export function SearchableSelect({
                 </React.Fragment>
               ))}
             </CommandGroup>
+            {hiddenCount > 0 && (
+              <div className="px-3 py-2 text-xs text-muted-foreground border-t border-border">
+                還有 {hiddenCount} 筆符合，請輸入更多關鍵字縮小範圍
+              </div>
+            )}
             {footer && (
               <>
                 <CommandSeparator />
