@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { FolderPlus } from "lucide-react";
+import { FolderPlus, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { createGroup } from "@/app/actions/groups";
 import {
@@ -19,10 +19,41 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Loader2 } from "lucide-react";
 import type { FlattenedGroup } from "@/lib/groupTree";
 
 const NONE = "__none__";
+
+/**
+ * Pure transform: turn a flat group list into rows for SearchableSelect.
+ * Exported for testing — the UI behavior of separators / indent is
+ * easier to verify here than against a rendered popover.
+ */
+export function buildGroupItems(
+  groups: FlattenedGroup[],
+  noneLabel: string
+): SearchableItem[] {
+  const items: SearchableItem[] = [
+    {
+      value: NONE,
+      label: noneLabel,
+      searchText: "none 不屬於 不指定",
+    },
+  ];
+  for (let idx = 0; idx < groups.length; idx++) {
+    const g = groups[idx];
+    const isTopLevel = g.depth === 0;
+    items.push({
+      value: g.id,
+      label: g.label,
+      searchText: g.label,
+      // Visual break before each new top-level block (after the first).
+      separatorBefore: isTopLevel && idx > 0,
+      // Indent capped at depth 2 to keep the dropdown readable.
+      indentRem: Math.min(g.depth, 2) * 0.75,
+    });
+  }
+  return items;
+}
 
 /**
  * Searchable dropdown for picking a group within a work. On top of the
@@ -65,34 +96,7 @@ export function GroupPicker({
   const [newName, setNewName] = React.useState("");
   const [submitting, setSubmitting] = React.useState(false);
 
-  // Build the items: NONE first, then each group with a separator
-  // before every top-level (depth=0) group except the first.
-  const items: SearchableItem[] = [
-    {
-      value: NONE,
-      label: noneLabel,
-      searchText: "none 不屬於 不指定",
-    },
-    ...groups.map((g, idx): SearchableItem => {
-      const isTopLevel = g.depth === 0;
-      // The "previous" group in the list — used to detect block boundaries.
-      const prev = groups[idx - 1];
-      // Insert a separator BEFORE this row when it's a new top-level block
-      // and we've already emitted at least one group above.
-      const separatorBefore = isTopLevel && idx > 0;
-      return {
-        value: g.id,
-        label: g.label, // full path so trigger shows context
-        searchText: g.label,
-        separatorBefore,
-        // Tiny indent for child rows so depth is visible at a glance.
-        // Top-level: 0; depth 1: 0.75rem; depth 2+: capped at 1.5rem.
-        indentRem: Math.min(g.depth, 2) * 0.75,
-        // Keep as part of label cluster — separatorBefore handles the visual gap.
-        ...(prev && !isTopLevel ? {} : {}),
-      };
-    }),
-  ];
+  const items = buildGroupItems(groups, noneLabel);
 
   async function submitNewGroup() {
     const trimmed = newName.trim();
