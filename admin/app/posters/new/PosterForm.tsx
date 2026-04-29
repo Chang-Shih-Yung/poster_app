@@ -34,6 +34,7 @@ import {
 } from "@/components/ui/select";
 import { WorkPicker, type WorkOption } from "@/components/WorkPicker";
 import { GroupPicker } from "@/components/GroupPicker";
+import { DatePicker } from "@/components/DatePicker";
 import { AlertTriangle, Loader2 } from "lucide-react";
 
 type InitialPoster = {
@@ -298,10 +299,16 @@ export default function PosterForm({
 
       <div className="grid grid-cols-2 gap-3">
         <FormField label="發行精確日期" helper="填日期後年份自動帶入">
-          <Input
-            type="date"
-            {...register("poster_release_date")}
-            disabled={pending}
+          <Controller
+            control={control}
+            name="poster_release_date"
+            render={({ field }) => (
+              <DatePicker
+                value={field.value}
+                onChange={field.onChange}
+                disabled={pending}
+              />
+            )}
           />
         </FormField>
         <FormField label="發行年份" error={errors.year?.message}>

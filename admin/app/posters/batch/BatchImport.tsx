@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/select";
 import { WorkPicker, type WorkOption } from "@/components/WorkPicker";
 import { GroupPicker } from "@/components/GroupPicker";
+import { DatePicker } from "@/components/DatePicker";
 import {
   CheckCircle2,
   ChevronDown,
@@ -545,6 +546,22 @@ function DraftCard({
 }) {
   const [expanded, setExpanded] = useState(false);
   const [groupOptions, setGroupOptions] = useState<GroupOption[]>([]);
+  const [previewBroken, setPreviewBroken] = useState(false);
+  const replaceInputRef = useRef<HTMLInputElement>(null);
+
+  function handleReplaceFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    // Free the old object URL so we don't accumulate them while the
+    // user replaces a card multiple times in one session.
+    URL.revokeObjectURL(draft.previewUrl);
+    onChange({
+      file,
+      previewUrl: URL.createObjectURL(file),
+    });
+    setPreviewBroken(false);
+    e.target.value = ""; // allow re-selecting the same filename later
+  }
 
   async function refetchGroups(forWorkId: string) {
     const supabase = createClient();
@@ -587,15 +604,54 @@ function DraftCard({
       )}
     >
       <CardContent className="p-3 space-y-2">
+        {/* Hidden file input for replacing this card's photo */}
+        <input
+          ref={replaceInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={handleReplaceFile}
+        />
+
         {/* ── Header row ────────────────────────────────────────────── */}
         <div className="flex items-start gap-2.5">
-          {/* Thumbnail */}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={draft.previewUrl}
-            alt=""
-            className="w-10 h-14 rounded object-cover border border-border shrink-0 mt-0.5"
-          />
+          {/* Clickable thumbnail — click to replace photo (preserves
+              all metadata that's already filled in). Falls back to a
+              placeholder when the browser can't decode the file
+              (HEIC on Chrome desktop is the common case). */}
+          <button
+            type="button"
+            onClick={() => !disabled && replaceInputRef.current?.click()}
+            disabled={disabled}
+            className={cn(
+              "relative w-10 h-14 rounded border border-border shrink-0 mt-0.5 overflow-hidden group",
+              !disabled && "hover:border-primary cursor-pointer",
+              disabled && "cursor-default"
+            )}
+            title={disabled ? undefined : "點擊更換照片"}
+          >
+            {previewBroken ? (
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-secondary/40 text-muted-foreground">
+                <ImagePlus className="w-4 h-4" />
+                <span className="text-[8px] mt-0.5 px-0.5 truncate max-w-full">
+                  無預覽
+                </span>
+              </div>
+            ) : (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={draft.previewUrl}
+                alt=""
+                className="w-full h-full object-cover"
+                onError={() => setPreviewBroken(true)}
+              />
+            )}
+            {!disabled && (
+              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 flex items-center justify-center transition-colors opacity-0 group-hover:opacity-100">
+                <ImagePlus className="w-3.5 h-3.5 text-white" />
+              </div>
+            )}
+          </button>
 
           {/* Name */}
           <div className="flex-1 min-w-0">
@@ -681,11 +737,9 @@ function DraftCard({
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-1">
                 <Label className="text-xs">發行日期</Label>
-                <Input
-                  type="date"
+                <DatePicker
                   value={draft.poster_release_date}
-                  onChange={(e) => {
-                    const v = e.target.value;
+                  onChange={(v) => {
                     const yearPatch = /^\d{4}-\d{2}-\d{2}$/.test(v) ? { year: v.slice(0, 4) } : {};
                     onChange({ poster_release_date: v, ...yearPatch });
                   }}
