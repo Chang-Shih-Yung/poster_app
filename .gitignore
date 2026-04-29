@@ -1,6 +1,11 @@
 # macOS
 .DS_Store
 
+# Node — any nested node_modules + vite/vitest cache that may land at root
+# when commands run from repo root instead of admin/.
+node_modules/
+.vite/
+
 # Flutter / Dart
 .dart_tool/
 .packages
