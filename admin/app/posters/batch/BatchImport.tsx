@@ -15,6 +15,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -180,10 +190,7 @@ export default function BatchImport({
   );
   // Don't guard while we're actively submitting — the user wants to
   // wait, not be prompted.
-  useUnsavedChangesGuard(
-    hasUnsavedWork && !submitting,
-    "批量新增有未儲存的內容，確定離開？"
-  );
+  const guard = useUnsavedChangesGuard(hasUnsavedWork && !submitting);
 
   // ─── Helpers ──────────────────────────────────────────────────────
   function updateDraft(localId: string, patch: Partial<DraftPoster>) {
@@ -755,6 +762,35 @@ export default function BatchImport({
             </p>
           )}
       </div>
+
+      {/* Navigation guard — shadcn AlertDialog instead of native confirm
+          so it matches the rest of the admin (delete dialogs etc.) */}
+      <AlertDialog
+        open={guard.pending}
+        onOpenChange={(open) => {
+          if (!open) guard.cancel();
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>確定離開？</AlertDialogTitle>
+            <AlertDialogDescription>
+              這個批量新增頁面有未儲存的內容（包括已填的 metadata 跟還沒送出的卡片）。離開後資料會消失，請確認。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={guard.cancel}>
+              留在頁面
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={guard.confirm}
+            >
+              捨棄並離開
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
