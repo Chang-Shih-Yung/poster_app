@@ -18,7 +18,7 @@ export default async function EditPosterPage({
     supabase
       .from("posters")
       .select(
-        "id, work_id, work_kind, parent_group_id, poster_name, year, region, poster_release_type, size_type, channel_category, channel_name, is_exclusive, exclusive_name, material_type, version_label, source_url, source_note, is_placeholder, poster_url, thumbnail_url"
+        "id, work_id, work_kind, parent_group_id, poster_name, year, poster_release_date, region, poster_release_type, size_type, channel_category, channel_type, channel_name, is_exclusive, exclusive_name, material_type, version_label, source_url, source_platform, source_note, signed, numbered, edition_number, linen_backed, licensed, is_placeholder, poster_url, thumbnail_url"
       )
       .eq("id", id)
       .single(),

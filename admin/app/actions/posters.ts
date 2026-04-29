@@ -38,17 +38,26 @@ export async function createPoster(input: {
   parent_group_id: string | null;
   poster_name: string;
   year?: number | null;
+  poster_release_date?: string | null;   // YYYY-MM-DD
   region?: string | null;
   poster_release_type?: string | null;
   size_type?: string | null;
   channel_category?: string | null;
+  channel_type?: string | null;
   channel_name?: string | null;
   is_exclusive?: boolean;
   exclusive_name?: string | null;
   material_type?: string | null;
   version_label?: string | null;
   source_url?: string | null;
+  source_platform?: string | null;
   source_note?: string | null;
+  // Collector flags
+  signed?: boolean;
+  numbered?: boolean;
+  edition_number?: string | null;
+  linen_backed?: boolean;
+  licensed?: boolean;
 }): Promise<
   ActionResult<{
     id: string;
@@ -68,17 +77,26 @@ export async function createPoster(input: {
         parent_group_id: input.parent_group_id,
         poster_name: trimmed,
         year: input.year ?? null,
+        poster_release_date: input.poster_release_date ?? null,
         region: input.region ?? null,
         poster_release_type: input.poster_release_type ?? null,
         size_type: input.size_type ?? null,
         channel_category: input.channel_category ?? null,
+        channel_type: input.channel_type ?? null,
         channel_name: input.channel_name ?? null,
         is_exclusive: input.is_exclusive ?? false,
         exclusive_name: input.exclusive_name ?? null,
         material_type: input.material_type ?? null,
         version_label: input.version_label ?? null,
         source_url: input.source_url ?? null,
+        source_platform: input.source_platform ?? null,
         source_note: input.source_note ?? null,
+        signed: input.signed ?? false,
+        numbered: input.numbered ?? false,
+        edition_number: input.edition_number ?? null,
+        linen_backed: input.linen_backed ?? false,
+        licensed: input.licensed ?? true,
+        source: "admin",
         status: "approved",
       })
       .select("id, poster_name, is_placeholder, thumbnail_url")
@@ -284,17 +302,25 @@ const POSTER_METADATA_ALLOWED = new Set([
   "poster_name",
   "title",
   "year",
+  "poster_release_date",
   "region",
   "poster_release_type",
   "size_type",
   "channel_category",
+  "channel_type",
   "channel_name",
   "is_exclusive",
   "exclusive_name",
   "material_type",
   "version_label",
   "source_url",
+  "source_platform",
   "source_note",
+  "signed",
+  "numbered",
+  "edition_number",
+  "linen_backed",
+  "licensed",
   "parent_group_id",
 ]);
 
