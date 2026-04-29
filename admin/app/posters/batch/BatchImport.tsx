@@ -298,9 +298,14 @@ export default function BatchImport({
     }
   }
 
-  const readyCount = drafts.filter(
-    (d) => d.status === "idle" && d.name.trim() && d.work_id
+  const idleDrafts = drafts.filter((d) => d.status === "idle");
+  const readyCount = idleDrafts.filter(
+    (d) => d.name.trim() && d.work_id
   ).length;
+  // Cards that are idle but missing required fields. We refuse to
+  // submit while any of these exist — silently skipping them was the
+  // old behaviour and surprised users.
+  const incompleteCount = idleDrafts.length - readyCount;
   const doneCount = drafts.filter((d) => d.status === "done").length;
   const errorCount = drafts.filter((d) => d.status === "error").length;
   const busyCount = drafts.filter(
@@ -498,7 +503,7 @@ export default function BatchImport({
         <div className="flex gap-2 flex-wrap">
           <Button
             onClick={submitAll}
-            disabled={submitting || readyCount === 0}
+            disabled={submitting || readyCount === 0 || incompleteCount > 0}
             className="flex-1"
           >
             {submitting && <Loader2 className="animate-spin" />}
@@ -514,12 +519,12 @@ export default function BatchImport({
           </Button>
         </div>
 
-        {readyCount < drafts.length && readyCount > 0 && (
-          <p className="text-xs text-muted-foreground">
-            {drafts.length - readyCount} 張缺少「名稱」或「作品」將被跳過
+        {incompleteCount > 0 && (
+          <p className="text-xs text-destructive">
+            還有 {incompleteCount} 張缺少「名稱」或「作品」，全部填完才能建立
           </p>
         )}
-        {readyCount === 0 && drafts.some((d) => d.status === "idle") && (
+        {readyCount === 0 && drafts.some((d) => d.status === "idle") && incompleteCount === 0 && (
           <p className="text-xs text-destructive">
             每張卡片至少需填寫「海報名稱」和「作品」才能建立
           </p>
