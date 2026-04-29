@@ -18,10 +18,10 @@ vi.mock("sonner", () => ({
 
 describe("buildGroupItems (pure)", () => {
   it("emits a NONE entry first", () => {
-    const items = buildGroupItems([], "── 不屬於任何群組 ──");
+    const items = buildGroupItems([], "── 不放進群組 ──");
     expect(items).toHaveLength(1);
     expect(items[0].value).toBe("__none__");
-    expect(items[0].label).toBe("── 不屬於任何群組 ──");
+    expect(items[0].label).toBe("── 不放進群組 ──");
   });
 
   it("inserts a separator before each new top-level block (except first)", () => {
@@ -102,8 +102,8 @@ describe("GroupPicker createGroup integration", () => {
     const trigger = screen.getByRole("combobox");
     fireEvent.click(trigger);
 
-    // Click the "新增頂層群組…" action
-    const addAction = await screen.findByText("新增頂層群組…");
+    // Click the "新增資料夾…" action
+    const addAction = await screen.findByText("新增資料夾…");
     fireEvent.click(addAction);
 
     // Fill the dialog input
@@ -143,7 +143,7 @@ describe("GroupPicker createGroup integration", () => {
     );
 
     fireEvent.click(screen.getByRole("combobox"));
-    const addAction = await screen.findByText("新增頂層群組…");
+    const addAction = await screen.findByText("新增資料夾…");
     fireEvent.click(addAction);
 
     const input = await screen.findByPlaceholderText("例：2024 國際版");

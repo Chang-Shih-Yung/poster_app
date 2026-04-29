@@ -36,7 +36,7 @@ export function buildGroupItems(
     {
       value: NONE,
       label: noneLabel,
-      searchText: "none 不屬於 不指定",
+      searchText: "none 不屬於 不放進 不指定 直接 作品下",
     },
   ];
   for (let idx = 0; idx < groups.length; idx++) {
@@ -61,7 +61,7 @@ export function buildGroupItems(
  *
  * 1. Inserts a visual separator before each new top-level group block
  *    so the parent → child structure is readable in a long list.
- * 2. Adds an inline "+ 新增頂層群組…" action that opens a dialog,
+ * 2. Adds an inline "+ 新增資料夾…" action that opens a dialog,
  *    creates the group via the existing `createGroup` server action,
  *    and auto-selects it.
  *
@@ -77,10 +77,10 @@ export function GroupPicker({
   onChange,
   onGroupCreated,
   disabled,
-  noneLabel = "── 不屬於任何群組 ──",
+  noneLabel = "── 不放進群組（直接掛在作品下）──",
 }: {
   workId: string;
-  /** Used in the "建立在 X 頂層" dialog copy. */
+  /** Used in the "在 X 底下新增資料夾" dialog copy. */
   workName?: string;
   groups: FlattenedGroup[];
   /** Either NONE sentinel or a group id. */
@@ -143,7 +143,7 @@ export function GroupPicker({
             className="text-primary"
           >
             <FolderPlus className="mr-2 h-4 w-4" />
-            <span>新增頂層群組…</span>
+            <span>新增資料夾…</span>
           </CommandItem>
         )}
       />
@@ -151,11 +151,11 @@ export function GroupPicker({
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>新增群組</DialogTitle>
+            <DialogTitle>新增資料夾</DialogTitle>
             <DialogDescription>
               {workName
-                ? `會建在「${workName}」的頂層。建好後想嵌套到別的群組底下，到目錄頁拖移即可。`
-                : "會建在這個作品的頂層。"}
+                ? `會在「${workName}」底下新增資料夾。`
+                : "會在這個作品底下新增資料夾。"}
             </DialogDescription>
           </DialogHeader>
           <Input
