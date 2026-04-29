@@ -93,6 +93,11 @@ export default function BatchImport({
   // Tracks the live submit so the cancel button can abort still-pending tasks.
   // Cleared back to null when submit settles.
   const abortRef = useRef<AbortController | null>(null);
+  // Holds the post-submit redirect timer so unmount can clear it. Without
+  // this, navigating away during the 1.2s success-toast window would still
+  // fire `router.push("/posters")` from the unmounted component, jumping
+  // the user out of wherever they went.
+  const redirectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Groups cache: workId → flat group list. Shared across the apply
   // bar and every DraftCard, so N cards on the same work share one
@@ -171,6 +176,13 @@ export default function BatchImport({
     return () => {
       for (const d of draftsRef.current) {
         URL.revokeObjectURL(d.previewUrl);
+      }
+      // Cancel the post-submit redirect timer if the component unmounts
+      // while it's pending (user navigated away during the success-toast
+      // delay).
+      if (redirectTimerRef.current) {
+        clearTimeout(redirectTimerRef.current);
+        redirectTimerRef.current = null;
       }
     };
   }, []);
@@ -451,7 +463,10 @@ export default function BatchImport({
       cancelledCount === 0
     ) {
       toast.success(`${fullSuccessCount} 張海報已建立！`);
-      setTimeout(() => router.push("/posters"), 1200);
+      redirectTimerRef.current = setTimeout(() => {
+        redirectTimerRef.current = null;
+        router.push("/posters");
+      }, 1200);
     } else if (fullFailureCount === 0 && imageFailedCount === 0) {
       // Only cancellations — stay on page so user can resume.
       toast.message(`${fullSuccessCount} 張完成${cancelSuffix}`);
@@ -509,9 +524,9 @@ export default function BatchImport({
           <span className="text-sm font-medium">
             點此選擇照片（可多選）
           </span>
-          <span className="text-xs">JPG / PNG / WebP / GIF</span>
+          <span className="text-xs">JPG / PNG / WebP / GIF / HEIC</span>
           <span className="text-[10px] text-muted-foreground/70 px-4 text-center">
-            HEIC（iPhone 拍照預設格式）僅 Safari 可用，其他瀏覽器請改 JPEG
+            iPhone HEIC 會自動轉成 JPEG（每張需 4–8 秒）
           </span>
         </button>
       </div>
