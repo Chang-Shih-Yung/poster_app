@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
-import { flattenGroupTree } from "@/lib/groupTree";
+import { flattenGroupTree, type FlattenedGroup } from "@/lib/groupTree";
 import {
   REGIONS,
   SIZE_TYPES,
@@ -21,7 +21,6 @@ import { createPoster, attachImage } from "@/app/actions/posters";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -31,6 +30,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { WorkPicker, type WorkOption } from "@/components/WorkPicker";
+import { GroupPicker } from "@/components/GroupPicker";
 import {
   CheckCircle2,
   ChevronDown,
@@ -45,8 +46,7 @@ import { cn } from "@/lib/utils";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type WorkOption = { id: string; title_zh: string; studio: string | null };
-type GroupOption = { id: string; label: string };
+type GroupOption = FlattenedGroup;
 type DraftStatus = "idle" | "creating" | "uploading" | "done" | "error";
 const NONE = "__none__";
 
@@ -140,22 +140,26 @@ export default function BatchImport({
   const [applyChannelCat, setApplyChannelCat] = useState(NONE);
   const [applyGroupOptions, setApplyGroupOptions] = useState<GroupOption[]>([]);
 
-  // Load groups when apply-bar work changes. Preserve `defaultGroupId`
-  // on the *first* load (so deep-linking from a group page keeps the
-  // pre-selection); subsequent work changes reset the group.
+  // Load groups for the apply-bar work. Extracted so GroupPicker's
+  // "+ 新增頂層群組" can re-fetch after creating a new group.
+  async function refetchApplyGroups(forWorkId: string) {
+    const supabase = createClient();
+    const { data } = await supabase
+      .from("poster_groups")
+      .select("id, name, parent_group_id, display_order")
+      .eq("work_id", forWorkId)
+      .order("display_order")
+      .order("name");
+    setApplyGroupOptions(flattenGroupTree(data ?? []));
+  }
+
+  // Preserve `defaultGroupId` on the *first* load (deep-link from a
+  // group page); subsequent work changes reset the group.
   const initialGroupRef = useRef(defaultGroupId ?? NONE);
   useEffect(() => {
     if (!applyWorkId) { setApplyGroupOptions([]); setApplyGroupId(NONE); return; }
-    const supabase = createClient();
     (async () => {
-      const { data } = await supabase
-        .from("poster_groups")
-        .select("id, name, parent_group_id, display_order")
-        .eq("work_id", applyWorkId)
-        .order("display_order")
-        .order("name");
-      setApplyGroupOptions(flattenGroupTree(data ?? []));
-      // First load: keep the pre-selected group; later: reset to NONE
+      await refetchApplyGroups(applyWorkId);
       const initial = initialGroupRef.current;
       if (initial && initial !== NONE) {
         setApplyGroupId(initial);
@@ -164,6 +168,7 @@ export default function BatchImport({
         setApplyGroupId(NONE);
       }
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [applyWorkId]);
 
   function updateDraft(localId: string, patch: Partial<DraftPoster>) {
@@ -359,35 +364,29 @@ export default function BatchImport({
             套用到全部卡片
           </p>
 
-          {/* Work */}
+          {/* Work — searchable */}
           <div className="space-y-1">
             <Label className="text-xs">作品</Label>
-            <Select value={applyWorkId || NONE} onValueChange={(v) => setApplyWorkId(v === NONE ? "" : v)}>
-              <SelectTrigger className="h-9"><SelectValue placeholder="── 選擇作品 ──" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value={NONE}>── 不指定 ──</SelectItem>
-                {works.map((w) => (
-                  <SelectItem key={w.id} value={w.id}>
-                    {w.studio ? `[${w.studio}] ` : ""}{w.title_zh}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <WorkPicker
+              works={works}
+              value={applyWorkId}
+              onChange={setApplyWorkId}
+              triggerClassName="h-9"
+            />
           </div>
 
-          {/* Group (only shown when work is selected) */}
+          {/* Group — searchable + "+ 新增" (only shown when work selected) */}
           {applyWorkId && (
             <div className="space-y-1">
               <Label className="text-xs">群組</Label>
-              <Select value={applyGroupId} onValueChange={setApplyGroupId}>
-                <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={NONE}>── 不屬於任何群組 ──</SelectItem>
-                  {applyGroupOptions.map((g) => (
-                    <SelectItem key={g.id} value={g.id}>{g.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <GroupPicker
+                workId={applyWorkId}
+                workName={works.find((w) => w.id === applyWorkId)?.title_zh}
+                groups={applyGroupOptions}
+                value={applyGroupId}
+                onChange={setApplyGroupId}
+                onGroupCreated={() => refetchApplyGroups(applyWorkId)}
+              />
             </div>
           )}
 
@@ -547,18 +546,20 @@ function DraftCard({
   const [expanded, setExpanded] = useState(false);
   const [groupOptions, setGroupOptions] = useState<GroupOption[]>([]);
 
+  async function refetchGroups(forWorkId: string) {
+    const supabase = createClient();
+    const { data } = await supabase
+      .from("poster_groups")
+      .select("id, name, parent_group_id, display_order")
+      .eq("work_id", forWorkId)
+      .order("display_order")
+      .order("name");
+    setGroupOptions(flattenGroupTree(data ?? []));
+  }
+
   useEffect(() => {
     if (!draft.work_id) { setGroupOptions([]); return; }
-    const supabase = createClient();
-    (async () => {
-      const { data } = await supabase
-        .from("poster_groups")
-        .select("id, name, parent_group_id, display_order")
-        .eq("work_id", draft.work_id)
-        .order("display_order")
-        .order("name");
-      setGroupOptions(flattenGroupTree(data ?? []));
-    })();
+    refetchGroups(draft.work_id);
   }, [draft.work_id]);
 
   const statusIcon =
@@ -651,37 +652,28 @@ function DraftCard({
         {/* ── Expanded fields ────────────────────────────────────────── */}
         {expanded && draft.status === "idle" && (
           <div className="space-y-3 pt-1 border-t border-border">
-            {/* 作品 + 群組 */}
+            {/* 作品 + 群組 — searchable */}
             <div className="space-y-1">
               <Label className="text-xs">作品 *</Label>
-              <Select
-                value={draft.work_id || NONE}
-                onValueChange={(v) => onChange({ work_id: v === NONE ? "" : v, parent_group_id: NONE })}
-              >
-                <SelectTrigger className="h-9"><SelectValue placeholder="── 選擇作品 ──" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={NONE}>── 選擇作品 ──</SelectItem>
-                  {works.map((w) => (
-                    <SelectItem key={w.id} value={w.id}>
-                      {w.studio ? `[${w.studio}] ` : ""}{w.title_zh}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <WorkPicker
+                works={works}
+                value={draft.work_id}
+                onChange={(v) => onChange({ work_id: v, parent_group_id: NONE })}
+                triggerClassName="h-9"
+              />
             </div>
 
             {draft.work_id && (
               <div className="space-y-1">
                 <Label className="text-xs">群組</Label>
-                <Select value={draft.parent_group_id} onValueChange={(v) => onChange({ parent_group_id: v })}>
-                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={NONE}>── 不屬於任何群組 ──</SelectItem>
-                    {groupOptions.map((g) => (
-                      <SelectItem key={g.id} value={g.id}>{g.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <GroupPicker
+                  workId={draft.work_id}
+                  workName={works.find((w) => w.id === draft.work_id)?.title_zh}
+                  groups={groupOptions}
+                  value={draft.parent_group_id}
+                  onChange={(v) => onChange({ parent_group_id: v })}
+                  onGroupCreated={() => refetchGroups(draft.work_id)}
+                />
               </div>
             )}
 

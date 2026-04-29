@@ -98,7 +98,7 @@ describe("flattenGroupTree", () => {
     expect(out.map((x) => x.id)).toEqual(["a", "c", "b"]);
   });
 
-  it("encodes hierarchy in the label with / separator", () => {
+  it("encodes hierarchy in the label with / separator and depth", () => {
     const rows = [
       { id: "p", name: "Parent", parent_group_id: null, display_order: 0 },
       { id: "c", name: "Child", parent_group_id: "p", display_order: 0 },
@@ -106,9 +106,9 @@ describe("flattenGroupTree", () => {
     ];
     const out = flattenGroupTree(rows);
     expect(out).toEqual([
-      { id: "p", label: "Parent" },
-      { id: "c", label: "Parent / Child" },
-      { id: "g", label: "Parent / Child / Grand" },
+      { id: "p", label: "Parent", name: "Parent", depth: 0 },
+      { id: "c", label: "Parent / Child", name: "Child", depth: 1 },
+      { id: "g", label: "Parent / Child / Grand", name: "Grand", depth: 2 },
     ]);
   });
 

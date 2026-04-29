@@ -16,7 +16,7 @@ import {
   MATERIAL_TYPES,
   WORK_KINDS,
 } from "@/lib/enums";
-import { flattenGroupTree } from "@/lib/groupTree";
+import { flattenGroupTree, type FlattenedGroup } from "@/lib/groupTree";
 import { DEFAULT_REGION } from "@/lib/keys";
 import { createPoster, updatePosterMetadata } from "@/app/actions/posters";
 import { Input } from "@/components/ui/input";
@@ -32,9 +32,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { WorkPicker, type WorkOption } from "@/components/WorkPicker";
+import { GroupPicker } from "@/components/GroupPicker";
 import { AlertTriangle, Loader2 } from "lucide-react";
-
-type WorkOption = { id: string; title_zh: string; studio: string | null };
 
 type InitialPoster = {
   id: string;
@@ -118,7 +118,7 @@ export default function PosterForm({
   defaultWorkId,
 }: PosterFormProps) {
   const router = useRouter();
-  const [groupOptions, setGroupOptions] = useState<{ id: string; label: string }[]>([]);
+  const [groupOptions, setGroupOptions] = useState<FlattenedGroup[]>([]);
   const [serverError, setServerError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -170,23 +170,22 @@ export default function PosterForm({
     }
   }, [posterReleaseDate, setValue]);
 
-  // Load groups for the selected work
-  useEffect(() => {
-    if (!workId) {
-      setGroupOptions([]);
-      return;
-    }
+  // Load groups for the selected work. Extracted so GroupPicker's
+  // "+ 新增頂層群組" can re-fetch after creating a new group.
+  async function refetchGroups(forWorkId: string) {
     const supabase = createClient();
-    (async () => {
-      const { data } = await supabase
-        .from("poster_groups")
-        .select("id, name, parent_group_id, display_order")
-        .eq("work_id", workId)
-        .order("display_order")
-        .order("name");
-      const flat = flattenGroupTree(data ?? []);
-      setGroupOptions(flat);
-    })();
+    const { data } = await supabase
+      .from("poster_groups")
+      .select("id, name, parent_group_id, display_order")
+      .eq("work_id", forWorkId)
+      .order("display_order")
+      .order("name");
+    setGroupOptions(flattenGroupTree(data ?? []));
+  }
+
+  useEffect(() => {
+    if (!workId) { setGroupOptions([]); return; }
+    refetchGroups(workId);
   }, [workId]);
 
   function onSubmit(values: FormValues) {
@@ -256,16 +255,12 @@ export default function PosterForm({
           control={control}
           name="work_id"
           render={({ field }) => (
-            <Select value={field.value} onValueChange={field.onChange} disabled={pending}>
-              <SelectTrigger><SelectValue placeholder="── 選擇作品 ──" /></SelectTrigger>
-              <SelectContent>
-                {works.map((w) => (
-                  <SelectItem key={w.id} value={w.id}>
-                    {w.studio ? `[${w.studio}] ` : ""}{w.title_zh}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <WorkPicker
+              works={works}
+              value={field.value}
+              onChange={field.onChange}
+              disabled={pending}
+            />
           )}
         />
       </FormField>
@@ -279,15 +274,15 @@ export default function PosterForm({
           control={control}
           name="parent_group_id"
           render={({ field }) => (
-            <Select value={field.value} onValueChange={field.onChange} disabled={!workId || pending}>
-              <SelectTrigger><SelectValue placeholder="── 不屬於任何群組 ──" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value={NONE}>── 不屬於任何群組 ──</SelectItem>
-                {groupOptions.map((g) => (
-                  <SelectItem key={g.id} value={g.id}>{g.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <GroupPicker
+              workId={workId}
+              workName={works.find((w) => w.id === workId)?.title_zh}
+              groups={groupOptions}
+              value={field.value}
+              onChange={field.onChange}
+              onGroupCreated={() => refetchGroups(workId)}
+              disabled={!workId || pending}
+            />
           )}
         />
       </FormField>
