@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Search, Folder, FileImage, ImageOff, Loader2 } from "lucide-react";
+import { Search, Folder, FolderTree, Film, ImageOff, Loader2 } from "lucide-react";
 import {
   Sheet,
   SheetContent,
@@ -12,6 +12,30 @@ import {
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { globalSearch, type SearchResult } from "@/app/actions/search";
+import { encodeStudioParam, NULL_STUDIO_KEY } from "@/lib/keys";
+
+/** Build the navigation href for a search result. Inlined here because
+ * `app/actions/search.ts` is `"use server"` and can only export async
+ * functions. */
+function hrefFor(result: SearchResult): string {
+  switch (result.kind) {
+    case "studio":
+      return `/tree/studio/${encodeStudioParam(result.id || NULL_STUDIO_KEY)}`;
+    case "work":
+      return `/tree/work/${result.id}`;
+    case "group":
+      return `/tree/group/${result.id}`;
+    case "poster":
+      return `/posters/${result.id}`;
+  }
+}
+
+const KIND_LABEL: Record<SearchResult["kind"], string> = {
+  studio: "分類",
+  work: "作品",
+  group: "群組",
+  poster: "海報",
+};
 
 function useDebounce<T>(value: T, delay: number): T {
   const [debounced, setDebounced] = React.useState(value);
@@ -32,16 +56,14 @@ function ResultRow({
   onNavigate: () => void;
 }) {
   const router = useRouter();
-  const href =
-    result.kind === "group"
-      ? `/tree/group/${result.id}`
-      : `/posters/${result.id}`;
 
   function handleClick(e: React.MouseEvent) {
     e.preventDefault();
     onNavigate();
-    router.push(href);
+    router.push(hrefFor(result));
   }
+
+  const isPoster = result.kind === "poster";
 
   return (
     <li>
@@ -49,9 +71,17 @@ function ResultRow({
         onClick={handleClick}
         className="w-full flex items-center gap-3 px-4 py-3 hover:bg-muted/60 transition-colors text-left"
       >
-        {/* Icon */}
+        {/* Icon: folder for studio/work/group, thumbnail for poster */}
         <span className="shrink-0 flex items-center justify-center w-10 h-10">
-          {result.kind === "group" ? (
+          {result.kind === "studio" ? (
+            <span className="w-10 h-10 rounded-lg bg-secondary flex items-center justify-center text-muted-foreground">
+              <FolderTree className="w-5 h-5" strokeWidth={1.75} />
+            </span>
+          ) : result.kind === "work" ? (
+            <span className="w-10 h-10 rounded-lg bg-secondary flex items-center justify-center text-muted-foreground">
+              <Film className="w-5 h-5" strokeWidth={1.75} />
+            </span>
+          ) : result.kind === "group" ? (
             <span className="w-10 h-10 rounded-lg bg-secondary flex items-center justify-center text-muted-foreground">
               <Folder className="w-5 h-5" strokeWidth={1.75} />
             </span>
@@ -75,23 +105,20 @@ function ResultRow({
             {result.label}
           </span>
           <span className="block text-xs text-muted-foreground truncate mt-0.5">
-            {result.kind === "group" ? "資料夾" : "海報"} · {result.meta}
+            {KIND_LABEL[result.kind]} · {result.meta}
           </span>
         </span>
 
-        {/* Type chip */}
+        {/* Type chip — color-coded by kind */}
         <span
           className={cn(
             "shrink-0 text-[10px] tracking-wide px-1.5 py-0.5 rounded",
-            result.kind === "group"
-              ? "bg-secondary text-muted-foreground"
-              : "bg-amber-500/10 text-amber-600 dark:text-amber-400"
+            isPoster
+              ? "bg-amber-500/10 text-amber-600 dark:text-amber-400"
+              : "bg-secondary text-muted-foreground"
           )}
         >
-          {result.kind === "group" ? (
-            <FileImage className="hidden" />
-          ) : null}
-          {result.kind === "group" ? "群組" : "海報"}
+          {KIND_LABEL[result.kind]}
         </span>
       </button>
     </li>
@@ -142,7 +169,7 @@ function SearchSheetBody({ onClose }: { onClose: () => void }) {
             ref={inputRef}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="搜尋群組或海報名稱…"
+            placeholder="搜尋分類 / 作品 / 群組 / 海報…"
             className="pl-9 h-10"
           />
           {loading && (
@@ -164,7 +191,7 @@ function SearchSheetBody({ onClose }: { onClose: () => void }) {
         </div>
       ) : !debouncedQuery.trim() ? (
         <div className="py-10 text-center text-muted-foreground text-sm">
-          輸入關鍵字搜尋群組或海報
+          輸入關鍵字搜尋分類、作品、群組或海報
         </div>
       ) : null}
     </div>

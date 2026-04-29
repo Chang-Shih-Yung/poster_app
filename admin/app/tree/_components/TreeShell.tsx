@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import BottomTabBar from "@/components/BottomTabBar";
+import GlobalSearch from "@/components/GlobalSearch";
 
 /**
  * Shell for /tree pages — handles theme tokens, the breadcrumb-back
@@ -67,6 +68,7 @@ export default function TreeShell({
             </Link>
           )}
           <div className="flex-1" />
+          <GlobalSearch />
           <ThemeToggle />
         </div>
         <div className="px-4 pt-1 pb-3 max-w-3xl mx-auto">
