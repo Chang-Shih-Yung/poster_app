@@ -445,7 +445,7 @@ export default function PosterForm({
       <FormField label="通路名稱">
         <Input
           {...register("channel_name")}
-          placeholder="例：威秀影城、東寶"
+          placeholder="例：威秀影城"
           disabled={pending}
         />
       </FormField>
