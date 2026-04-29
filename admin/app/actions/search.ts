@@ -51,11 +51,13 @@ export async function globalSearch(
       .select("id, title_zh, title_en, studio, movie_release_year, poster_count")
       .or(`title_zh.ilike.${pattern},title_en.ilike.${pattern}`)
       .limit(8),
+    // poster_groups doesn't have a deleted_at column (only posters does).
+    // Earlier we filtered .is("deleted_at", null) here by mistake — that
+    // would silently fail and return 0 rows even when the group existed.
     supabase
       .from("poster_groups")
       .select("id, name, works!inner(title_zh)")
       .ilike("name", pattern)
-      .is("deleted_at", null)
       .limit(8),
     supabase
       .from("posters")

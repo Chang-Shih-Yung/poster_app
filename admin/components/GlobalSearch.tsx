@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Search, Folder, FolderTree, Film, ImageOff, Loader2 } from "lucide-react";
+import { Search, Folder, FolderTree, ImageOff, Loader2 } from "lucide-react";
 import {
   Sheet,
   SheetContent,
@@ -77,11 +77,10 @@ function ResultRow({
             <span className="w-10 h-10 rounded-lg bg-secondary flex items-center justify-center text-muted-foreground">
               <FolderTree className="w-5 h-5" strokeWidth={1.75} />
             </span>
-          ) : result.kind === "work" ? (
-            <span className="w-10 h-10 rounded-lg bg-secondary flex items-center justify-center text-muted-foreground">
-              <Film className="w-5 h-5" strokeWidth={1.75} />
-            </span>
-          ) : result.kind === "group" ? (
+          ) : result.kind === "work" || result.kind === "group" ? (
+            // Conceptually both 作品 and 群組 are "containers" — folders
+            // in the tree view. Differentiated only by the type chip on
+            // the right; same icon family.
             <span className="w-10 h-10 rounded-lg bg-secondary flex items-center justify-center text-muted-foreground">
               <Folder className="w-5 h-5" strokeWidth={1.75} />
             </span>
