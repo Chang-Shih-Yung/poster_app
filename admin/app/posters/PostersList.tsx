@@ -2,7 +2,7 @@
 
 import { useRef, useState, useTransition } from "react";
 import Link from "next/link";
-import { Pencil, Trash2, ImagePlus, Loader2, AlertTriangle, X } from "lucide-react";
+import { Pencil, Trash2, ImagePlus, Loader2, AlertTriangle, X, Plus, Layers } from "lucide-react";
 import { uploadPosterImage } from "@/lib/imageUpload";
 import { describeError } from "@/lib/errors";
 import { UNNAMED_POSTER } from "@/lib/keys";
@@ -91,16 +91,40 @@ export default function PostersList({
 
   return (
     <div className="px-4 md:px-0">
+      {/* Mobile FAB */}
+      <Link
+        href="/posters/batch"
+        aria-label="批量新增海報"
+        className="md:hidden fixed bottom-[calc(env(safe-area-inset-bottom,0px)+72px)] right-4 z-40 w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center hover:bg-primary/90 transition-colors"
+      >
+        <Plus className="w-6 h-6" />
+      </Link>
+
       <div className="sticky top-[calc(env(safe-area-inset-top,0px)+52px)] md:top-14 z-30 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 -mx-4 md:mx-0 px-4 md:px-0 py-2.5 mb-3 space-y-2">
         <div className="flex items-center justify-between">
           <span className="text-xs text-muted-foreground">
             {initial.length} 張海報
           </span>
-          {placeholderOnly && (
-            <Button asChild variant="link" size="sm">
-              <Link href="/posters">清除「只看待補圖」篩選</Link>
+          <div className="flex items-center gap-2">
+            {placeholderOnly && (
+              <Button asChild variant="link" size="sm">
+                <Link href="/posters">清除「只看待補圖」篩選</Link>
+              </Button>
+            )}
+            {/* Desktop buttons */}
+            <Button asChild size="sm" variant="outline" className="hidden md:flex">
+              <Link href="/posters/new">
+                <Plus className="w-4 h-4" />
+                新增單張
+              </Link>
             </Button>
-          )}
+            <Button asChild size="sm" className="hidden md:flex">
+              <Link href="/posters/batch">
+                <Layers className="w-4 h-4" />
+                批量新增
+              </Link>
+            </Button>
+          </div>
         </div>
         <form className="flex gap-2" action="/posters" method="get">
           <Input
