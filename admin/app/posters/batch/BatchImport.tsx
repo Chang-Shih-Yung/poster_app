@@ -512,7 +512,7 @@ export default function BatchImport({
           ref={fileInputRef}
           type="file"
           multiple
-          accept="image/jpeg,image/png,image/webp,image/gif"
+          accept="image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,.heic,.heif"
           className="hidden"
           onChange={(e) => addFiles(e.target.files)}
         />
@@ -541,7 +541,7 @@ export default function BatchImport({
         ref={fileInputRef}
         type="file"
         multiple
-        accept="image/jpeg,image/png,image/webp,image/gif"
+        accept="image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,.heic,.heif"
         className="hidden"
         onChange={(e) => addFiles(e.target.files)}
       />
@@ -549,7 +549,7 @@ export default function BatchImport({
         ref={addMoreRef}
         type="file"
         multiple
-        accept="image/jpeg,image/png,image/webp,image/gif"
+        accept="image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,.heic,.heif"
         className="hidden"
         onChange={(e) => addFiles(e.target.files)}
       />

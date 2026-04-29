@@ -121,7 +121,10 @@ export function DraftCard({
         <input
           ref={replaceInputRef}
           type="file"
-          accept="image/*"
+          // Explicit list mirrors BatchImport's inputs — `image/*` alone
+          // makes some Chrome builds grey out HEIC in the picker even
+          // though we support converting it via heic2any.
+          accept="image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,.heic,.heif"
           className="hidden"
           onChange={handleReplaceFile}
         />
