@@ -22,6 +22,15 @@ export type DraftStatus =
  * Local-only representation of one card in the batch import grid.
  * Becomes a posters row + Storage upload on submit.
  */
+/**
+ * Aligned with collaborator's poster spec (2026-04-29). Changes vs old shape:
+ *   - Removed: signed, numbered, edition_number, linen_backed, licensed
+ *     (DB columns dropped in 20260429150000)
+ *   - Added: cinema_release_types[], premium_format, cinema_name,
+ *     custom_width, custom_height, size_unit, channel_note
+ *   - poster_release_year (formerly `year`) is now REQUIRED — but DB column
+ *     name stays `year` because Flutter app reads it
+ */
 export type DraftPoster = {
   localId: string;
   file: File;
@@ -29,14 +38,23 @@ export type DraftPoster = {
   name: string;
   work_id: string;
   parent_group_id: string;
-  year: string;
+  year: string; // REQUIRED at submit (zod), maps to posters.year column
   poster_release_date: string;
-  region: string;
+  region: string; // REQUIRED — was sentinel-allowed, now defaults to TW
   poster_release_type: string;
-  size_type: string;
-  channel_category: string;
+  size_type: string; // REQUIRED
+  channel_category: string; // REQUIRED
   channel_type: string;
   channel_name: string;
+  // ── cinema-specific (channel_category=cinema) ─────────
+  cinema_release_types: string[]; // multi-select array
+  premium_format: string; // sentinel/value, only when cinema_release_types includes premium_format_limited
+  cinema_name: string; // sentinel/value, only when channel_category=cinema
+  // ── size CUSTOM-specific (size_type=custom) ───────────
+  custom_width: string;  // numeric string, parsed at submit
+  custom_height: string;
+  size_unit: string; // sentinel/value
+  // ── other ─────────────────────────────────────────────
   is_exclusive: boolean;
   exclusive_name: string;
   material_type: string;
@@ -44,15 +62,9 @@ export type DraftPoster = {
   source_url: string;
   source_platform: string;
   source_note: string;
-  signed: boolean;
-  numbered: boolean;
-  edition_number: string;
-  linen_backed: boolean;
-  licensed: boolean;
+  channel_note: string;
   status: DraftStatus;
   errorMsg?: string;
-  /** Set when status === "image_failed" so the user can be told the
-   * row exists and pointed to /posters to retry the upload. */
   createdPosterId?: string;
 };
 
@@ -75,6 +87,12 @@ export function newDraft(
     channel_category: defaults.channel_category ?? NONE,
     channel_type: NONE,
     channel_name: "",
+    cinema_release_types: [],
+    premium_format: NONE,
+    cinema_name: NONE,
+    custom_width: "",
+    custom_height: "",
+    size_unit: NONE,
     is_exclusive: false,
     exclusive_name: "",
     material_type: NONE,
@@ -82,11 +100,7 @@ export function newDraft(
     source_url: "",
     source_platform: NONE,
     source_note: "",
-    signed: false,
-    numbered: false,
-    edition_number: "",
-    linen_backed: false,
-    licensed: true,
+    channel_note: "",
     status: "idle",
   };
 }
@@ -96,10 +110,26 @@ export function fromSentinel(v: string): string | null {
   return v === NONE ? null : v || null;
 }
 
-/** Mirror of the validation rule used by the UI: a draft is "ready"
- * when it's idle and has the two required fields filled in. */
+/** Mirror of the validation rule used by the UI. Required per collaborator's
+ * spec: name, work, year, region, size_type, channel_category. CUSTOM size
+ * additionally requires width + height + unit; that detailed check lives in
+ * the form's zod schema, not here — this gate is the coarser "card is
+ * submittable" filter for the batch-submit flow. */
 export function isReady(d: DraftPoster): boolean {
-  return d.status === "idle" && !!d.name.trim() && !!d.work_id;
+  if (d.status !== "idle") return false;
+  if (!d.name.trim() || !d.work_id) return false;
+  // year must be a 1900-2100 integer string
+  const yearOk = /^\d+$/.test(d.year.trim()) && +d.year >= 1900 && +d.year <= 2100;
+  if (!yearOk) return false;
+  if (!d.region) return false;
+  if (!d.size_type || d.size_type === NONE) return false;
+  if (!d.channel_category || d.channel_category === NONE) return false;
+  // CUSTOM size needs the trio
+  if (d.size_type === "custom") {
+    if (!d.custom_width.trim() || !d.custom_height.trim()) return false;
+    if (!d.size_unit || d.size_unit === NONE) return false;
+  }
+  return true;
 }
 
 /** Detect HEIC/HEIF input (mime, mime variant, or extension fallback for

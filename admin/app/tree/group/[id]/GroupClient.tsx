@@ -391,6 +391,12 @@ export default function GroupClient({
                 work_id: group.work_id,
                 parent_group_id: group.id,
                 poster_name: values.name,
+                // Partner-spec required fields. Tree quick-add gathers
+                // only the name; admin edits the rest later.
+                year: new Date().getFullYear(),
+                region: "TW",
+                size_type: "A4",
+                channel_category: "other",
               }),
             addSheets.close
           )

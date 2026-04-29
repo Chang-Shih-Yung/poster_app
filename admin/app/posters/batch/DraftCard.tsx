@@ -13,8 +13,12 @@ import {
 import {
   REGIONS,
   SIZE_TYPES,
+  SIZE_UNITS,
   CHANNEL_CATEGORIES,
   CHANNEL_TYPES,
+  CINEMA_RELEASE_TYPES,
+  PREMIUM_FORMATS,
+  CINEMA_NAMES,
   RELEASE_TYPES,
   MATERIAL_TYPES,
   SOURCE_PLATFORMS,
@@ -35,6 +39,7 @@ import {
 import { WorkPicker, type WorkOption } from "@/components/WorkPicker";
 import { GroupPicker } from "@/components/GroupPicker";
 import { DatePicker } from "@/components/DatePicker";
+import { MultiSelectDropdown } from "@/components/ui/multi-select";
 import { cn } from "@/lib/utils";
 import { NONE, type DraftPoster } from "./_shared";
 
@@ -329,9 +334,10 @@ export function DraftCard({
               </div>
             </div>
 
+            {/* 尺寸 + 材質 */}
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-1">
-                <Label className="text-xs">尺寸</Label>
+                <Label className="text-xs">尺寸 *</Label>
                 <Select
                   value={draft.size_type}
                   onValueChange={(v) => onChange({ size_type: v })}
@@ -370,46 +376,168 @@ export function DraftCard({
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-1">
-                <Label className="text-xs">通路類型</Label>
-                <Select
-                  value={draft.channel_category}
-                  onValueChange={(v) => onChange({ channel_category: v })}
-                >
-                  <SelectTrigger className="h-9">
-                    <SelectValue placeholder="—" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={NONE}>—</SelectItem>
-                    {CHANNEL_CATEGORIES.map((r) => (
-                      <SelectItem key={r.value} value={r.value}>
-                        {r.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+            {/* CUSTOM 尺寸：寬高單位 */}
+            {draft.size_type === "custom" && (
+              <div className="grid grid-cols-3 gap-2 p-2 rounded border border-border bg-secondary/30">
+                <div className="space-y-1">
+                  <Label className="text-xs">寬 *</Label>
+                  <Input
+                    type="number"
+                    step="0.1"
+                    value={draft.custom_width}
+                    onChange={(e) =>
+                      onChange({ custom_width: e.target.value })
+                    }
+                    placeholder="60"
+                    className="h-9"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">高 *</Label>
+                  <Input
+                    type="number"
+                    step="0.1"
+                    value={draft.custom_height}
+                    onChange={(e) =>
+                      onChange({ custom_height: e.target.value })
+                    }
+                    placeholder="90"
+                    className="h-9"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">單位 *</Label>
+                  <Select
+                    value={draft.size_unit}
+                    onValueChange={(v) => onChange({ size_unit: v })}
+                  >
+                    <SelectTrigger className="h-9">
+                      <SelectValue placeholder="—" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={NONE}>—</SelectItem>
+                      {SIZE_UNITS.map((u) => (
+                        <SelectItem key={u.value} value={u.value}>
+                          {u.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
-              <div className="space-y-1">
-                <Label className="text-xs">通路細分</Label>
-                <Select
-                  value={draft.channel_type}
-                  onValueChange={(v) => onChange({ channel_type: v })}
-                >
-                  <SelectTrigger className="h-9">
-                    <SelectValue placeholder="—" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={NONE}>—</SelectItem>
-                    {CHANNEL_TYPES.map((r) => (
-                      <SelectItem key={r.value} value={r.value}>
-                        {r.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+            )}
+
+            {/* 通路類型 */}
+            <div className="space-y-1">
+              <Label className="text-xs">通路類型 *</Label>
+              <Select
+                value={draft.channel_category}
+                onValueChange={(v) =>
+                  onChange({
+                    channel_category: v,
+                    // Reset cinema-only fields when switching away from cinema
+                    ...(v !== "cinema" && {
+                      cinema_release_types: [],
+                      premium_format: NONE,
+                      cinema_name: NONE,
+                    }),
+                  })
+                }
+              >
+                <SelectTrigger className="h-9">
+                  <SelectValue placeholder="—" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NONE}>—</SelectItem>
+                  {CHANNEL_CATEGORIES.map((r) => (
+                    <SelectItem key={r.value} value={r.value}>
+                      {r.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
+
+            {/* Cinema-specific (only when channel_category=cinema) */}
+            {draft.channel_category === "cinema" && (
+              <>
+                <div className="space-y-1">
+                  <Label className="text-xs">影城發行類型（可複選）</Label>
+                  <MultiSelectDropdown
+                    items={CINEMA_RELEASE_TYPES}
+                    value={draft.cinema_release_types}
+                    onChange={(v) => onChange({ cinema_release_types: v })}
+                    placeholder="—"
+                  />
+                </div>
+                {draft.cinema_release_types.includes(
+                  "premium_format_limited"
+                ) && (
+                  <div className="space-y-1">
+                    <Label className="text-xs">發行影廳</Label>
+                    <Select
+                      value={draft.premium_format}
+                      onValueChange={(v) => onChange({ premium_format: v })}
+                    >
+                      <SelectTrigger className="h-9">
+                        <SelectValue placeholder="—" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={NONE}>—</SelectItem>
+                        {PREMIUM_FORMATS.map((r) => (
+                          <SelectItem key={r.value} value={r.value}>
+                            {r.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+                <div className="space-y-1">
+                  <Label className="text-xs">影城</Label>
+                  <Select
+                    value={draft.cinema_name}
+                    onValueChange={(v) => onChange({ cinema_name: v })}
+                  >
+                    <SelectTrigger className="h-9">
+                      <SelectValue placeholder="—" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={NONE}>—</SelectItem>
+                      {CINEMA_NAMES.map((r) => (
+                        <SelectItem key={r.value} value={r.value}>
+                          {r.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </>
+            )}
+
+            {/* Non-cinema channel_type */}
+            {draft.channel_category !== "cinema" &&
+              draft.channel_category !== NONE && (
+                <div className="space-y-1">
+                  <Label className="text-xs">通路細分</Label>
+                  <Select
+                    value={draft.channel_type}
+                    onValueChange={(v) => onChange({ channel_type: v })}
+                  >
+                    <SelectTrigger className="h-9">
+                      <SelectValue placeholder="—" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={NONE}>—</SelectItem>
+                      {CHANNEL_TYPES.map((r) => (
+                        <SelectItem key={r.value} value={r.value}>
+                          {r.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
 
             <div className="space-y-1">
               <Label className="text-xs">通路名稱</Label>
@@ -418,6 +546,16 @@ export function DraftCard({
                 onChange={(e) => onChange({ channel_name: e.target.value })}
                 placeholder="例：威秀影城"
                 className="h-9"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-xs">通路補充說明</Label>
+              <Textarea
+                value={draft.channel_note}
+                onChange={(e) => onChange({ channel_note: e.target.value })}
+                placeholder="例：威秀獨家加贈卡套"
+                rows={2}
               />
             </div>
 
@@ -487,58 +625,6 @@ export function DraftCard({
                 onChange={(e) => onChange({ source_note: e.target.value })}
                 rows={2}
               />
-            </div>
-
-            <div className="space-y-2 pt-1">
-              <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                收藏者資訊
-              </p>
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={draft.signed}
-                  onChange={(e) => onChange({ signed: e.target.checked })}
-                  className="h-4 w-4 rounded border-input"
-                />
-                有簽名 signed
-              </label>
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={draft.numbered}
-                  onChange={(e) => onChange({ numbered: e.target.checked })}
-                  className="h-4 w-4 rounded border-input"
-                />
-                限量編號 numbered
-              </label>
-              {draft.numbered && (
-                <Input
-                  value={draft.edition_number}
-                  onChange={(e) =>
-                    onChange({ edition_number: e.target.value })
-                  }
-                  placeholder="例：42/325"
-                  className="h-9"
-                />
-              )}
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={draft.linen_backed}
-                  onChange={(e) => onChange({ linen_backed: e.target.checked })}
-                  className="h-4 w-4 rounded border-input"
-                />
-                亞麻布背裱 linen backed
-              </label>
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={draft.licensed}
-                  onChange={(e) => onChange({ licensed: e.target.checked })}
-                  className="h-4 w-4 rounded border-input"
-                />
-                官方授權 licensed
-              </label>
             </div>
           </div>
         )}

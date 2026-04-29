@@ -37,14 +37,26 @@ export async function createPoster(input: {
   work_id: string;
   parent_group_id: string | null;
   poster_name: string;
-  year?: number | null;
+  // Required per partner spec
+  year: number;                          // posterReleaseYear (required)
+  region: string;                        // required, default 'TW'
+  size_type: string;                     // required
+  channel_category: string;              // required
+  // Optional metadata
   poster_release_date?: string | null;   // YYYY-MM-DD
-  region?: string | null;
   poster_release_type?: string | null;
-  size_type?: string | null;
-  channel_category?: string | null;
   channel_type?: string | null;
   channel_name?: string | null;
+  channel_note?: string | null;
+  // Cinema-specific (only when channel_category=cinema)
+  cinema_release_types?: string[] | null;
+  premium_format?: string | null;
+  cinema_name?: string | null;
+  // CUSTOM size-specific (only when size_type=custom)
+  custom_width?: number | null;
+  custom_height?: number | null;
+  size_unit?: string | null;
+  // Other
   is_exclusive?: boolean;
   exclusive_name?: string | null;
   material_type?: string | null;
@@ -52,12 +64,7 @@ export async function createPoster(input: {
   source_url?: string | null;
   source_platform?: string | null;
   source_note?: string | null;
-  // Collector flags
-  signed?: boolean;
-  numbered?: boolean;
-  edition_number?: string | null;
-  linen_backed?: boolean;
-  licensed?: boolean;
+  batch_id?: string | null;
 }): Promise<
   ActionResult<{
     id: string;
@@ -69,21 +76,49 @@ export async function createPoster(input: {
   try {
     const { supabase, user } = await requireAdmin();
     if (!input.poster_name.trim()) throw new Error("海報名稱必填");
+    if (input.year == null) throw new Error("發行年份必填");
+    if (!input.region) throw new Error("地區必填");
+    if (!input.size_type) throw new Error("尺寸必填");
+    if (!input.channel_category) throw new Error("通路類型必填");
     const trimmed = input.poster_name.trim();
+
+    // Friendly pre-check for the unique (work_id, lower(poster_name))
+    // index added in 20260429150000. If we skipped this and let the DB
+    // raise 23505, the user would see a cryptic Postgres error.
+    const { data: dup } = await supabase
+      .from("posters")
+      .select("id")
+      .eq("work_id", input.work_id)
+      .ilike("poster_name", trimmed)
+      .is("deleted_at", null)
+      .maybeSingle();
+    if (dup) {
+      throw new Error(
+        `此作品已有海報「${trimmed}」（同名擋下，請改名或加版本標記）`
+      );
+    }
+
     const { data, error } = await supabase
       .from("posters")
       .insert({
         work_id: input.work_id,
         parent_group_id: input.parent_group_id,
         poster_name: trimmed,
-        year: input.year ?? null,
+        year: input.year,
         poster_release_date: input.poster_release_date ?? null,
-        region: input.region ?? null,
+        region: input.region,
         poster_release_type: input.poster_release_type ?? null,
-        size_type: input.size_type ?? null,
-        channel_category: input.channel_category ?? null,
+        size_type: input.size_type,
+        channel_category: input.channel_category,
         channel_type: input.channel_type ?? null,
         channel_name: input.channel_name ?? null,
+        channel_note: input.channel_note ?? null,
+        cinema_release_types: input.cinema_release_types ?? [],
+        premium_format: input.premium_format ?? null,
+        cinema_name: input.cinema_name ?? null,
+        custom_width: input.custom_width ?? null,
+        custom_height: input.custom_height ?? null,
+        size_unit: input.size_unit ?? null,
         is_exclusive: input.is_exclusive ?? false,
         exclusive_name: input.exclusive_name ?? null,
         material_type: input.material_type ?? null,
@@ -91,17 +126,22 @@ export async function createPoster(input: {
         source_url: input.source_url ?? null,
         source_platform: input.source_platform ?? null,
         source_note: input.source_note ?? null,
-        signed: input.signed ?? false,
-        numbered: input.numbered ?? false,
-        edition_number: input.edition_number ?? null,
-        linen_backed: input.linen_backed ?? false,
-        licensed: input.licensed ?? true,
+        batch_id: input.batch_id ?? null,
         source: "admin",
         status: "approved",
       })
       .select("id, poster_name, is_placeholder, thumbnail_url")
       .single();
-    if (error) throw error;
+    if (error) {
+      // Postgres unique_violation falls through here when the friendly
+      // pre-check missed a race-condition window.
+      if ((error as { code?: string }).code === "23505") {
+        throw new Error(
+          `此作品已有海報「${trimmed}」（race condition; please retry）`
+        );
+      }
+      throw error;
+    }
     revalidatePosterSurfaces(input.work_id);
     void logAudit(supabase, user, {
       action: "create_poster",
@@ -309,6 +349,13 @@ const POSTER_METADATA_ALLOWED = new Set([
   "channel_category",
   "channel_type",
   "channel_name",
+  "channel_note",
+  "cinema_release_types",
+  "premium_format",
+  "cinema_name",
+  "custom_width",
+  "custom_height",
+  "size_unit",
   "is_exclusive",
   "exclusive_name",
   "material_type",
@@ -316,12 +363,10 @@ const POSTER_METADATA_ALLOWED = new Set([
   "source_url",
   "source_platform",
   "source_note",
-  "signed",
-  "numbered",
-  "edition_number",
-  "linen_backed",
-  "licensed",
+  "batch_id",
   "parent_group_id",
+  // collector flags (signed / numbered / edition_number / linen_backed /
+  // licensed) intentionally REMOVED — DB columns dropped in 20260429150000.
 ]);
 
 export async function updatePosterMetadata(
@@ -329,20 +374,54 @@ export async function updatePosterMetadata(
   patch: Record<string, unknown>
 ): Promise<ActionResult> {
   try {
-    const { supabase } = await requireAdmin();
+    const { supabase, user } = await requireAdmin();
     const safePatch = Object.fromEntries(
       Object.entries(patch).filter(([k]) => POSTER_METADATA_ALLOWED.has(k))
     );
     if (Object.keys(safePatch).length === 0) {
       throw new Error("沒有可更新的欄位");
     }
+    // Stamp who-did-it. updated_at trigger already fires on UPDATE.
+    const patchWithActor = { ...safePatch, updated_by: user.id };
+
+    // If poster_name is being changed, pre-check the unique constraint
+    // for friendlier error than raw 23505.
+    if (typeof safePatch.poster_name === "string") {
+      const trimmed = (safePatch.poster_name as string).trim();
+      const { data: existingRow } = await supabase
+        .from("posters")
+        .select("work_id")
+        .eq("id", id)
+        .maybeSingle();
+      if (existingRow?.work_id) {
+        const { data: dup } = await supabase
+          .from("posters")
+          .select("id")
+          .eq("work_id", existingRow.work_id)
+          .ilike("poster_name", trimmed)
+          .neq("id", id)
+          .is("deleted_at", null)
+          .maybeSingle();
+        if (dup) {
+          throw new Error(
+            `此作品已有同名海報「${trimmed}」（同名擋下，請改名或加版本標記）`
+          );
+        }
+      }
+    }
+
     const { data, error } = await supabase
       .from("posters")
-      .update(safePatch)
+      .update(patchWithActor)
       .eq("id", id)
       .select("work_id")
       .maybeSingle();
-    if (error) throw error;
+    if (error) {
+      if ((error as { code?: string }).code === "23505") {
+        throw new Error("此作品已有同名海報（race condition; please retry）");
+      }
+      throw error;
+    }
     revalidatePosterSurfaces(data?.work_id ?? undefined, id);
     return ok(undefined);
   } catch (e) {

@@ -54,10 +54,13 @@ describe("newDraft", () => {
     expect(d.parent_group_id).toBe(NONE);
     expect(d.region).toBe("TW"); // DEFAULT_REGION
     expect(d.size_type).toBe(NONE);
-    expect(d.licensed).toBe(true); // licensed default flips to true
-    expect(d.signed).toBe(false);
-    expect(d.numbered).toBe(false);
-    expect(d.linen_backed).toBe(false);
+    expect(d.cinema_release_types).toEqual([]);
+    expect(d.premium_format).toBe(NONE);
+    expect(d.cinema_name).toBe(NONE);
+    expect(d.size_unit).toBe(NONE);
+    expect(d.custom_width).toBe("");
+    expect(d.custom_height).toBe("");
+    expect(d.channel_note).toBe("");
     expect(d.status).toBe("idle");
     expect(d.localId).toMatch(/^[a-z0-9]+$/);
   });
@@ -85,29 +88,88 @@ describe("newDraft", () => {
 });
 
 describe("isReady", () => {
-  function draftWith(patch: Partial<DraftPoster>): DraftPoster {
-    return { ...newDraft(fakeFile()), ...patch };
+  // Builds a draft that already satisfies partner-spec's required fields,
+  // so individual tests can flip ONE thing and assert it now fails.
+  function readyDraft(overrides: Partial<DraftPoster> = {}): DraftPoster {
+    return {
+      ...newDraft(fakeFile()),
+      name: "X",
+      work_id: "w",
+      year: "2026",
+      region: "TW",
+      size_type: "A4",
+      channel_category: "cinema",
+      ...overrides,
+    };
   }
 
+  it("returns true when all partner-required fields are set", () => {
+    expect(isReady(readyDraft())).toBe(true);
+  });
+
   it("requires status === idle", () => {
-    expect(isReady(draftWith({ status: "done", name: "X", work_id: "w" }))).toBe(false);
-    expect(isReady(draftWith({ status: "creating", name: "X", work_id: "w" }))).toBe(false);
-    expect(isReady(draftWith({ status: "uploading", name: "X", work_id: "w" }))).toBe(false);
-    expect(isReady(draftWith({ status: "error", name: "X", work_id: "w" }))).toBe(false);
-    expect(isReady(draftWith({ status: "image_failed", name: "X", work_id: "w" }))).toBe(false);
+    expect(isReady(readyDraft({ status: "done" }))).toBe(false);
+    expect(isReady(readyDraft({ status: "creating" }))).toBe(false);
+    expect(isReady(readyDraft({ status: "uploading" }))).toBe(false);
+    expect(isReady(readyDraft({ status: "error" }))).toBe(false);
+    expect(isReady(readyDraft({ status: "image_failed" }))).toBe(false);
   });
 
   it("requires non-blank name", () => {
-    expect(isReady(draftWith({ name: "", work_id: "w" }))).toBe(false);
-    expect(isReady(draftWith({ name: "   ", work_id: "w" }))).toBe(false);
+    expect(isReady(readyDraft({ name: "" }))).toBe(false);
+    expect(isReady(readyDraft({ name: "   " }))).toBe(false);
   });
 
-  it("requires non-empty work_id", () => {
-    expect(isReady(draftWith({ name: "X", work_id: "" }))).toBe(false);
+  it("requires work_id", () => {
+    expect(isReady(readyDraft({ work_id: "" }))).toBe(false);
   });
 
-  it("returns true when idle + name + work_id all set", () => {
-    expect(isReady(draftWith({ name: "X", work_id: "w" }))).toBe(true);
+  it("requires year (1900-2100 integer string)", () => {
+    expect(isReady(readyDraft({ year: "" }))).toBe(false);
+    expect(isReady(readyDraft({ year: "abc" }))).toBe(false);
+    expect(isReady(readyDraft({ year: "1899" }))).toBe(false);
+    expect(isReady(readyDraft({ year: "2101" }))).toBe(false);
+    expect(isReady(readyDraft({ year: "2026.5" }))).toBe(false);
+    expect(isReady(readyDraft({ year: "2026" }))).toBe(true);
+    expect(isReady(readyDraft({ year: "1900" }))).toBe(true);
+    expect(isReady(readyDraft({ year: "2100" }))).toBe(true);
+  });
+
+  it("requires region", () => {
+    expect(isReady(readyDraft({ region: "" }))).toBe(false);
+  });
+
+  it("requires size_type to be set (not sentinel NONE)", () => {
+    expect(isReady(readyDraft({ size_type: NONE }))).toBe(false);
+    expect(isReady(readyDraft({ size_type: "" }))).toBe(false);
+  });
+
+  it("requires channel_category to be set (not sentinel NONE)", () => {
+    expect(isReady(readyDraft({ channel_category: NONE }))).toBe(false);
+    expect(isReady(readyDraft({ channel_category: "" }))).toBe(false);
+  });
+
+  it("when size_type=custom, requires width + height + size_unit", () => {
+    const base = readyDraft({ size_type: "custom" });
+    // missing all three custom fields → not ready
+    expect(isReady(base)).toBe(false);
+    // only width
+    expect(isReady({ ...base, custom_width: "60" })).toBe(false);
+    // width + height, no unit
+    expect(
+      isReady({ ...base, custom_width: "60", custom_height: "90" })
+    ).toBe(false);
+    // unit set but no width
+    expect(isReady({ ...base, size_unit: "cm" })).toBe(false);
+    // all three → ready
+    expect(
+      isReady({
+        ...base,
+        custom_width: "60",
+        custom_height: "90",
+        size_unit: "cm",
+      })
+    ).toBe(true);
   });
 });
 

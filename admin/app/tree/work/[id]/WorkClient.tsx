@@ -337,6 +337,12 @@ export default function WorkClient({
                 work_id: work.id,
                 parent_group_id: null,
                 poster_name: values.name,
+                // Partner-spec required fields. Tree quick-add gathers
+                // only the name; admin edits the rest later via /posters/[id].
+                year: new Date().getFullYear(),
+                region: "TW",
+                size_type: "A4",
+                channel_category: "other",
               }),
             addSheets.close
           )

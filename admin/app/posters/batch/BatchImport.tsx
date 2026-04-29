@@ -382,18 +382,41 @@ export default function BatchImport({
         let posterId: string | null = null;
         try {
           updateDraft(draft.localId, { status: "creating" });
+          const isCinema = draft.channel_category === "cinema";
+          const isCustomSize = draft.size_type === "custom";
           const r = await createPoster({
             work_id: draft.work_id,
             parent_group_id: fromSentinel(draft.parent_group_id),
             poster_name: draft.name.trim(),
-            year: draft.year ? parseInt(draft.year, 10) : null,
-            poster_release_date: draft.poster_release_date || null,
+            // Required per partner spec — UI validation (isReady) ensures
+            // year/region/size_type/channel_category are present at this point.
+            year: parseInt(draft.year, 10),
             region: draft.region || DEFAULT_REGION,
+            size_type: draft.size_type,
+            channel_category: draft.channel_category,
+            poster_release_date: draft.poster_release_date || null,
             poster_release_type: fromSentinel(draft.poster_release_type),
-            size_type: fromSentinel(draft.size_type),
-            channel_category: fromSentinel(draft.channel_category),
-            channel_type: fromSentinel(draft.channel_type),
+            channel_type: isCinema ? null : fromSentinel(draft.channel_type),
             channel_name: draft.channel_name.trim() || null,
+            channel_note: draft.channel_note.trim() || null,
+            // Cinema-specific fields (only when channel_category=cinema)
+            cinema_release_types: isCinema ? draft.cinema_release_types : [],
+            premium_format:
+              isCinema &&
+              draft.cinema_release_types.includes("premium_format_limited")
+                ? fromSentinel(draft.premium_format)
+                : null,
+            cinema_name: isCinema ? fromSentinel(draft.cinema_name) : null,
+            // CUSTOM-size-specific fields (only when size_type=custom)
+            custom_width:
+              isCustomSize && draft.custom_width.trim()
+                ? Number(draft.custom_width)
+                : null,
+            custom_height:
+              isCustomSize && draft.custom_height.trim()
+                ? Number(draft.custom_height)
+                : null,
+            size_unit: isCustomSize ? fromSentinel(draft.size_unit) : null,
             is_exclusive: draft.is_exclusive,
             exclusive_name: draft.is_exclusive
               ? draft.exclusive_name.trim() || null
@@ -403,13 +426,6 @@ export default function BatchImport({
             source_url: draft.source_url.trim() || null,
             source_platform: fromSentinel(draft.source_platform),
             source_note: draft.source_note.trim() || null,
-            signed: draft.signed,
-            numbered: draft.numbered,
-            edition_number: draft.numbered
-              ? draft.edition_number.trim() || null
-              : null,
-            linen_backed: draft.linen_backed,
-            licensed: draft.licensed,
           });
           if (!r.ok) throw new Error(r.error);
           posterId = r.data.id;
