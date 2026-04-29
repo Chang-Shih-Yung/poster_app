@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Pencil, Trash2, FolderPlus, FilePlus2, ImagePlus } from "lucide-react";
+import { Pencil, Trash2, FolderPlus, FilePlus2, ImagePlus, Layers } from "lucide-react";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import {
@@ -268,9 +268,18 @@ export default function WorkClient({
                 },
                 {
                   icon: <FilePlus2 className="w-4 h-4" />,
-                  label: "新增海報",
+                  label: "新增海報（單張）",
                   hint: "直接掛在這個作品下，不放進群組",
                   onClick: () => addSheets.openForm("poster"),
+                },
+                {
+                  icon: <Layers className="w-4 h-4" />,
+                  label: "批量新增海報",
+                  hint: "一次選多張照片，套用共用欄位",
+                  onClick: () => {
+                    addSheets.close();
+                    router.push(`/posters/batch?work_id=${work.id}`);
+                  },
                 },
               ]}
             />

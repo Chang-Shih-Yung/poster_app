@@ -115,7 +115,15 @@ function newDraft(file: File, defaults: Partial<DraftPoster> = {}): DraftPoster 
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export default function BatchImport({ works }: { works: WorkOption[] }) {
+export default function BatchImport({
+  works,
+  defaultWorkId,
+  defaultGroupId,
+}: {
+  works: WorkOption[];
+  defaultWorkId?: string;
+  defaultGroupId?: string;
+}) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const addMoreRef = useRef<HTMLInputElement>(null);
@@ -123,16 +131,19 @@ export default function BatchImport({ works }: { works: WorkOption[] }) {
   const [drafts, setDrafts] = useState<DraftPoster[]>([]);
   const [submitting, setSubmitting] = useState(false);
 
-  // Apply-bar state
-  const [applyWorkId, setApplyWorkId] = useState("");
-  const [applyGroupId, setApplyGroupId] = useState(NONE);
+  // Apply-bar state — prefilled from query params if present
+  const [applyWorkId, setApplyWorkId] = useState(defaultWorkId ?? "");
+  const [applyGroupId, setApplyGroupId] = useState(defaultGroupId ?? NONE);
   const [applyRegion, setApplyRegion] = useState(DEFAULT_REGION);
   const [applyYear, setApplyYear] = useState("");
   const [applySizeType, setApplySizeType] = useState(NONE);
   const [applyChannelCat, setApplyChannelCat] = useState(NONE);
   const [applyGroupOptions, setApplyGroupOptions] = useState<GroupOption[]>([]);
 
-  // Load groups when apply-bar work changes
+  // Load groups when apply-bar work changes. Preserve `defaultGroupId`
+  // on the *first* load (so deep-linking from a group page keeps the
+  // pre-selection); subsequent work changes reset the group.
+  const initialGroupRef = useRef(defaultGroupId ?? NONE);
   useEffect(() => {
     if (!applyWorkId) { setApplyGroupOptions([]); setApplyGroupId(NONE); return; }
     const supabase = createClient();
@@ -144,7 +155,14 @@ export default function BatchImport({ works }: { works: WorkOption[] }) {
         .order("display_order")
         .order("name");
       setApplyGroupOptions(flattenGroupTree(data ?? []));
-      setApplyGroupId(NONE);
+      // First load: keep the pre-selected group; later: reset to NONE
+      const initial = initialGroupRef.current;
+      if (initial && initial !== NONE) {
+        setApplyGroupId(initial);
+        initialGroupRef.current = NONE; // consume — only used once
+      } else {
+        setApplyGroupId(NONE);
+      }
     })();
   }, [applyWorkId]);
 

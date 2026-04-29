@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Pencil, Trash2, Tag, Loader2 } from "lucide-react";
+import { Pencil, Trash2, Tag, Loader2, Info } from "lucide-react";
 import TreeShell from "../../_components/TreeShell";
 import TreeRow from "../../_components/TreeRow";
 import FAB from "../../_components/FAB";
@@ -156,7 +156,7 @@ export default function StudioClient({
       back={{ href: "/tree", label: "目錄" }}
       title={studio}
       subtitle={[
-        `${rows.length} 部作品${cursor ? "（還有更多）" : ""}`,
+        `分類層 · ${rows.length} 部作品${cursor ? "（還有更多）" : ""}`,
         `${totalPosters} 張海報`,
         totalPlaceholders > 0 ? `${totalPlaceholders} 待補圖` : null,
       ]
@@ -164,6 +164,13 @@ export default function StudioClient({
         .join(" · ")}
       fab={<FAB onClick={() => setAddOpen(true)} label="新增作品" />}
     >
+      <div className="mb-3 px-3 py-2 rounded-md bg-muted/50 border border-border flex items-start gap-2 text-xs text-muted-foreground">
+        <Info className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+        <span>
+          這層是「分類 → 作品」。右下角 + 是新增<strong className="text-foreground">作品</strong>。要新增海報請先進入作品。
+        </span>
+      </div>
+
       {rows.length === 0 ? (
         <div className="text-center text-muted-foreground py-12 text-sm">
           這個分類底下還沒有作品。點右下的 + 開始建立。

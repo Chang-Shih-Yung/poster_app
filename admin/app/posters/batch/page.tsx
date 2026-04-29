@@ -5,7 +5,12 @@ import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
-export default async function BatchImportPage() {
+export default async function BatchImportPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ work_id?: string; group_id?: string }>;
+}) {
+  const { work_id, group_id } = await searchParams;
   const supabase = await getServerSupabase();
   const { data: works } = await supabase
     .from("works")
@@ -25,7 +30,11 @@ export default async function BatchImportPage() {
             改為新增單張 →
           </Link>
         </div>
-        <BatchImport works={works ?? []} />
+        <BatchImport
+          works={works ?? []}
+          defaultWorkId={work_id}
+          defaultGroupId={group_id}
+        />
       </div>
     </PageShell>
   );
