@@ -19,29 +19,35 @@ export type UnsavedGuardState = {
 };
 
 /**
- * Block in-app and browser-level navigation while there's unsaved work.
+ * Block IN-APP navigation while there's unsaved work.
  *
  * Layers:
  *
- *   1. `beforeunload`        — close tab / refresh / hard-link to external URL.
- *                              Stays as the browser's native confirm because
- *                              the spec REQUIRES it to be synchronous; we
- *                              can't show a custom AlertDialog here.
- *
- *   2. `popstate`            — mobile swipe-back, browser back button.
- *                              We push a sentinel history entry on mount and
+ *   1. `popstate`            — mobile swipe-back, browser back button.
+ *                              Push a sentinel history entry on mount and
  *                              re-push it when popstate fires, while also
  *                              raising a pending navigation for the caller's
  *                              AlertDialog to handle.
  *
- *   3. document `click`      — internal `<a href>` clicks (Next `<Link>`
+ *   2. document `click`      — internal `<a href>` clicks (Next `<Link>`
  *                              renders an anchor). Capture-phase preventDefault
  *                              + stash the URL as a pending nav.
  *
- * What this does NOT cover: imperative `router.push()` from React code.
- * Next App Router has no public hook for those. Audit the page that
- * uses this guard to make sure all imperative pushes happen at moments
- * where there's nothing left to lose (e.g. after a successful submit).
+ * What this does NOT cover (intentional):
+ *
+ *   • `beforeunload` (close tab / refresh / cross-origin link). Adding it
+ *     creates a fight with our AlertDialog: when the dialog's "捨棄並離開"
+ *     thunk does `window.location.href = url`, beforeunload fires AGAIN
+ *     and shows a SECOND native confirm. The user clicks twice or gets
+ *     stuck. Pick one layer and stick to it. We pick AlertDialog because
+ *     it covers the real-world risk (mobile tap on BottomTabBar, swipe
+ *     back) consistently with the rest of the admin UI; close-tab/F5
+ *     are deliberate user actions where the data loss is expected.
+ *
+ *   • imperative `router.push()` from React code. Next App Router has no
+ *     public hook for those. Audit the page that uses this guard to make
+ *     sure all imperative pushes happen at moments where there's nothing
+ *     left to lose (e.g. after a successful submit).
  */
 export function useUnsavedChangesGuard(active: boolean): UnsavedGuardState {
   // The pending navigation is stored as a thunk. Using a state-of-function
@@ -54,11 +60,6 @@ export function useUnsavedChangesGuard(active: boolean): UnsavedGuardState {
 
   useEffect(() => {
     if (!active || typeof window === "undefined") return;
-
-    function beforeUnload(e: BeforeUnloadEvent) {
-      e.preventDefault();
-      e.returnValue = "";
-    }
 
     function clickGuard(e: MouseEvent) {
       // Modifier-clicks open a new tab and don't lose state — let them through.
@@ -100,12 +101,10 @@ export function useUnsavedChangesGuard(active: boolean): UnsavedGuardState {
 
     window.history.pushState(null, "", window.location.href);
 
-    window.addEventListener("beforeunload", beforeUnload);
     document.addEventListener("click", clickGuard, true);
     window.addEventListener("popstate", popstateGuard);
 
     return () => {
-      window.removeEventListener("beforeunload", beforeUnload);
       document.removeEventListener("click", clickGuard, true);
       window.removeEventListener("popstate", popstateGuard);
     };
