@@ -75,6 +75,7 @@ const childGroupActions: ItemAction<Group>[] = [
     destructive: true,
     confirm: (g) =>
       `刪除群組「${g.name}」？\n底下所有子群組與海報會一併硬刪，無法復原。要保留的海報請先長按拖出群組。`,
+    successToast: (g) => `已刪除群組「${g.name}」`,
     run: (g) => deleteGroup(g.id),
   },
 ];
@@ -139,6 +140,7 @@ export default function GroupClient({
       destructive: true,
       confirm: (g) =>
         `刪除群組「${g.name}」？\n底下所有子群組與海報會一併硬刪，無法復原。要保留的海報請先長按拖出群組。`,
+      successToast: (g) => `已刪除群組「${g.name}」`,
       run: async (g) => {
         const r = await deleteGroup(g.id);
         if (r.ok) router.push(back.href);
@@ -183,6 +185,7 @@ export default function GroupClient({
       destructive: true,
       confirm: (p) =>
         `刪除海報「${p.poster_name ?? UNNAMED_POSTER}」？此操作不可復原。`,
+      successToast: (p) => `已刪除海報「${p.poster_name ?? UNNAMED_POSTER}」`,
       run: (p) => deletePoster(p.id),
     },
   ];
@@ -364,7 +367,8 @@ export default function GroupClient({
                 parent_group_id: group.id,
                 name: values.name,
               }),
-            addSheets.close
+            addSheets.close,
+            { successToast: `已新增子群組「${values.name}」` }
           )
         }
       />
@@ -398,7 +402,8 @@ export default function GroupClient({
                 size_type: "A4",
                 channel_category: "other",
               }),
-            addSheets.close
+            addSheets.close,
+            { successToast: `已新增海報「${values.name}」` }
           )
         }
       />

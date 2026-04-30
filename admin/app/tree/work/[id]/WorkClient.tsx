@@ -75,6 +75,7 @@ const groupActions: ItemAction<Group>[] = [
     destructive: true,
     confirm: (g) =>
       `刪除群組「${g.name}」？\n底下所有子群組與海報會一併硬刪，無法復原。要保留的海報請先長按拖出群組。`,
+    successToast: (g) => `已刪除群組「${g.name}」`,
     run: (g) => deleteGroup(g.id),
   },
 ];
@@ -146,6 +147,7 @@ export default function WorkClient({
       destructive: true,
       confirm: (p) =>
         `刪除海報「${p.poster_name ?? UNNAMED_POSTER}」？此操作不可復原。`,
+      successToast: (p) => `已刪除海報「${p.poster_name ?? UNNAMED_POSTER}」`,
       run: (p) => deletePoster(p.id),
     },
   ];
@@ -310,7 +312,8 @@ export default function WorkClient({
                 parent_group_id: null,
                 name: values.name,
               }),
-            addSheets.close
+            addSheets.close,
+            { successToast: `已新增群組「${values.name}」` }
           )
         }
       />
@@ -344,7 +347,8 @@ export default function WorkClient({
                 size_type: "A4",
                 channel_category: "other",
               }),
-            addSheets.close
+            addSheets.close,
+            { successToast: `已新增海報「${values.name}」` }
           )
         }
       />

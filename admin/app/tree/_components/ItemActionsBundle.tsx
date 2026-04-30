@@ -44,6 +44,17 @@ import type { ActionResult } from "@/app/actions/_internal";
  * pattern.
  */
 
+/**
+ * Optional success-toast override for an ItemAction:
+ *   - string             → toast that exact text
+ *   - (item) => string   → derive from the item (e.g. "已刪除「{name}」")
+ *   - false              → suppress (use when the UI already gives
+ *                          unambiguous feedback, e.g. a navigation pop)
+ *   - undefined / omit   → fallback to "已${action.label}" derived in
+ *                          ItemActionsBundle below
+ */
+type ActionSuccessToast<T> = string | ((item: T) => string) | false;
+
 export type ItemFormAction<T> = {
   kind: "form";
   icon: React.ReactNode;
@@ -55,6 +66,7 @@ export type ItemFormAction<T> = {
   formDescription?: string;
   fields: (item: T) => FormField[];
   submitLabel?: string;
+  successToast?: ActionSuccessToast<T>;
   run: (item: T, values: Record<string, string>) => Promise<ActionResult<unknown>>;
 };
 
@@ -66,10 +78,29 @@ export type ItemInstantAction<T> = {
   destructive?: boolean;
   disabled?: boolean;
   confirm?: (item: T) => string;
+  successToast?: ActionSuccessToast<T>;
   run: (item: T) => Promise<ActionResult<unknown>>;
 };
 
 export type ItemAction<T> = ItemFormAction<T> | ItemInstantAction<T>;
+
+/**
+ * Resolve the per-action override into the helpers' SuccessToast value.
+ * The default ("已${label}") is generated at the ItemActionsBundle layer
+ * so every action gets feedback unless explicitly silenced.
+ */
+function resolveSuccessToast<T>(
+  action: ItemAction<T>,
+  item: T
+): string | false {
+  const t = action.successToast;
+  if (t === false) return false;
+  if (typeof t === "function") return t(item);
+  if (typeof t === "string") return t;
+  // Default: "已重新命名群組" / "已刪除群組" — reads naturally because
+  // every action.label in this codebase is verb-led ("刪除...", "重新命名...").
+  return `已${action.label}`;
+}
 
 type ConfirmState<T> = {
   action: ItemInstantAction<T>;
@@ -151,7 +182,9 @@ export function ItemActionsBundle<T>({
                       setConfirmState({ action: a, item: target, message: msg });
                       return;
                     }
-                    runAction(() => a.run(target));
+                    runAction(() => a.run(target), {
+                      successToast: resolveSuccessToast(a, target),
+                    });
                   },
                 }))}
               />
@@ -185,7 +218,9 @@ export function ItemActionsBundle<T>({
                 if (!confirmState) return;
                 const { action, item: target } = confirmState;
                 setConfirmState(null);
-                runAction(() => action.run(target));
+                runAction(() => action.run(target), {
+                  successToast: resolveSuccessToast(action, target),
+                });
               }}
             >
               確認刪除
@@ -208,10 +243,14 @@ export function ItemActionsBundle<T>({
           fields={activeForm.fields(item)}
           submitLabel={activeForm.submitLabel}
           onSubmit={(values) =>
-            runFormAction(() => activeForm.run(item, values), () => {
-              setFormIdx(null);
-              onClose();
-            })
+            runFormAction(
+              () => activeForm.run(item, values),
+              () => {
+                setFormIdx(null);
+                onClose();
+              },
+              { successToast: resolveSuccessToast(activeForm, item) }
+            )
           }
         />
       )}

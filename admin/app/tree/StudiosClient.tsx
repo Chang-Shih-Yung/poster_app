@@ -49,6 +49,7 @@ const STUDIO_ACTIONS: ItemAction<Studio>[] = [
     disabled: false, // overridden per-item below
     confirm: (s) =>
       `刪除分類「${s.studio}」？\n底下 ${s.works} 部作品、${s.posters} 張海報全部會被刪除。此操作不可復原。`,
+    successToast: (s) => `已刪除分類「${s.studio}」`,
     run: (s) => deleteStudio(s.studio),
   },
 ];
@@ -185,7 +186,8 @@ export default function StudiosClient({
                 studio: values.studio,
                 work_kind: values.kind || "movie",
               }),
-            () => setAddOpen(false)
+            () => setAddOpen(false),
+            { successToast: `已新增「${values.title}」` }
           )
         }
       />

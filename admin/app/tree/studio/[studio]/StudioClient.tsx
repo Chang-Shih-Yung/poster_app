@@ -82,6 +82,7 @@ const WORK_ACTIONS: ItemAction<Work>[] = [
     destructive: true,
     confirm: (w) =>
       `刪除作品「${w.title_zh}」？\n底下的所有群組跟海報都會一起被刪除（${w.poster_count} 張海報）。\n此操作不可復原。`,
+    successToast: (w) => `已刪除作品「${w.title_zh}」`,
     run: (w) => deleteWork(w.id),
   },
 ];
@@ -253,7 +254,8 @@ export default function StudioClient({
                 studio: studio === NULL_STUDIO_KEY ? null : studio,
                 work_kind: values.kind || "movie",
               }),
-            () => setAddOpen(false)
+            () => setAddOpen(false),
+            { successToast: `已新增作品「${values.title}」` }
           )
         }
       />
