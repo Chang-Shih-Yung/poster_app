@@ -71,10 +71,10 @@ const childGroupActions: ItemAction<Group>[] = [
     kind: "instant",
     icon: <Trash2 className="w-4 h-4" />,
     label: "刪除群組",
-    hint: "海報會回到作品頂層，不會被刪除",
+    hint: "底下子群組與海報會全部一併刪除（要保留的請先拖出去）",
     destructive: true,
     confirm: (g) =>
-      `刪除群組「${g.name}」？\n子群組會一併消失，群組內的海報會回到作品頂層（不放進任何群組），海報本身不刪。`,
+      `刪除群組「${g.name}」？\n底下所有子群組與海報會一併硬刪，無法復原。要保留的海報請先長按拖出群組。`,
     run: (g) => deleteGroup(g.id),
   },
 ];
@@ -135,10 +135,10 @@ export default function GroupClient({
       kind: "instant",
       icon: <Trash2 className="w-4 h-4" />,
       label: "刪除群組",
-      hint: "海報會回到作品頂層，不會被刪除",
+      hint: "底下子群組與海報會全部一併刪除（要保留的請先拖出去）",
       destructive: true,
       confirm: (g) =>
-        `刪除群組「${g.name}」？\n子群組會一併消失，群組內的海報會回到作品頂層（不放進任何群組），海報本身不刪。`,
+        `刪除群組「${g.name}」？\n底下所有子群組與海報會一併硬刪，無法復原。要保留的海報請先長按拖出群組。`,
       run: async (g) => {
         const r = await deleteGroup(g.id);
         if (r.ok) router.push(back.href);

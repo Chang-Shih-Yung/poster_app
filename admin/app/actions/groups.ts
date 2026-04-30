@@ -183,6 +183,27 @@ export async function deleteGroup(id: string): Promise<ActionResult> {
       .eq("id", id)
       .maybeSingle();
     if (lookupErr) throw lookupErr;
+
+    // Cascade scope snapshot. Since 20260430100000 the FK is ON DELETE
+    // CASCADE, so deleting a group nukes every descendant group AND
+    // every poster under any descendant. Capture the counts BEFORE the
+    // delete so the audit log can answer "how big was the blast" later.
+    let cascade: { posters_total: number; placeholders: number } | null = null;
+    if (existing?.work_id) {
+      const { data: counts } = await supabase.rpc(
+        "get_group_recursive_counts",
+        { p_work_id: existing.work_id as string }
+      );
+      const row = (counts as { group_id: string; total: number; placeholder_total: number }[] | null)
+        ?.find((r) => r.group_id === id);
+      if (row) {
+        cascade = {
+          posters_total: Number(row.total ?? 0),
+          placeholders: Number(row.placeholder_total ?? 0),
+        };
+      }
+    }
+
     const { error } = await supabase
       .from("poster_groups")
       .delete()
@@ -196,7 +217,7 @@ export async function deleteGroup(id: string): Promise<ActionResult> {
       action: "delete_group",
       target_kind: "group",
       target_id: id,
-      payload: existing ? { snapshot: existing } : null,
+      payload: existing ? { snapshot: existing, cascade } : null,
     });
     return ok(undefined);
   } catch (e) {
