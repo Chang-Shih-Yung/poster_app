@@ -77,10 +77,12 @@ export function GroupPicker({
   onChange,
   onGroupCreated,
   disabled,
-  noneLabel = "── 不放進群組（直接掛在作品下）──",
+  noneLabel,
 }: {
   workId: string;
-  /** Used in the "在 X 底下新增資料夾" dialog copy. */
+  /** Used in the "在 X 底下新增資料夾" dialog copy AND, when no explicit
+   * `noneLabel` is passed, woven into the NONE row so the admin can see
+   * exactly which work the poster will land directly under. */
   workName?: string;
   groups: FlattenedGroup[];
   /** Either NONE sentinel or a group id. */
@@ -90,13 +92,26 @@ export function GroupPicker({
    * the groups list (server-side create doesn't push to client state). */
   onGroupCreated?: (newGroupId: string) => void;
   disabled?: boolean;
+  /** Override the default NONE row label. When omitted, GroupPicker
+   * builds one from `workName` so the row is concrete (e.g. "── 直接放在
+   * 《蒼鷺與少年》底下 ──") instead of the generic "不放進群組". */
   noneLabel?: string;
 }) {
   const [createOpen, setCreateOpen] = React.useState(false);
   const [newName, setNewName] = React.useState("");
   const [submitting, setSubmitting] = React.useState(false);
 
-  const items = buildGroupItems(groups, noneLabel);
+  // Dynamic NONE label so the admin sees the actual parent work name in
+  // the dropdown — way clearer than a generic "不放進群組". Falls back to
+  // the generic copy when workName is missing (e.g. picker rendered
+  // before a work has been chosen in batch mode).
+  const resolvedNoneLabel =
+    noneLabel ??
+    (workName
+      ? `── 直接放在《${workName}》底下 ──`
+      : "── 直接放在這個作品底下 ──");
+
+  const items = buildGroupItems(groups, resolvedNoneLabel);
 
   async function submitNewGroup() {
     const trimmed = newName.trim();
@@ -128,7 +143,7 @@ export function GroupPicker({
         items={items}
         value={value}
         onChange={onChange}
-        placeholder={noneLabel}
+        placeholder={resolvedNoneLabel}
         searchPlaceholder="搜尋群組（含父層）…"
         emptyText="找不到符合的群組"
         disabled={disabled}
