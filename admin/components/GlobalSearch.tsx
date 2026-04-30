@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { Search, Folder, FolderTree, ImageOff, Loader2 } from "lucide-react";
 import {
   Sheet,
@@ -172,7 +172,15 @@ function SearchSheetBody({ onClose }: { onClose: () => void }) {
             className="pl-9 h-10"
           />
           {loading && (
-            <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground animate-spin" />
+            // Tailwind v3 transform-composition trap: putting both
+            // `-translate-y-1/2` and `animate-spin` on the same element
+            // makes animate-spin's keyframe `transform: rotate(...)` overwrite
+            // the translate composed via --tw-translate-y CSS var. The icon
+            // ends up jittering instead of smoothly spinning. Wrap the
+            // positioning on the parent and let the icon spin freely.
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+              <Loader2 className="w-4 h-4 text-muted-foreground animate-spin" />
+            </span>
           )}
         </div>
       </div>
@@ -199,8 +207,50 @@ function SearchSheetBody({ onClose }: { onClose: () => void }) {
 
 // ── Main export ───────────────────────────────────────────────────────────────
 
+/**
+ * Routes where the global search MUST be hidden because the user is in
+ * the middle of a create / edit / batch flow. Searching there would
+ * navigate away mid-form and lose unsaved work — the in-app guard
+ * already shows a "discard changes?" dialog, but the cleaner fix is to
+ * just not surface the trigger.
+ *
+ * Matched as a prefix (e.g. `/posters/new` matches `/posters/new/...`).
+ */
+const HIDE_ON_PREFIXES = [
+  "/posters/new",
+  "/posters/batch",
+  "/works/new",
+];
+
+/**
+ * Dynamic edit-page paths: `/posters/<id>` and `/works/<id>` (but NOT
+ * the index pages `/posters` or `/works`, and NOT the static `/new`
+ * /`batch` siblings already covered above).
+ */
+function isEditPath(pathname: string): boolean {
+  const editParents = ["/posters/", "/works/"];
+  for (const parent of editParents) {
+    if (pathname.startsWith(parent)) {
+      const rest = pathname.slice(parent.length);
+      // e.g. for /posters/abc-123 → rest = "abc-123"
+      // skip /new and /batch (already in HIDE_ON_PREFIXES)
+      if (rest && rest !== "new" && rest !== "batch" && !rest.startsWith("new/") && !rest.startsWith("batch/")) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 export default function GlobalSearch() {
   const [open, setOpen] = React.useState(false);
+  const pathname = usePathname() ?? "";
+
+  const hidden =
+    HIDE_ON_PREFIXES.some((p) => pathname === p || pathname.startsWith(p + "/")) ||
+    isEditPath(pathname);
+
+  if (hidden) return null;
 
   return (
     <>
