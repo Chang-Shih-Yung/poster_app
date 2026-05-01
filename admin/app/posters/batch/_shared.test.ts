@@ -115,9 +115,9 @@ describe("isReady", () => {
     expect(isReady(readyDraft({ status: "image_failed" }))).toBe(false);
   });
 
-  it("requires non-blank name", () => {
-    expect(isReady(readyDraft({ name: "" }))).toBe(false);
-    expect(isReady(readyDraft({ name: "   " }))).toBe(false);
+  it("name is OPTIONAL — blank is fine (2026-05-02 spec relaxed)", () => {
+    expect(isReady(readyDraft({ name: "" }))).toBe(true);
+    expect(isReady(readyDraft({ name: "   " }))).toBe(true);
   });
 
   it("requires work_id", () => {

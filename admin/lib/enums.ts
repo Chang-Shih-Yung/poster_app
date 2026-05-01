@@ -91,12 +91,14 @@ export const CHANNEL_CATEGORIES = [
 
 // cinema_release_types — multi-select (array<string>) when channelCategory=cinema.
 // One poster can be both "premium_format_limited" and "weekly_bonus".
+// Labels follow合夥人 2026-05-02 spec wording (DB values stay the same so we
+// don't have to migrate; values are stable internal IDs).
 export const CINEMA_RELEASE_TYPES = [
-  { value: "weekly_bonus",           label: "週特典 weekly bonus" },
-  { value: "special_screening",      label: "特別上映 special screening" },
-  { value: "cinema_limited",         label: "影城限定 cinema limited" },
-  { value: "premium_format_limited", label: "特殊廳限定 premium format" },
-  { value: "ticket_bundle",          label: "票券搭售 ticket bundle" },
+  { value: "weekly_bonus",           label: "周特點" },
+  { value: "special_screening",      label: "特別場限定" },
+  { value: "cinema_limited",         label: "影城限定" },
+  { value: "premium_format_limited", label: "特殊影廳限定" },
+  { value: "ticket_bundle",          label: "套票限定" },
 ] as const;
 
 // premium_format_enum — only used when cinemaReleaseTypes contains
@@ -131,18 +133,21 @@ export const CHANNEL_TYPES = [
 // cinema_name_enum — used when channelCategory=cinema.
 // MUST stay in sync with the cinema_name_enum DB type — these become
 // filter values for end-user push notifications and search.
+// Labels follow 合夥人 2026-05-02 spec wording (DB values stay stable IDs).
+// NOTE: DB value `u_cinema` was originally "in89 豪華"; partner's spec lists
+// it as「環球影城」. Same DB key, just relabel — same physical chain.
 export const CINEMA_NAMES = [
   { value: "vieshow",          label: "威秀影城" },
   { value: "showtime",         label: "秀泰影城" },
   { value: "miramar",          label: "美麗華影城" },
   { value: "ambassador",       label: "國賓影城" },
-  { value: "centuryasia",      label: "喜樂時代" },
+  { value: "centuryasia",      label: "喜樂時代影城" },
   { value: "eslite_art_house", label: "誠品電影院" },
-  { value: "star",             label: "星橋影城" },
-  { value: "hala",             label: "哈拉影城" },
-  { value: "u_cinema",         label: "in89 豪華" },
-  { value: "mld",              label: "MLD 台鋁" },
-  { value: "other",             label: "其他 other" },
+  { value: "star",             label: "星光影城" },
+  { value: "hala",             label: "哈啦影城" },
+  { value: "u_cinema",         label: "環球影城" },
+  { value: "mld",              label: "台鋁影城" },
+  { value: "other",            label: "其他" },
 ] as const;
 
 // source_platform — partner's 6 values (we drop 'twitter', kept previously)
@@ -151,16 +156,17 @@ export const SOURCE_PLATFORMS = [
   { value: "instagram",        label: "Instagram" },
   { value: "threads",          label: "Threads" },
   { value: "official_website", label: "官方網站" },
-  { value: "online_store",     label: "線上商店" },
-  { value: "other",            label: "其他 other" },
+  { value: "online_store",     label: "線上商城" },
+  { value: "other",            label: "其他" },
 ] as const;
 
-// material_type — partner's spec
+// material_type — partner's 2026-05-02 spec simplified to 4 values.
+// Column is `text` (no DB enum), so legacy rows storing thick_paper / foil
+// / fabric still display as their raw value but UI no longer offers them
+// as choices. New rows pick from the 4 below.
 export const MATERIAL_TYPES = [
-  { value: "paper",       label: "普通紙 paper" },
-  { value: "thick_paper", label: "厚紙板 thick paper" },
-  { value: "foil",        label: "金屬箔 foil" },
-  { value: "metal",       label: "金屬板 metal" },
-  { value: "fabric",      label: "布料 fabric" },
-  { value: "other",       label: "其他 other" },
+  { value: "paper",   label: "紙" },
+  { value: "plastic", label: "塑膠" },
+  { value: "metal",   label: "金屬" },
+  { value: "other",   label: "其他" },
 ] as const;

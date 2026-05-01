@@ -75,27 +75,33 @@ export async function createPoster(input: {
 > {
   try {
     const { supabase, user } = await requireAdmin();
-    if (!input.poster_name.trim()) throw new Error("海報名稱必填");
+    // poster_name is OPTIONAL per 2026-05-02 partner spec — admin can leave
+    // it blank and treat the file's place in tree as identifier. Empty/blank
+    // value is normalized to NULL at insert.
     if (input.year == null) throw new Error("發行年份必填");
     if (!input.region) throw new Error("地區必填");
     if (!input.size_type) throw new Error("尺寸必填");
     if (!input.channel_category) throw new Error("通路類型必填");
-    const trimmed = input.poster_name.trim();
+    const trimmed = input.poster_name?.trim() ?? "";
+    const nameForInsert: string | null = trimmed === "" ? null : trimmed;
 
     // Friendly pre-check for the unique (work_id, lower(poster_name))
-    // index added in 20260429150000. If we skipped this and let the DB
-    // raise 23505, the user would see a cryptic Postgres error.
-    const { data: dup } = await supabase
-      .from("posters")
-      .select("id")
-      .eq("work_id", input.work_id)
-      .ilike("poster_name", trimmed)
-      .is("deleted_at", null)
-      .maybeSingle();
-    if (dup) {
-      throw new Error(
-        `此作品已有海報「${trimmed}」（同名擋下，請改名或加版本標記）`
-      );
+    // index added in 20260429150000. SKIP when name is null — Postgres
+    // treats NULL as not-equal so multiple unnamed posters under the same
+    // work are allowed by design.
+    if (nameForInsert) {
+      const { data: dup } = await supabase
+        .from("posters")
+        .select("id")
+        .eq("work_id", input.work_id)
+        .ilike("poster_name", nameForInsert)
+        .is("deleted_at", null)
+        .maybeSingle();
+      if (dup) {
+        throw new Error(
+          `此作品已有海報「${nameForInsert}」（同名擋下，請改名或加版本標記）`
+        );
+      }
     }
 
     const { data, error } = await supabase
@@ -103,7 +109,7 @@ export async function createPoster(input: {
       .insert({
         work_id: input.work_id,
         parent_group_id: input.parent_group_id,
-        poster_name: trimmed,
+        poster_name: nameForInsert,
         year: input.year,
         poster_release_date: input.poster_release_date ?? null,
         region: input.region,
@@ -137,7 +143,7 @@ export async function createPoster(input: {
       // pre-check missed a race-condition window.
       if ((error as { code?: string }).code === "23505") {
         throw new Error(
-          `此作品已有海報「${trimmed}」（race condition; please retry）`
+          `此作品已有海報「${nameForInsert ?? ""}」（race condition; please retry）`
         );
       }
       throw error;

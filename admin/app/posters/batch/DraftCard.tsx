@@ -177,14 +177,14 @@ export function DraftCard({
             <Input
               value={draft.name}
               onChange={(e) => onChange({ name: e.target.value })}
-              placeholder="海報名稱 *"
+              placeholder="海報名稱"
               disabled={disabled}
-              className={cn(
-                "h-9",
-                !draft.name.trim() &&
-                  draft.status === "idle" &&
-                  "border-orange-400/60"
-              )}
+              // Name is optional now — no orange "missing" border. We could
+              // surface other missing required fields (work / year / region /
+              // size / channel) here later but isReady() already gates the
+              // submit button, so the current UX (red error message + button
+              // disabled) covers it.
+              className="h-9"
             />
             {(draft.status === "error" || draft.status === "image_failed") &&
               draft.errorMsg && (
@@ -293,43 +293,26 @@ export function DraftCard({
               </FormField>
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
-              <FormField label="地區" required size="compact">
-                <Select
-                  value={draft.region}
-                  onValueChange={(v) => onChange({ region: v })}
-                >
-                  <SelectTrigger className="h-9">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {REGIONS.map((r) => (
-                      <SelectItem key={r.value} value={r.value}>
-                        {r.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </FormField>
-              <FormField label="發行類型" size="compact">
-                <Select
-                  value={draft.poster_release_type}
-                  onValueChange={(v) => onChange({ poster_release_type: v })}
-                >
-                  <SelectTrigger className="h-9">
-                    <SelectValue placeholder="—" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={NONE}>—</SelectItem>
-                    {RELEASE_TYPES.map((r) => (
-                      <SelectItem key={r.value} value={r.value}>
-                        {r.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </FormField>
-            </div>
+            <FormField label="地區" required size="compact">
+              <Select
+                value={draft.region}
+                onValueChange={(v) => onChange({ region: v })}
+              >
+                <SelectTrigger className="h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {REGIONS.map((r) => (
+                    <SelectItem key={r.value} value={r.value}>
+                      {r.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </FormField>
+            {/* Top-level「發行類型」單選已移除 — 2026-05-02 spec 沒有這個概念，
+                發行類型只存在於影城條件多選（見下方 cinema_release_types）。
+                poster_release_type DB 欄位保留（不破壞舊資料），新海報會送 NONE。*/}
 
             {/* 尺寸 + 材質 */}
             <div className="grid grid-cols-2 gap-2">
@@ -452,7 +435,7 @@ export function DraftCard({
             {/* Cinema-specific (only when channel_category=cinema) */}
             {draft.channel_category === "cinema" && (
               <>
-                <FormField label="影城發行類型（可複選）" size="compact">
+                <FormField label="發行類型（可複選）" size="compact">
                   <MultiSelectDropdown
                     items={CINEMA_RELEASE_TYPES}
                     value={draft.cinema_release_types}

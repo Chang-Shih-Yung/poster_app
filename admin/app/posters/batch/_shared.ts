@@ -115,14 +115,15 @@ export function fromSentinel(v: string): string | null {
   return v === NONE ? null : v || null;
 }
 
-/** Mirror of the validation rule used by the UI. Required per collaborator's
- * spec: name, work, year, region, size_type, channel_category. CUSTOM size
+/** Mirror of the validation rule used by the UI. Required per 2026-05-02
+ * partner spec: work, year, region, size_type, channel_category. NOT name —
+ * poster_name was relaxed to optional (admin may keep blank). CUSTOM size
  * additionally requires width + height + unit; that detailed check lives in
  * the form's zod schema, not here — this gate is the coarser "card is
  * submittable" filter for the batch-submit flow. */
 export function isReady(d: DraftPoster): boolean {
   if (d.status !== "idle") return false;
-  if (!d.name.trim() || !d.work_id) return false;
+  if (!d.work_id) return false;
   // year must be a 1900-2100 integer string
   const yearOk = /^\d+$/.test(d.year.trim()) && +d.year >= 1900 && +d.year <= 2100;
   if (!yearOk) return false;

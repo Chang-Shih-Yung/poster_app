@@ -99,7 +99,8 @@ const schema = z
   .object({
     work_id: z.string().min(1, "必須指定作品"),
     parent_group_id: z.string(),
-    poster_name: z.string().trim().min(1, "海報名稱必填"),
+    // poster_name is OPTIONAL per 2026-05-02 spec.
+    poster_name: z.string().trim(),
     poster_release_date: z.string(), // YYYY-MM-DD or "" (optional)
     year: z
       .string()
@@ -409,7 +410,7 @@ export default function PosterForm({
       </FormField>
 
       {/* ── 基本資訊 ─────────────────────────────────────────────── */}
-      <FormField label="海報名稱" required error={errors.poster_name?.message}>
+      <FormField label="海報名稱" error={errors.poster_name?.message}>
         <Input
           {...register("poster_name")}
           placeholder="例：B1 原版 / IMAX 威秀獨家"
@@ -468,31 +469,9 @@ export default function PosterForm({
             )}
           />
         </FormField>
-        <FormField label="發行類型">
-          <Controller
-            control={control}
-            name="poster_release_type"
-            render={({ field }) => (
-              <Select
-                value={field.value}
-                onValueChange={field.onChange}
-                disabled={pending}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="—" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={NONE}>—</SelectItem>
-                  {RELEASE_TYPES.map((r) => (
-                    <SelectItem key={r.value} value={r.value}>
-                      {r.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-          />
-        </FormField>
+        {/* Top-level「發行類型」單選已移除 — 合夥人 2026-05-02 spec 沒有
+            這個概念，發行類型只存在於影城條件多選。poster_release_type
+            DB 欄位保留（不破壞舊資料），新表單送 null。*/}
       </div>
 
       {/* ── 尺寸（CUSTOM 時展開 width/height/unit）─────────────── */}
@@ -639,8 +618,8 @@ export default function PosterForm({
       {isCinema && (
         <>
           <FormField
-            label="影城發行類型"
-            helper="可複選；含「特殊廳限定」會顯示放映格式選單"
+            label="發行類型"
+            helper="可複選；含「特殊影廳限定」會顯示發行影廳選單"
           >
             <Controller
               control={control}
@@ -658,7 +637,7 @@ export default function PosterForm({
           </FormField>
 
           {showPremiumFormat && (
-            <FormField label="發行影廳（特殊廳）">
+            <FormField label="發行影廳">
               <Controller
                 control={control}
                 name="premium_format"
