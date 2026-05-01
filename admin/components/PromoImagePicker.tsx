@@ -44,12 +44,24 @@ export default function PromoImagePicker({
    *  where vertical space is tight. Default false renders the larger
    *  4:3 box used by PosterForm. */
   compact,
+  /** Overrides for the empty-state label. Defaults to promo image
+   *  copy; pass through when reusing this picker for the main poster
+   *  image (or anywhere else the language differs). */
+  emptyTitle,
+  emptyHelper,
+  /** Aspect ratio for the picker box. Defaults to 4:3 (promo flyers are
+   *  often landscape). For main poster image use "2/3" since posters
+   *  are typically portrait. */
+  aspect,
 }: {
   existingUrl: string | null;
   state: PromoImagePickerState;
   onChange: (s: PromoImagePickerState) => void;
   disabled?: boolean;
   compact?: boolean;
+  emptyTitle?: string;
+  emptyHelper?: string;
+  aspect?: "2/3" | "4/3" | "16/9";
 }) {
   const fileRef = React.useRef<HTMLInputElement>(null);
   const [error, setError] = React.useState<string | null>(null);
@@ -124,7 +136,20 @@ export default function PromoImagePicker({
     onChange({ file: null, markedForRemoval: false });
   }
 
-  const aspectClass = compact ? "aspect-[16/9]" : "aspect-[4/3]";
+  const aspectClass = compact
+    ? "aspect-[16/9]"
+    : aspect === "2/3"
+      ? "aspect-[2/3]"
+      : aspect === "16/9"
+        ? "aspect-[16/9]"
+        : "aspect-[4/3]";
+
+  const resolvedTitle = emptyTitle ?? "點此上傳宣傳圖片";
+  const resolvedHelper =
+    emptyHelper ?? "影院 DM、IG 活動圖、票券優惠等取得方式佐證";
+  const resolvedRemoveTitle = emptyTitle
+    ? "儲存後會移除原本圖片"
+    : "儲存後會移除原本的宣傳圖";
 
   return (
     <div className="space-y-2">
@@ -154,17 +179,17 @@ export default function PromoImagePicker({
         ) : state.markedForRemoval ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center text-destructive p-3 text-center">
             <AlertTriangle className="w-6 h-6 mb-1" strokeWidth={1.5} />
-            <div className="text-xs font-medium">儲存後會移除原本的宣傳圖</div>
+            <div className="text-xs font-medium">{resolvedRemoveTitle}</div>
           </div>
         ) : (
           <div className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground p-3 text-center">
             <ImagePlus className={cn(compact ? "w-7 h-7 mb-1" : "w-9 h-9 mb-2")} strokeWidth={1.5} />
             <div className={cn(compact ? "text-xs" : "text-sm", "font-medium text-foreground")}>
-              點此上傳宣傳圖片
+              {resolvedTitle}
             </div>
             {!compact && (
               <div className="text-xs text-muted-foreground mt-1 leading-snug">
-                影院 DM、IG 活動圖、票券優惠等取得方式佐證
+                {resolvedHelper}
               </div>
             )}
           </div>

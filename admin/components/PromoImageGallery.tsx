@@ -11,7 +11,6 @@ import {
   removePromoImage,
   type PromoImage,
 } from "@/app/actions/poster-promo-images";
-import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -25,53 +24,116 @@ import {
 import { cn } from "@/lib/utils";
 
 /**
- * Spec #18 海報發行資訊 — 多張版本。Edit-page only（建立海報後才能用）。
+ * Spec #18 海報發行資訊 — 多張版本。
  *
- * UX：
- *   - 縮圖 grid（每格 4:3），移除按鈕在右上
- *   - 一個「+ 新增」格在尾，點下開系統檔案選取（多選）
- *   - 選好後逐張壓縮上傳到 Storage、addPromoImage 寫一筆子表 row
- *   - 失敗的個別檔案 toast.warning，其他繼續
- *   - 移除有 AlertDialog confirm（避免誤觸）
- *   - 拖曳重排不在這版（之後加 reorderPromoImages 即可）
+ * 兩種 mode：
  *
- * 同 PosterCombinationField 模式：自己呼 server action，不經 form submit。
- * Create mode（posterId=null）顯示 disabled 提示。
+ * Edit mode（posterId 已存在）：
+ *   - 元件自己 fetch 既有清單，新增/移除即時呼 server action
+ *   - 失敗單張不影響整批，AlertDialog 二次確認 remove
+ *
+ * Create mode（posterId=null + pendingFiles + onPendingChange 受控）：
+ *   - 純前端 staging，沒 server call
+ *   - File 暫存到 parent state，object URL 顯示縮圖
+ *   - submit 後 parent 拿到新 poster id，逐張 upload + addPromoImage
+ *
+ * 兩種 mode UI 視覺一致 — admin 不用知道差別。
  */
 export default function PromoImageGallery({
   posterId,
   disabled,
+  pendingFiles,
+  onPendingChange,
 }: {
+  /** edit mode 帶 poster id；create mode 傳 null + pendingFiles props */
   posterId: string | null;
   disabled?: boolean;
+  /** Create mode 暫存的檔案陣列（受控）。Edit mode 忽略。 */
+  pendingFiles?: File[];
+  onPendingChange?: (next: File[]) => void;
 }) {
+  const isCreateMode = !posterId;
   const fileRef = React.useRef<HTMLInputElement>(null);
+
+  // Edit mode 的 server-fetched gallery
   const [images, setImages] = React.useState<PromoImage[]>([]);
-  const [loaded, setLoaded] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
   const [progress, setProgress] = React.useState<string | null>(null);
-  const [removeTarget, setRemoveTarget] = React.useState<PromoImage | null>(
-    null
-  );
+  const [removeTarget, setRemoveTarget] = React.useState<
+    { kind: "server"; image: PromoImage } | { kind: "pending"; index: number } | null
+  >(null);
 
   const refresh = React.useCallback(async () => {
     if (!posterId) return;
     const r = await listPromoImages(posterId);
-    if (r.ok) {
-      setImages(r.data);
-      setLoaded(true);
-    }
+    if (r.ok) setImages(r.data);
   }, [posterId]);
 
   React.useEffect(() => {
     if (posterId) void refresh();
   }, [posterId, refresh]);
 
-  async function onFilesChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(e.target.files ?? []);
-    if (!posterId || files.length === 0) return;
-    setBusy(true);
+  // Create mode：把 pendingFiles 的 object URL 算一次（避免每 render 都建）
+  const pendingPreviewUrls = React.useMemo(() => {
+    if (!isCreateMode) return [];
+    return (pendingFiles ?? []).map((f) => URL.createObjectURL(f));
+  }, [isCreateMode, pendingFiles]);
 
+  // Cleanup object URLs when files change / unmount.
+  React.useEffect(() => {
+    return () => {
+      pendingPreviewUrls.forEach((u) => URL.revokeObjectURL(u));
+    };
+  }, [pendingPreviewUrls]);
+
+  /** 處理 HEIC + 把 File 加入清單。 */
+  async function ingestFiles(files: File[]) {
+    if (files.length === 0) return;
+
+    if (isCreateMode) {
+      // Create mode：HEIC 也要先轉，這樣 staging 預覽不會壞掉，submit
+      // 時再壓縮上傳。
+      setBusy(true);
+      const converted: File[] = [];
+      for (let i = 0; i < files.length; i++) {
+        setProgress(`${i + 1} / ${files.length} 處理中…`);
+        const file = files[i];
+        try {
+          let working = file;
+          if (
+            file.type === "image/heic" ||
+            file.type === "image/heif" ||
+            /\.(heic|heif)$/i.test(file.name)
+          ) {
+            const heic2any = (await import("heic2any")).default;
+            const blob = (await heic2any({
+              blob: file,
+              toType: "image/jpeg",
+              quality: 0.9,
+            })) as Blob;
+            working = new File(
+              [blob],
+              file.name.replace(/\.(heic|heif)$/i, ".jpg"),
+              { type: "image/jpeg" }
+            );
+          }
+          converted.push(working);
+        } catch (err) {
+          console.error("[promo gallery] HEIC convert failed", err);
+          toast.error(`「${file.name}」HEIC 轉檔失敗`);
+        }
+      }
+      setBusy(false);
+      setProgress(null);
+      if (converted.length > 0) {
+        onPendingChange?.([...(pendingFiles ?? []), ...converted]);
+      }
+      return;
+    }
+
+    // Edit mode：壓縮 + 上 Storage + 寫 DB（即時）
+    if (!posterId) return;
+    setBusy(true);
     let okCount = 0;
     let failCount = 0;
     for (let i = 0; i < files.length; i++) {
@@ -79,7 +141,6 @@ export default function PromoImageGallery({
       try {
         setProgress(`${i + 1} / ${files.length} 處理中…`);
 
-        // HEIC pre-convert (lazy heic2any)
         let working = file;
         if (
           file.type === "image/heic" ||
@@ -108,33 +169,40 @@ export default function PromoImageGallery({
         okCount++;
       } catch (err) {
         failCount++;
-        // Don't break the loop — admin probably uploaded 5 files and 1
-        // bad file shouldn't kill the other 4.
         console.error("[promo gallery] upload failed", err);
       }
     }
-
     setBusy(false);
     setProgress(null);
-    if (fileRef.current) fileRef.current.value = "";
-
     if (okCount > 0 && failCount === 0) {
       toast.success(`已新增 ${okCount} 張宣傳圖片`);
-    } else if (okCount > 0 && failCount > 0) {
+    } else if (okCount > 0) {
       toast.warning(`${okCount} 張成功、${failCount} 張失敗`);
-    } else if (failCount > 0) {
+    } else {
       toast.error(`${failCount} 張全部上傳失敗`);
     }
-
     await refresh();
+  }
+
+  async function onFilesChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
+    await ingestFiles(files);
+    if (fileRef.current) fileRef.current.value = "";
   }
 
   async function confirmRemove() {
     const t = removeTarget;
     if (!t) return;
     setRemoveTarget(null);
+    if (t.kind === "pending") {
+      // Create mode — 從 pending list 拔掉
+      const next = (pendingFiles ?? []).filter((_, i) => i !== t.index);
+      onPendingChange?.(next);
+      return;
+    }
+    // Edit mode — 即時砍 DB row
     setBusy(true);
-    const r = await removePromoImage(t.id);
+    const r = await removePromoImage(t.image.id);
     setBusy(false);
     if (!r.ok) {
       toast.error(r.error);
@@ -144,32 +212,43 @@ export default function PromoImageGallery({
     await refresh();
   }
 
-  if (!posterId) {
-    return (
-      <div className="text-sm text-muted-foreground rounded-md border border-dashed border-input bg-secondary/30 p-3">
-        建立海報後，回到編輯頁就能上傳宣傳圖片（可多張）。
-      </div>
-    );
-  }
+  // 當前要顯示的縮圖列表（mode-aware）
+  const displayItems: Array<{
+    key: string;
+    url: string;
+    onRemove: () => void;
+  }> = isCreateMode
+    ? pendingPreviewUrls.map((url, idx) => ({
+        key: `pending-${idx}`,
+        url,
+        onRemove: () =>
+          setRemoveTarget({ kind: "pending", index: idx }),
+      }))
+    : images.map((img) => ({
+        key: img.id,
+        url: img.thumbnail_url,
+        onRemove: () => setRemoveTarget({ kind: "server", image: img }),
+      }));
+
+  const totalCount = displayItems.length;
 
   return (
     <div className="space-y-2">
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-        {/* Existing images */}
-        {images.map((img) => (
+        {displayItems.map((item) => (
           <div
-            key={img.id}
+            key={item.key}
             className="relative group aspect-[4/3] rounded-lg overflow-hidden border border-border bg-black/30"
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={img.thumbnail_url}
+              src={item.url}
               alt=""
               className="w-full h-full object-contain"
             />
             <button
               type="button"
-              onClick={() => setRemoveTarget(img)}
+              onClick={item.onRemove}
               disabled={busy || disabled}
               className={cn(
                 "absolute top-1.5 right-1.5 w-7 h-7 rounded-full",
@@ -209,21 +288,13 @@ export default function PromoImageGallery({
             <>
               <ImagePlus className="w-7 h-7" strokeWidth={1.5} />
               <span className="text-xs">
-                {images.length === 0 ? "上傳宣傳圖片（可多張）" : "新增一張"}
+                {totalCount === 0 ? "上傳宣傳圖片（可多張）" : "新增一張"}
               </span>
             </>
           )}
         </button>
       </div>
 
-      {!loaded && images.length === 0 && (
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Loader2 className="w-3 h-3 animate-spin" />
-          載入中…
-        </div>
-      )}
-
-      {/* Hidden file input — multi-select enabled */}
       <input
         ref={fileRef}
         type="file"
@@ -248,13 +319,13 @@ export default function PromoImageGallery({
           <AlertDialogHeader>
             <AlertDialogTitle>移除這張宣傳圖片？</AlertDialogTitle>
             <AlertDialogDescription>
-              只解除這張海報跟宣傳圖的連結，Storage 檔案會留著（之後可重傳新版）。
-              {removeTarget && (
-                <span className="flex items-start gap-2 mt-3 text-xs text-destructive">
-                  <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-                  此操作無法 undo。
-                </span>
-              )}
+              {removeTarget?.kind === "pending"
+                ? "這張還沒上傳，移除等於放棄不送出。"
+                : "只解除這張海報跟宣傳圖的連結，Storage 檔案會留著（之後可重傳新版）。"}
+              <span className="flex items-start gap-2 mt-3 text-xs text-destructive">
+                <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                此操作無法 undo。
+              </span>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

@@ -27,8 +27,9 @@ import PromoImagePicker, {
   EMPTY_PROMO_STATE,
   type PromoImagePickerState,
 } from "@/components/PromoImagePicker";
-import { uploadPosterImage } from "@/lib/imageUpload";
+import { uploadPosterImage, uploadPromoImage } from "@/lib/imageUpload";
 import { attachImage } from "@/app/actions/posters";
+import { addPromoImage } from "@/app/actions/poster-promo-images";
 import { linkPosters } from "@/app/actions/poster-sets";
 import { describeError } from "@/lib/errors";
 import { toast } from "sonner";
@@ -215,6 +216,11 @@ export default function PosterForm({
   // 新海報 id 後逐筆呼 linkPosters。Edit mode 由 PosterCombinationField
   // 自己管（即時 link / unlink）。
   const [pendingSiblingIds, setPendingSiblingIds] = useState<string[]>([]);
+
+  // 宣傳圖片（create mode only）— 暫存 File[]，submit 時 createPoster
+  // 拿到 id 後逐筆 uploadPromoImage + addPromoImage。Edit mode 由
+  // PromoImageGallery 自己管（即時 upload）。
+  const [pendingPromoFiles, setPendingPromoFiles] = useState<File[]>([]);
 
   const {
     register,
@@ -458,33 +464,53 @@ export default function PosterForm({
         }
       }
 
-      // 宣傳圖片走 PromoImageGallery 直接呼 server action（edit mode），
-      // create mode 留給 admin 進編輯頁加（多檔 staging 較複雜，下一輪做）。
+      // 宣傳圖片（create mode）— 逐張 upload + addPromoImage。順序意義
+      // 不大（addPromoImage 自己算 sort_order = max+1 追加在尾），個別
+      // 失敗不影響其他張，最後 toast 統計。
+      if (mode === "create" && pendingPromoFiles.length > 0) {
+        let promoFails = 0;
+        for (const file of pendingPromoFiles) {
+          try {
+            const uploaded = await uploadPromoImage(file, targetId);
+            const r = await addPromoImage(targetId, {
+              image_url: uploaded.promoImageUrl,
+              thumbnail_url: uploaded.promoThumbnailUrl,
+            });
+            if (!r.ok) throw new Error(r.error);
+          } catch {
+            promoFails++;
+          }
+        }
+        if (promoFails > 0) {
+          toast.warning(
+            `海報已建立，但 ${promoFails} 張宣傳圖片上傳失敗。請進編輯頁重試。`,
+            { duration: 10000 }
+          );
+        }
+      }
+
       router.push("/posters");
     });
   }
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-      {/* ── 真實海報圖（spec — 兩種 mode 統一在表單內處理） ──────── */}
-      {/*
-       * Create mode：暫存 File 到 mainImageState，submit 時 createPoster
-       *   → uploadPosterImage → attachImage（跟批量同 pipeline）。
-       * Edit mode：即時上傳（File 拿到就跑 upload + attach）— 跟舊
-       *   PosterImageUploader 同行為，只是搬進表單裡而非另一個 section。
-       *   （edit 頁已經有現成 PosterImageUploader 在頂部，這裡保留 pure
-       *    create-staging 行為以避免重複上傳路徑；edit 頁的圖片 section
-       *    後續另外 unify。）
+      {/* ── 真實海報圖（無外層 label，picker 自己有 placeholder 文字） ──
+       * Create mode：暫存 File，submit 時 createPoster → uploadPosterImage
+       *   → attachImage（與批量同 pipeline）
+       * Edit mode：圖片仍由 /posters/[id]/page.tsx 的 PosterImageUploader
+       *   處理（即時 upload）— 後續可進一步 unify
        */}
       {mode === "create" && (
-        <FormField label="真實海報圖">
-          <PromoImagePicker
-            existingUrl={null}
-            state={mainImageState}
-            onChange={setMainImageState}
-            disabled={pending}
-          />
-        </FormField>
+        <PromoImagePicker
+          existingUrl={null}
+          state={mainImageState}
+          onChange={setMainImageState}
+          disabled={pending}
+          emptyTitle="點此上傳海報"
+          emptyHelper="支援 JPG / PNG / HEIC，自動壓縮與產生縮圖"
+          aspect="2/3"
+        />
       )}
 
       {serverError && (
@@ -952,6 +978,10 @@ export default function PosterForm({
       <FormField label="海報發行資訊">
         <PromoImageGallery
           posterId={mode === "edit" ? initial!.id : null}
+          pendingFiles={mode === "create" ? pendingPromoFiles : undefined}
+          onPendingChange={
+            mode === "create" ? setPendingPromoFiles : undefined
+          }
           disabled={pending}
         />
       </FormField>
