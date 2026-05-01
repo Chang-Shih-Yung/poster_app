@@ -22,8 +22,8 @@ import {
   SOURCE_PLATFORMS,
   PRICE_TYPES,
 } from "@/lib/enums";
-import { SetPicker } from "@/components/SetPicker";
-import type { PosterSet } from "@/app/actions/poster-sets";
+// SetPicker 已從批量移除（建立時沒有 poster id 不能掛 sibling）；admin
+// 在 /posters/[id] 編輯頁用 PosterCombinationField 加同組合海報。
 import type { FlattenedGroup } from "@/lib/groupTree";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -57,12 +57,10 @@ export function DraftCard({
   draft,
   works,
   groups,
-  posterSets,
   onChange,
   onRemove,
   onWorkChange,
   onGroupCreated,
-  onSetCreated,
   onWorkCreated,
   disabled,
 }: {
@@ -70,8 +68,6 @@ export function DraftCard({
   works: WorkOption[];
   /** Groups for THIS card's work_id. Parent maintains the cache. */
   groups: FlattenedGroup[];
-  /** All poster_sets — same list across all cards (sets aren't per-work). */
-  posterSets: PosterSet[];
   onChange: (patch: Partial<DraftPoster>) => void;
   onRemove: () => void;
   /** Called when the card's work_id changes — parent uses this to
@@ -80,8 +76,6 @@ export function DraftCard({
   /** Called after a new group is created via the GroupPicker — parent
    * re-fetches groups for this work. */
   onGroupCreated: () => void;
-  /** Called after a new poster_set is created from the inline picker. */
-  onSetCreated: () => void;
   /** Called after a new work is created from the inline WorkPicker dialog
    *  — parent should refetch the works list so the new row shows up. */
   onWorkCreated: () => void;
@@ -574,18 +568,13 @@ export function DraftCard({
             </div>
 
             {/* ── #14 海報發行組合 ──────────────────────────────── */}
-            <FormField
-              label="海報發行組合"
-              helper="N 張一起發行的套票（空白＝不屬於任何組合）"
-              size="compact"
-            >
-              <SetPicker
-                sets={posterSets}
-                value={draft.set_id}
-                onChange={(v) => onChange({ set_id: v })}
-                onSetCreated={onSetCreated}
-                disabled={disabled}
-              />
+            {/* 批量是 create-only。海報還沒 ID 時不能掛 sibling。
+                建好後在 /posters/[id] 編輯頁裡用 PosterCombinationField
+                加入同組合的其他海報。 */}
+            <FormField label="海報發行組合" size="compact">
+              <div className="text-xs text-muted-foreground rounded-md border border-dashed border-input bg-secondary/30 p-2.5">
+                建立海報後，到編輯頁加入「同組合的其他海報」。
+              </div>
             </FormField>
 
             {/* ── #15 #16 來源平台 + 連結 ──────────────────────── */}

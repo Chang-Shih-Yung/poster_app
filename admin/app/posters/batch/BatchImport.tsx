@@ -8,7 +8,6 @@ import { flattenGroupTree, type FlattenedGroup } from "@/lib/groupTree";
 import { SIZE_TYPES, CHANNEL_CATEGORIES, REGIONS } from "@/lib/enums";
 import { DEFAULT_REGION } from "@/lib/keys";
 import { uploadPosterImage, applyPromoImageChange } from "@/lib/imageUpload";
-import { listPosterSets, type PosterSet } from "@/app/actions/poster-sets";
 import { describeError } from "@/lib/errors";
 import { createPoster, attachImage } from "@/app/actions/posters";
 import { Button } from "@/components/ui/button";
@@ -108,17 +107,8 @@ export default function BatchImport({
   >({});
   const inflightRef = useRef<Set<string>>(new Set());
 
-  // poster_sets cache — shared across all cards (set is independent of
-  // work, so one fetch covers the whole batch import session). Refetched
-  // when any DraftCard creates a new set inline.
-  const [posterSets, setPosterSets] = useState<PosterSet[]>([]);
-  const refetchPosterSets = useCallback(async () => {
-    const r = await listPosterSets();
-    if (r.ok) setPosterSets(r.data);
-  }, []);
-  useEffect(() => {
-    refetchPosterSets();
-  }, [refetchPosterSets]);
+  // 批量 mode 不掛 set_id（create-only，海報還沒 ID 無法掛 sibling）。
+  // 海報建好後 admin 進編輯頁用 PosterCombinationField 加同組合的海報。
 
   // Apply-bar state
   const [applyWorkId, setApplyWorkId] = useState(defaultWorkId ?? "");
@@ -727,7 +717,6 @@ export default function BatchImport({
             groups={
               draft.work_id ? groupsByWork[draft.work_id] ?? [] : []
             }
-            posterSets={posterSets}
             onChange={(patch) => updateDraft(draft.localId, patch)}
             onRemove={() => removeDraft(draft.localId)}
             onWorkChange={(newWorkId) => {
@@ -737,7 +726,6 @@ export default function BatchImport({
               if (draft.work_id)
                 loadGroupsFor(draft.work_id, { force: true });
             }}
-            onSetCreated={() => refetchPosterSets()}
             onWorkCreated={() => router.refresh()}
             disabled={submitting || draft.status !== "idle"}
           />

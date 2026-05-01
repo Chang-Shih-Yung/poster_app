@@ -44,8 +44,7 @@ import {
 import { MultiSelectDropdown } from "@/components/ui/multi-select";
 import { WorkPicker, type WorkOption } from "@/components/WorkPicker";
 import { GroupPicker } from "@/components/GroupPicker";
-import { SetPicker } from "@/components/SetPicker";
-import { listPosterSets, type PosterSet } from "@/app/actions/poster-sets";
+import PosterCombinationField from "@/components/PosterCombinationField";
 import { DatePicker } from "@/components/DatePicker";
 import { AlertTriangle, Loader2 } from "lucide-react";
 
@@ -144,8 +143,8 @@ const schema = z
     // 售價 — type 是 sentinel/value，amount 是 numeric string（解析在 submit）
     price_type: z.string(),
     price_amount: z.string(),
-    // 套票 id（NONE 或 uuid）
-    set_id: z.string(),
+    // set_id 不在 zod 內 — 海報發行組合走 PosterCombinationField 直接呼
+    // 叫 server action linkPosters / unlinkPoster，不經 form submit。
   })
   // price_type='paid' 時 price_amount 必填且為正數
   .refine(
@@ -231,7 +230,6 @@ export default function PosterForm({
       price_type: initial?.price_type ?? NONE,
       price_amount:
         initial?.price_amount != null ? String(initial.price_amount) : "",
-      set_id: initial?.set_id ?? NONE,
     },
   });
 
@@ -245,16 +243,8 @@ export default function PosterForm({
   const posterReleaseDate = watch("poster_release_date");
   const priceType = watch("price_type");
 
-  // Load poster_sets for the SetPicker dropdown. Refetched after a new
-  // set is created from the inline footer.
-  const [posterSets, setPosterSets] = useState<PosterSet[]>([]);
-  async function refetchPosterSets() {
-    const r = await listPosterSets();
-    if (r.ok) setPosterSets(r.data);
-  }
-  useEffect(() => {
-    refetchPosterSets();
-  }, []);
+  // PosterCombinationField self-fetches its own data via server actions
+  // (listSiblings / listAllPostersForPicker) — no parent-side cache needed.
 
   // Auto-fill year from poster_release_date when date changes
   useEffect(() => {
@@ -353,7 +343,8 @@ export default function PosterForm({
         values.price_type === "paid" && values.price_amount.trim()
           ? Number(values.price_amount)
           : null,
-      set_id: fromSentinel(values.set_id),
+      // set_id 不在這個 payload — PosterCombinationField 直接呼叫
+      // linkPosters / unlinkPoster 寫 DB，不經 form submit。
     };
 
     startTransition(async () => {
@@ -820,22 +811,16 @@ export default function PosterForm({
       </div>
 
       {/* ── #14 海報發行組合 ─────────────────────────────────────── */}
+      {/* 「是 / 否」+ sibling picker — 不思考 set 物件，直接挑同組合的
+          其他海報；後端用 poster_sets 表做底層存儲。create mode 看不到
+          picker（沒 ID 不能掛 sibling），元件會顯示提示。 */}
       <FormField
         label="海報發行組合"
-        helper="N 張海報一起發行的套票（影城套票、IG 活動組合等）。空白＝不屬於任何組合"
+        helper="是 = 跟其他海報是同一發行組合（套票、IG 活動套組等）；否 = 單張獨立發行"
       >
-        <Controller
-          control={control}
-          name="set_id"
-          render={({ field }) => (
-            <SetPicker
-              sets={posterSets}
-              value={field.value}
-              onChange={field.onChange}
-              onSetCreated={() => refetchPosterSets()}
-              disabled={pending}
-            />
-          )}
+        <PosterCombinationField
+          posterId={mode === "edit" ? initial!.id : null}
+          disabled={pending}
         />
       </FormField>
 
