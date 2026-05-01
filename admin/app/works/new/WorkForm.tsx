@@ -18,6 +18,11 @@ import { Card, CardContent } from "@/components/ui/card";
 import { AlertTriangle, Loader2 } from "lucide-react";
 
 const CUSTOM_VALUE = "__custom__";
+// Sentinel for "no studio" — Radix Select rejects SelectItem with empty
+// string value (it's reserved for clearing). We render the trigger with
+// this sentinel when studio is "" so the dropdown doesn't crash on works
+// with null studio.
+const NONE_VALUE = "__none__";
 
 type WorkFormProps = {
   mode: "create" | "edit";
@@ -93,10 +98,12 @@ export default function WorkForm({ mode, initial, studios = [] }: WorkFormProps)
       <FormField label="Studio / IP 持有者" htmlFor="studio">
         {studioMode === "select" ? (
           <Select
-            value={studio}
+            value={studio === "" ? NONE_VALUE : studio}
             onValueChange={(v) => {
               if (v === CUSTOM_VALUE) {
                 setStudioMode("custom");
+                setStudio("");
+              } else if (v === NONE_VALUE) {
                 setStudio("");
               } else {
                 setStudio(v);
@@ -108,7 +115,7 @@ export default function WorkForm({ mode, initial, studios = [] }: WorkFormProps)
               <SelectValue placeholder="請選擇分類" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">（未分類）</SelectItem>
+              <SelectItem value={NONE_VALUE}>（未分類）</SelectItem>
               {studios.map((s) => (
                 <SelectItem key={s} value={s}>
                   {s}

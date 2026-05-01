@@ -172,15 +172,17 @@ export default function WorksList({
         <Card className="mb-3">
           <CardContent className="p-3 space-y-2">
             <Select
-              value={newStudio}
-              onValueChange={setNewStudio}
+              // Radix Select rejects empty-string values; sentinel-roundtrip
+              // mirrors the WorkForm pattern.
+              value={newStudio === "" ? "__none__" : newStudio}
+              onValueChange={(v) => setNewStudio(v === "__none__" ? "" : v)}
               disabled={pending}
             >
               <SelectTrigger>
                 <SelectValue placeholder="所屬分類" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">（未分類）</SelectItem>
+                <SelectItem value="__none__">（未分類）</SelectItem>
                 {studios.map((s) => (
                   <SelectItem key={s} value={s}>
                     {s}
