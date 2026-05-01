@@ -621,6 +621,7 @@ export default function BatchImport({
               works={works}
               value={applyWorkId}
               onChange={setApplyWorkId}
+              onWorkCreated={() => router.refresh()}
               triggerClassName="h-9"
             />
           </FormField>
@@ -737,6 +738,7 @@ export default function BatchImport({
                 loadGroupsFor(draft.work_id, { force: true });
             }}
             onSetCreated={() => refetchPosterSets()}
+            onWorkCreated={() => router.refresh()}
             disabled={submitting || draft.status !== "idle"}
           />
         ))}

@@ -65,6 +65,7 @@ export function DraftCard({
   onWorkChange,
   onGroupCreated,
   onSetCreated,
+  onWorkCreated,
   disabled,
 }: {
   draft: DraftPoster;
@@ -83,6 +84,9 @@ export function DraftCard({
   onGroupCreated: () => void;
   /** Called after a new poster_set is created from the inline picker. */
   onSetCreated: () => void;
+  /** Called after a new work is created from the inline WorkPicker dialog
+   *  — parent should refetch the works list so the new row shows up. */
+  onWorkCreated: () => void;
   disabled: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -259,6 +263,7 @@ export function DraftCard({
                   onChange({ work_id: v, parent_group_id: NONE });
                   onWorkChange(v);
                 }}
+                onWorkCreated={onWorkCreated}
                 triggerClassName="h-9"
               />
             </FormField>

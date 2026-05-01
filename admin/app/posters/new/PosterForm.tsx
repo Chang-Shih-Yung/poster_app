@@ -432,6 +432,10 @@ export default function PosterForm({
               works={works}
               value={field.value}
               onChange={field.onChange}
+              // After inline create, re-run the server component so the
+              // works prop includes the brand-new row. router.refresh()
+              // preserves client state (form values) so this is safe.
+              onWorkCreated={() => router.refresh()}
               disabled={pending}
             />
           )}

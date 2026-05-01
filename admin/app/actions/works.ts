@@ -86,6 +86,10 @@ function revalidateWorkSurfaces(workId?: string) {
 
 export async function createWork(input: {
   title_zh: string;
+  /** Required per 2026-05-02 partner spec — admin must provide both
+   * 作品台灣官方名稱 and 作品英文官方名稱. Form-level validation lives in
+   * WorkForm and the inline create dialog inside WorkPicker. */
+  title_en?: string | null;
   studio: string | null;
   work_kind: string;
 }): Promise<
@@ -100,11 +104,13 @@ export async function createWork(input: {
 > {
   try {
     const { supabase, user } = await requireAdmin();
-    if (!input.title_zh.trim()) throw new Error("作品名稱必填");
+    if (!input.title_zh.trim()) throw new Error("作品台灣官方名稱必填");
+    if (!input.title_en?.trim()) throw new Error("作品英文官方名稱必填");
     const { data, error } = await supabase
       .from("works")
       .insert({
         title_zh: input.title_zh.trim(),
+        title_en: input.title_en.trim(),
         studio: input.studio,
         work_kind: input.work_kind,
       })
@@ -118,6 +124,7 @@ export async function createWork(input: {
       target_id: data.id,
       payload: {
         title_zh: input.title_zh.trim(),
+        title_en: input.title_en.trim(),
         studio: input.studio,
         work_kind: input.work_kind,
       },

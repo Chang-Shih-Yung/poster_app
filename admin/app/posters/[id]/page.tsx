@@ -30,12 +30,20 @@ export default async function EditPosterPage({
   ]);
   // Surface query errors instead of silently 404-ing — schema-cache miss
   // (PGRST204) and other Supabase errors used to look like "row not found"
-  // even when the row was clearly there. Now we throw, Next renders the
-  // error page (with stack trace in dev / generic in prod), and the cause
-  // is at least visible in logs.
+  // even when the row was clearly there. Now we log the full error
+  // (visible in Vercel runtime logs) and throw with a one-line message
+  // that fits the truncated log column.
   if (posterRes.error) {
+    const e = posterRes.error;
+    console.error("[posters/[id]] supabase select error", {
+      poster_id: id,
+      code: e.code,
+      message: e.message,
+      details: e.details,
+      hint: e.hint,
+    });
     throw new Error(
-      `Load poster ${id} failed: ${posterRes.error.message} (code: ${posterRes.error.code ?? "—"})`
+      `Load poster ${id}: ${e.code ?? "?"} ${e.message ?? ""} ${e.hint ?? ""}`.trim()
     );
   }
   const poster = posterRes.data;
