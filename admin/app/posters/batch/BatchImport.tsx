@@ -8,6 +8,7 @@ import { flattenGroupTree, type FlattenedGroup } from "@/lib/groupTree";
 import { SIZE_TYPES, CHANNEL_CATEGORIES, REGIONS } from "@/lib/enums";
 import { DEFAULT_REGION } from "@/lib/keys";
 import { uploadPosterImage, applyPromoImageChange } from "@/lib/imageUpload";
+import { listPosterSets, type PosterSet } from "@/app/actions/poster-sets";
 import { describeError } from "@/lib/errors";
 import { createPoster, attachImage } from "@/app/actions/posters";
 import { Button } from "@/components/ui/button";
@@ -106,6 +107,18 @@ export default function BatchImport({
     Record<string, FlattenedGroup[]>
   >({});
   const inflightRef = useRef<Set<string>>(new Set());
+
+  // poster_sets cache — shared across all cards (set is independent of
+  // work, so one fetch covers the whole batch import session). Refetched
+  // when any DraftCard creates a new set inline.
+  const [posterSets, setPosterSets] = useState<PosterSet[]>([]);
+  const refetchPosterSets = useCallback(async () => {
+    const r = await listPosterSets();
+    if (r.ok) setPosterSets(r.data);
+  }, []);
+  useEffect(() => {
+    refetchPosterSets();
+  }, [refetchPosterSets]);
 
   // Apply-bar state
   const [applyWorkId, setApplyWorkId] = useState(defaultWorkId ?? "");
@@ -426,6 +439,16 @@ export default function BatchImport({
             source_url: draft.source_url.trim() || null,
             source_platform: fromSentinel(draft.source_platform),
             source_note: draft.source_note.trim() || null,
+            // 售價（#13）— 'paid' 必有 amount，'gift' 不帶；NONE = null
+            price_type: fromSentinel(draft.price_type),
+            price_amount:
+              draft.price_type === "paid" && draft.price_amount.trim()
+                ? Number(draft.price_amount)
+                : null,
+            // 套票（#14）
+            set_id: fromSentinel(draft.set_id),
+            // 是否公開（#26）
+            is_public: draft.is_public,
           });
           if (!r.ok) throw new Error(r.error);
           posterId = r.data.id;
@@ -703,6 +726,7 @@ export default function BatchImport({
             groups={
               draft.work_id ? groupsByWork[draft.work_id] ?? [] : []
             }
+            posterSets={posterSets}
             onChange={(patch) => updateDraft(draft.localId, patch)}
             onRemove={() => removeDraft(draft.localId)}
             onWorkChange={(newWorkId) => {
@@ -712,6 +736,7 @@ export default function BatchImport({
               if (draft.work_id)
                 loadGroupsFor(draft.work_id, { force: true });
             }}
+            onSetCreated={() => refetchPosterSets()}
             disabled={submitting || draft.status !== "idle"}
           />
         ))}

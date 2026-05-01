@@ -67,6 +67,13 @@ export type DraftPoster = {
   // image picked alongside the main poster image. Uploaded after the
   // posters row is created (needs the id for the Storage path).
   promoFile: File | null;
+  // 售價（#13 spec）— price_type sentinel/value，amount 數字字串
+  price_type: string;
+  price_amount: string;
+  // 套票組合（#14 spec）— sentinel 或 poster_sets.id
+  set_id: string;
+  // 是否公開（#26 spec）— DB 預設 true，admin 可關閉做「上架但不公開」
+  is_public: boolean;
   status: DraftStatus;
   errorMsg?: string;
   createdPosterId?: string;
@@ -106,6 +113,10 @@ export function newDraft(
     source_note: "",
     channel_note: "",
     promoFile: null,
+    price_type: NONE,
+    price_amount: "",
+    set_id: NONE,
+    is_public: true,
     status: "idle",
   };
 }

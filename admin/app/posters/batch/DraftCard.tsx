@@ -22,7 +22,10 @@ import {
   RELEASE_TYPES,
   MATERIAL_TYPES,
   SOURCE_PLATFORMS,
+  PRICE_TYPES,
 } from "@/lib/enums";
+import { SetPicker } from "@/components/SetPicker";
+import type { PosterSet } from "@/app/actions/poster-sets";
 import type { FlattenedGroup } from "@/lib/groupTree";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -56,16 +59,20 @@ export function DraftCard({
   draft,
   works,
   groups,
+  posterSets,
   onChange,
   onRemove,
   onWorkChange,
   onGroupCreated,
+  onSetCreated,
   disabled,
 }: {
   draft: DraftPoster;
   works: WorkOption[];
   /** Groups for THIS card's work_id. Parent maintains the cache. */
   groups: FlattenedGroup[];
+  /** All poster_sets — same list across all cards (sets aren't per-work). */
+  posterSets: PosterSet[];
   onChange: (patch: Partial<DraftPoster>) => void;
   onRemove: () => void;
   /** Called when the card's work_id changes — parent uses this to
@@ -74,6 +81,8 @@ export function DraftCard({
   /** Called after a new group is created via the GroupPicker — parent
    * re-fetches groups for this work. */
   onGroupCreated: () => void;
+  /** Called after a new poster_set is created from the inline picker. */
+  onSetCreated: () => void;
   disabled: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -608,6 +617,74 @@ export function DraftCard({
                 rows={2}
               />
             </FormField>
+
+            {/* ── 售價（#13） ───────────────────────────────────── */}
+            <div className="grid grid-cols-2 gap-2">
+              <FormField label="售價類型" size="compact">
+                <Select
+                  value={draft.price_type}
+                  onValueChange={(v) =>
+                    onChange({
+                      price_type: v,
+                      // 切回 NONE / gift 時清掉金額
+                      ...(v !== "paid" && { price_amount: "" }),
+                    })
+                  }
+                >
+                  <SelectTrigger className="h-9">
+                    <SelectValue placeholder="—" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={NONE}>—</SelectItem>
+                    {PRICE_TYPES.map((p) => (
+                      <SelectItem key={p.value} value={p.value}>
+                        {p.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FormField>
+              {draft.price_type === "paid" && (
+                <FormField label="售價（TWD）" required size="compact">
+                  <Input
+                    type="number"
+                    step="1"
+                    min="0"
+                    value={draft.price_amount}
+                    onChange={(e) =>
+                      onChange({ price_amount: e.target.value })
+                    }
+                    placeholder="例：188"
+                    className="h-9"
+                  />
+                </FormField>
+              )}
+            </div>
+
+            {/* ── 套票組合（#14） ───────────────────────────────── */}
+            <FormField label="所屬套票" size="compact">
+              <SetPicker
+                sets={posterSets}
+                value={draft.set_id}
+                onChange={(v) => onChange({ set_id: v })}
+                onSetCreated={onSetCreated}
+                disabled={disabled}
+              />
+            </FormField>
+
+            {/* ── 是否公開（#26） ───────────────────────────────── */}
+            <label className="flex items-center gap-2 text-sm select-none cursor-pointer">
+              <input
+                type="checkbox"
+                checked={draft.is_public}
+                onChange={(e) => onChange({ is_public: e.target.checked })}
+                disabled={disabled}
+                className="h-4 w-4 rounded border-input"
+              />
+              <span>
+                {draft.is_public ? "公開" : "未公開（admin 限定）"}
+              </span>
+            </label>
           </div>
         )}
       </CardContent>

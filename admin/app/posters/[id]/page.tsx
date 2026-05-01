@@ -18,7 +18,7 @@ export default async function EditPosterPage({
   // System columns (created_at / updated_at / uploader_id / updated_by /
   // view_count / favorite_count / status / is_public) are read here and
   // displayed in the read-only stats card below the metadata form.
-  const [{ data: poster }, { data: works }] = await Promise.all([
+  const [posterRes, worksRes] = await Promise.all([
     supabase
       .from("posters")
       .select(
@@ -28,7 +28,18 @@ export default async function EditPosterPage({
       .single(),
     supabase.from("works").select("id, title_zh, studio").order("studio").order("title_zh"),
   ]);
-
+  // Surface query errors instead of silently 404-ing — schema-cache miss
+  // (PGRST204) and other Supabase errors used to look like "row not found"
+  // even when the row was clearly there. Now we throw, Next renders the
+  // error page (with stack trace in dev / generic in prod), and the cause
+  // is at least visible in logs.
+  if (posterRes.error) {
+    throw new Error(
+      `Load poster ${id} failed: ${posterRes.error.message} (code: ${posterRes.error.code ?? "—"})`
+    );
+  }
+  const poster = posterRes.data;
+  const works = worksRes.data;
   if (!poster) notFound();
 
   // Resolve uploader / updater display names in one query — DB doesn't
