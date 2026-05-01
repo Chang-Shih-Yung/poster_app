@@ -22,11 +22,7 @@ import {
 import { flattenGroupTree, type FlattenedGroup } from "@/lib/groupTree";
 import { DEFAULT_REGION } from "@/lib/keys";
 import { createPoster, updatePosterMetadata } from "@/app/actions/posters";
-import { applyPromoImageChange } from "@/lib/imageUpload";
-import PromoImagePicker, {
-  EMPTY_PROMO_STATE,
-  type PromoImagePickerState,
-} from "@/components/PromoImagePicker";
+import PromoImageGallery from "@/components/PromoImageGallery";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -180,15 +176,9 @@ export default function PosterForm({
   const [groupOptions, setGroupOptions] = useState<FlattenedGroup[]>([]);
   const [serverError, setServerError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
-  // Promo image picker state lives outside RHF — RHF doesn't model File
-  // gracefully, and the post-submit upload pipeline needs the raw File
-  // anyway. Edit mode preserves the existing URL so the picker shows it
-  // until the admin actively replaces or removes.
-  const [promoState, setPromoState] = useState<PromoImagePickerState>(
-    EMPTY_PROMO_STATE
-  );
-  const existingPromoUrl =
-    initial?.promo_thumbnail_url ?? initial?.promo_image_url ?? null;
+  // 宣傳圖片改 1:N gallery — 由 PromoImageGallery 自己 fetch / mutate，
+  // 不再經過 RHF state 或 onSubmit。create mode 看不到（沒 ID），admin
+  // 建好海報後在編輯頁加。
 
   const {
     register,
@@ -376,28 +366,9 @@ export default function PosterForm({
         targetId = initial!.id;
       }
 
-      // Promo image side-effect (after metadata write succeeded). Same
-      // pipeline regardless of mode. Failures here don't roll back the
-      // metadata write — partial success is better than losing a long
-      // form. Warn + send the user to the edit page so they can retry.
-      const hasPromoChange =
-        promoState.file || (promoState.markedForRemoval && existingPromoUrl);
-      if (hasPromoChange) {
-        const promoR = await applyPromoImageChange(
-          targetId,
-          promoState,
-          existingPromoUrl
-        );
-        if (!promoR.ok) {
-          toast.warning(
-            `海報資料已${mode === "create" ? "建立" : "儲存"}，但宣傳圖片處理失敗：${promoR.error}。請進編輯頁重試宣傳圖。`,
-            { duration: 12000 }
-          );
-          router.push(`/posters/${targetId}`);
-          return;
-        }
-      }
-
+      // 宣傳圖片現在走 PromoImageGallery 直接呼 server action，不再用
+      // form submit 帶 file。Create flow 結束直接跳列表；admin 想加
+      // 宣傳圖回編輯頁加。
       router.push("/posters");
     });
   }
@@ -861,15 +832,10 @@ export default function PosterForm({
         <Textarea {...register("source_note")} disabled={pending} />
       </FormField>
 
-      {/* ── #18 海報發行資訊（圖檔）─────────────────────────────── */}
-      <FormField
-        label="海報發行資訊"
-        helper="影院 DM、IG 活動圖、票券優惠等取得方式佐證"
-      >
-        <PromoImagePicker
-          existingUrl={existingPromoUrl}
-          state={promoState}
-          onChange={setPromoState}
+      {/* ── #18 海報發行資訊（圖檔，可多張）─────────────────────── */}
+      <FormField label="海報發行資訊">
+        <PromoImageGallery
+          posterId={mode === "edit" ? initial!.id : null}
           disabled={pending}
         />
       </FormField>
