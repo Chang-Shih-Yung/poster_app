@@ -607,15 +607,6 @@ export function DraftCard({
               </FormField>
             </div>
 
-            {/* ── #17 資料來源補充說明 ─────────────────────────── */}
-            <FormField label="資料來源補充說明" size="compact">
-              <Textarea
-                value={draft.source_note}
-                onChange={(e) => onChange({ source_note: e.target.value })}
-                rows={2}
-              />
-            </FormField>
-
             {/* ── #18 海報發行資訊（圖檔）──────────────────────── */}
             <FormField label="海報發行資訊" size="compact">
               <PromoImagePicker
@@ -629,6 +620,15 @@ export function DraftCard({
                 }
                 disabled={draft.status !== "idle"}
                 compact
+              />
+            </FormField>
+
+            {/* ── #29 備註（= source_note，跟單張 PosterForm 同位置）── */}
+            <FormField label="備註" size="compact">
+              <Textarea
+                value={draft.source_note}
+                onChange={(e) => onChange({ source_note: e.target.value })}
+                rows={2}
               />
             </FormField>
 

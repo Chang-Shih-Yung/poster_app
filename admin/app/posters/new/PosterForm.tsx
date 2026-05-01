@@ -969,11 +969,6 @@ export default function PosterForm({
         </FormField>
       </div>
 
-      {/* ── #17 資料來源補充說明 ─────────────────────────────────── */}
-      <FormField label="資料來源補充說明">
-        <Textarea {...register("source_note")} disabled={pending} />
-      </FormField>
-
       {/* ── #18 海報發行資訊（圖檔，可多張）─────────────────────── */}
       <FormField label="海報發行資訊">
         <PromoImageGallery
@@ -984,6 +979,13 @@ export default function PosterForm({
           }
           disabled={pending}
         />
+      </FormField>
+
+      {/* ── #29 備註（spec 上 #17「資料來源補充說明」與 #29「備註」是
+            同一欄位 source_note，admin 的 mental model 統一稱「備註」並
+            放在「海報發行資訊」下方，跟批量 DraftCard 順序一致） */}
+      <FormField label="備註">
+        <Textarea {...register("source_note")} disabled={pending} />
       </FormField>
 
       {/* ── 公開狀態 ─────────────────────────────────────────────── */}
