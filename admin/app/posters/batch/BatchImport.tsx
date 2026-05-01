@@ -462,21 +462,27 @@ export default function BatchImport({
             });
             if (!ar.ok) throw new Error(ar.error);
 
-            // Promo image is optional. Spec #18 supports multiple now via
-            // poster_promo_images sub-table, but batch import only collects
-            // one file per draft (DraftCard 的 PromoImagePicker 是 single)。
-            // 寫一筆進新表（addPromoImage），admin 想加更多就到編輯頁。
-            if (draft.promoFile) {
-              const uploadedPromo = await uploadPromoImage(
-                draft.promoFile,
-                posterId
-              );
-              const promoR = await addPromoImage(posterId, {
-                image_url: uploadedPromo.promoImageUrl,
-                thumbnail_url: uploadedPromo.promoThumbnailUrl,
-              });
-              if (!promoR.ok) {
-                throw new Error(`宣傳圖：${promoR.error}`);
+            // 海報發行資訊（spec #18）— 多張，跟單張 PosterForm create
+            // mode 同 pipeline：逐張 uploadPromoImage + addPromoImage。
+            // 個別失敗不影響其他張，最後失敗計數含進去 image_failed 邏輯。
+            if (draft.promoFiles.length > 0) {
+              let promoFails = 0;
+              for (const file of draft.promoFiles) {
+                try {
+                  const uploadedPromo = await uploadPromoImage(file, posterId);
+                  const promoR = await addPromoImage(posterId, {
+                    image_url: uploadedPromo.promoImageUrl,
+                    thumbnail_url: uploadedPromo.promoThumbnailUrl,
+                  });
+                  if (!promoR.ok) throw new Error(promoR.error);
+                } catch {
+                  promoFails++;
+                }
+              }
+              if (promoFails > 0) {
+                throw new Error(
+                  `宣傳圖：${promoFails} / ${draft.promoFiles.length} 張上傳失敗`
+                );
               }
             }
 

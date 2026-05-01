@@ -41,9 +41,7 @@ import { WorkPicker, type WorkOption } from "@/components/WorkPicker";
 import { GroupPicker } from "@/components/GroupPicker";
 import { DatePicker } from "@/components/DatePicker";
 import { MultiSelectDropdown } from "@/components/ui/multi-select";
-import PromoImagePicker, {
-  type PromoImagePickerState,
-} from "@/components/PromoImagePicker";
+import PromoImageGallery from "@/components/PromoImageGallery";
 import { cn } from "@/lib/utils";
 import { NONE, type DraftPoster } from "./_shared";
 
@@ -607,19 +605,15 @@ export function DraftCard({
               </FormField>
             </div>
 
-            {/* ── #18 海報發行資訊（圖檔）──────────────────────── */}
+            {/* ── #18 海報發行資訊（圖檔，可多張） ──────────────── */}
+            {/* 跟單張 PosterForm 共用 PromoImageGallery 元件 — create
+                mode 收 File[]，submit pipeline 逐張上傳 */}
             <FormField label="海報發行資訊" size="compact">
-              <PromoImagePicker
-                existingUrl={null}
-                state={{
-                  file: draft.promoFile,
-                  markedForRemoval: false,
-                }}
-                onChange={(s: PromoImagePickerState) =>
-                  onChange({ promoFile: s.file })
-                }
+              <PromoImageGallery
+                posterId={null}
+                pendingFiles={draft.promoFiles}
+                onPendingChange={(files) => onChange({ promoFiles: files })}
                 disabled={draft.status !== "idle"}
-                compact
               />
             </FormField>
 

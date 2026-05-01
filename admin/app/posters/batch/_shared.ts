@@ -63,10 +63,10 @@ export type DraftPoster = {
   source_platform: string;
   source_note: string;
   channel_note: string;
-  // Promo image (cinema flyer / IG campaign / etc.) — optional second
-  // image picked alongside the main poster image. Uploaded after the
-  // posters row is created (needs the id for the Storage path).
-  promoFile: File | null;
+  // 海報發行資訊 (#18) — 多張，跟單張表單共用 PromoImageGallery 元件。
+  // Submit 時逐張 upload + addPromoImage（與單張 PosterForm create
+  // mode 同 pipeline）。
+  promoFiles: File[];
   // 售價（#13 spec）— price_type sentinel/value，amount 數字字串
   price_type: string;
   price_amount: string;
@@ -112,7 +112,7 @@ export function newDraft(
     source_platform: NONE,
     source_note: "",
     channel_note: "",
-    promoFile: null,
+    promoFiles: [],
     price_type: NONE,
     price_amount: "",
     set_id: NONE,
