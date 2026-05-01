@@ -26,9 +26,9 @@ import {
 import type { FlattenedGroup } from "@/lib/groupTree";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
+import { FormField } from "@/components/ui/form-field";
 import {
   Select,
   SelectContent,
@@ -242,8 +242,7 @@ export function DraftCard({
         {/* ── Expanded fields ────────────────────────────────────────── */}
         {expanded && draft.status === "idle" && (
           <div className="space-y-3 pt-1 border-t border-border">
-            <div className="space-y-1">
-              <Label className="text-xs">作品 *</Label>
+            <FormField label="作品" required size="compact">
               <WorkPicker
                 works={works}
                 value={draft.work_id}
@@ -253,11 +252,10 @@ export function DraftCard({
                 }}
                 triggerClassName="h-9"
               />
-            </div>
+            </FormField>
 
             {draft.work_id && (
-              <div className="space-y-1">
-                <Label className="text-xs">群組</Label>
+              <FormField label="群組" size="compact">
                 <GroupPicker
                   workId={draft.work_id}
                   workName={works.find((w) => w.id === draft.work_id)?.title_zh}
@@ -266,12 +264,11 @@ export function DraftCard({
                   onChange={(v) => onChange({ parent_group_id: v })}
                   onGroupCreated={onGroupCreated}
                 />
-              </div>
+              </FormField>
             )}
 
             <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-1">
-                <Label className="text-xs">發行日期</Label>
+              <FormField label="發行日期" size="compact">
                 <DatePicker
                   value={draft.poster_release_date}
                   onChange={(v) => {
@@ -282,9 +279,8 @@ export function DraftCard({
                   }}
                   className="h-9"
                 />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">發行年份 *</Label>
+              </FormField>
+              <FormField label="發行年份" required size="compact">
                 <Input
                   type="number"
                   min={1900}
@@ -294,12 +290,11 @@ export function DraftCard({
                   placeholder="例：2026"
                   className="h-9"
                 />
-              </div>
+              </FormField>
             </div>
 
             <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-1">
-                <Label className="text-xs">地區 *</Label>
+              <FormField label="地區" required size="compact">
                 <Select
                   value={draft.region}
                   onValueChange={(v) => onChange({ region: v })}
@@ -315,9 +310,8 @@ export function DraftCard({
                     ))}
                   </SelectContent>
                 </Select>
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">發行類型</Label>
+              </FormField>
+              <FormField label="發行類型" size="compact">
                 <Select
                   value={draft.poster_release_type}
                   onValueChange={(v) => onChange({ poster_release_type: v })}
@@ -334,13 +328,12 @@ export function DraftCard({
                     ))}
                   </SelectContent>
                 </Select>
-              </div>
+              </FormField>
             </div>
 
             {/* 尺寸 + 材質 */}
             <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-1">
-                <Label className="text-xs">尺寸 *</Label>
+              <FormField label="尺寸" required size="compact">
                 <Select
                   value={draft.size_type}
                   onValueChange={(v) => onChange({ size_type: v })}
@@ -357,9 +350,8 @@ export function DraftCard({
                     ))}
                   </SelectContent>
                 </Select>
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">材質</Label>
+              </FormField>
+              <FormField label="材質" size="compact">
                 <Select
                   value={draft.material_type}
                   onValueChange={(v) => onChange({ material_type: v })}
@@ -376,14 +368,13 @@ export function DraftCard({
                     ))}
                   </SelectContent>
                 </Select>
-              </div>
+              </FormField>
             </div>
 
             {/* CUSTOM 尺寸：寬高單位 */}
             {draft.size_type === "custom" && (
               <div className="grid grid-cols-3 gap-2 p-2 rounded border border-border bg-secondary/30">
-                <div className="space-y-1">
-                  <Label className="text-xs">寬 *</Label>
+                <FormField label="寬" required size="compact">
                   <Input
                     type="number"
                     step="0.1"
@@ -394,9 +385,8 @@ export function DraftCard({
                     placeholder="60"
                     className="h-9"
                   />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">高 *</Label>
+                </FormField>
+                <FormField label="高" required size="compact">
                   <Input
                     type="number"
                     step="0.1"
@@ -407,9 +397,8 @@ export function DraftCard({
                     placeholder="90"
                     className="h-9"
                   />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">單位 *</Label>
+                </FormField>
+                <FormField label="單位" required size="compact">
                   <Select
                     value={draft.size_unit}
                     onValueChange={(v) => onChange({ size_unit: v })}
@@ -426,13 +415,12 @@ export function DraftCard({
                       ))}
                     </SelectContent>
                   </Select>
-                </div>
+                </FormField>
               </div>
             )}
 
             {/* 通路類型 */}
-            <div className="space-y-1">
-              <Label className="text-xs">通路類型 *</Label>
+            <FormField label="通路類型" required size="compact">
               <Select
                 value={draft.channel_category}
                 onValueChange={(v) =>
@@ -459,25 +447,23 @@ export function DraftCard({
                   ))}
                 </SelectContent>
               </Select>
-            </div>
+            </FormField>
 
             {/* Cinema-specific (only when channel_category=cinema) */}
             {draft.channel_category === "cinema" && (
               <>
-                <div className="space-y-1">
-                  <Label className="text-xs">影城發行類型（可複選）</Label>
+                <FormField label="影城發行類型（可複選）" size="compact">
                   <MultiSelectDropdown
                     items={CINEMA_RELEASE_TYPES}
                     value={draft.cinema_release_types}
                     onChange={(v) => onChange({ cinema_release_types: v })}
                     placeholder="—"
                   />
-                </div>
+                </FormField>
                 {draft.cinema_release_types.includes(
                   "premium_format_limited"
                 ) && (
-                  <div className="space-y-1">
-                    <Label className="text-xs">發行影廳</Label>
+                  <FormField label="發行影廳" size="compact">
                     <Select
                       value={draft.premium_format}
                       onValueChange={(v) => onChange({ premium_format: v })}
@@ -494,10 +480,9 @@ export function DraftCard({
                         ))}
                       </SelectContent>
                     </Select>
-                  </div>
+                  </FormField>
                 )}
-                <div className="space-y-1">
-                  <Label className="text-xs">影城</Label>
+                <FormField label="影城" size="compact">
                   <Select
                     value={draft.cinema_name}
                     onValueChange={(v) => onChange({ cinema_name: v })}
@@ -514,15 +499,14 @@ export function DraftCard({
                       ))}
                     </SelectContent>
                   </Select>
-                </div>
+                </FormField>
               </>
             )}
 
             {/* Non-cinema channel_type */}
             {draft.channel_category !== "cinema" &&
               draft.channel_category !== NONE && (
-                <div className="space-y-1">
-                  <Label className="text-xs">通路細分</Label>
+                <FormField label="通路細分" size="compact">
                   <Select
                     value={draft.channel_type}
                     onValueChange={(v) => onChange({ channel_type: v })}
@@ -539,31 +523,28 @@ export function DraftCard({
                       ))}
                     </SelectContent>
                   </Select>
-                </div>
+                </FormField>
               )}
 
-            <div className="space-y-1">
-              <Label className="text-xs">通路名稱</Label>
+            <FormField label="通路名稱" size="compact">
               <Input
                 value={draft.channel_name}
                 onChange={(e) => onChange({ channel_name: e.target.value })}
                 placeholder="例：威秀影城"
                 className="h-9"
               />
-            </div>
+            </FormField>
 
-            <div className="space-y-1">
-              <Label className="text-xs">通路補充說明</Label>
+            <FormField label="通路補充說明" size="compact">
               <Textarea
                 value={draft.channel_note}
                 onChange={(e) => onChange({ channel_note: e.target.value })}
                 placeholder="例：威秀獨家加贈卡套"
                 rows={2}
               />
-            </div>
+            </FormField>
 
-            <div className="space-y-1">
-              <Label className="text-xs">宣傳圖片</Label>
+            <FormField label="宣傳圖片" size="compact">
               <PromoImagePicker
                 existingUrl={null}
                 state={{
@@ -579,7 +560,7 @@ export function DraftCard({
                 disabled={draft.status !== "idle"}
                 compact
               />
-            </div>
+            </FormField>
 
             <label className="flex items-center gap-2 text-sm">
               <input
@@ -599,19 +580,17 @@ export function DraftCard({
               />
             )}
 
-            <div className="space-y-1">
-              <Label className="text-xs">版本標記</Label>
+            <FormField label="版本標記" size="compact">
               <Input
                 value={draft.version_label}
                 onChange={(e) => onChange({ version_label: e.target.value })}
                 placeholder="例：v2、25 週年"
                 className="h-9"
               />
-            </div>
+            </FormField>
 
             <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-1">
-                <Label className="text-xs">來源平台</Label>
+              <FormField label="來源平台" size="compact">
                 <Select
                   value={draft.source_platform}
                   onValueChange={(v) => onChange({ source_platform: v })}
@@ -628,26 +607,24 @@ export function DraftCard({
                     ))}
                   </SelectContent>
                 </Select>
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">來源網址</Label>
+              </FormField>
+              <FormField label="來源網址" size="compact">
                 <Input
                   type="url"
                   value={draft.source_url}
                   onChange={(e) => onChange({ source_url: e.target.value })}
                   className="h-9"
                 />
-              </div>
+              </FormField>
             </div>
 
-            <div className="space-y-1">
-              <Label className="text-xs">備註</Label>
+            <FormField label="備註" size="compact">
               <Textarea
                 value={draft.source_note}
                 onChange={(e) => onChange({ source_note: e.target.value })}
                 rows={2}
               />
-            </div>
+            </FormField>
           </div>
         )}
       </CardContent>

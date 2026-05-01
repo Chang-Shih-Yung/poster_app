@@ -12,8 +12,8 @@ import { describeError } from "@/lib/errors";
 import { createPoster, attachImage } from "@/app/actions/posters";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
+import { FormField } from "@/components/ui/form-field";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -593,19 +593,17 @@ export default function BatchImport({
             套用到全部卡片
           </p>
 
-          <div className="space-y-1">
-            <Label className="text-xs">作品</Label>
+          <FormField label="作品" size="compact">
             <WorkPicker
               works={works}
               value={applyWorkId}
               onChange={setApplyWorkId}
               triggerClassName="h-9"
             />
-          </div>
+          </FormField>
 
           {applyWorkId && (
-            <div className="space-y-1">
-              <Label className="text-xs">群組</Label>
+            <FormField label="群組" size="compact">
               <GroupPicker
                 workId={applyWorkId}
                 workName={works.find((w) => w.id === applyWorkId)?.title_zh}
@@ -616,12 +614,11 @@ export default function BatchImport({
                   loadGroupsFor(applyWorkId, { force: true })
                 }
               />
-            </div>
+            </FormField>
           )}
 
           <div className="grid grid-cols-2 gap-2">
-            <div className="space-y-1">
-              <Label className="text-xs">地區</Label>
+            <FormField label="地區" size="compact">
               <Select value={applyRegion} onValueChange={setApplyRegion}>
                 <SelectTrigger className="h-9">
                   <SelectValue />
@@ -634,9 +631,8 @@ export default function BatchImport({
                   ))}
                 </SelectContent>
               </Select>
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">尺寸</Label>
+            </FormField>
+            <FormField label="尺寸" size="compact">
               <Select value={applySizeType} onValueChange={setApplySizeType}>
                 <SelectTrigger className="h-9">
                   <SelectValue placeholder="—" />
@@ -650,12 +646,11 @@ export default function BatchImport({
                   ))}
                 </SelectContent>
               </Select>
-            </div>
+            </FormField>
           </div>
 
           <div className="grid grid-cols-2 gap-2">
-            <div className="space-y-1">
-              <Label className="text-xs">發行年份</Label>
+            <FormField label="發行年份" size="compact">
               <Input
                 type="number"
                 min={1900}
@@ -665,9 +660,8 @@ export default function BatchImport({
                 placeholder="例：2026"
                 className="h-9"
               />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">通路類型</Label>
+            </FormField>
+            <FormField label="通路類型" size="compact">
               <Select value={applyChannelCat} onValueChange={setApplyChannelCat}>
                 <SelectTrigger className="h-9">
                   <SelectValue placeholder="—" />
@@ -681,7 +675,7 @@ export default function BatchImport({
                   ))}
                 </SelectContent>
               </Select>
-            </div>
+            </FormField>
           </div>
 
           <Button

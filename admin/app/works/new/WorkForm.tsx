@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation";
 import { WORK_KINDS } from "@/lib/enums";
 import { createWork, updateWork } from "@/app/actions/works";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { FormField } from "@/components/ui/form-field";
 import {
   Select,
   SelectContent,
@@ -86,8 +86,7 @@ export default function WorkForm({ mode, initial, studios = [] }: WorkFormProps)
         </Card>
       )}
 
-      <div className="space-y-1.5">
-        <Label htmlFor="studio">Studio / IP 持有者</Label>
+      <FormField label="Studio / IP 持有者" htmlFor="studio">
         {studioMode === "select" ? (
           <Select
             value={studio}
@@ -141,10 +140,9 @@ export default function WorkForm({ mode, initial, studios = [] }: WorkFormProps)
             </Button>
           </div>
         )}
-      </div>
+      </FormField>
 
-      <div className="space-y-1.5">
-        <Label htmlFor="title_zh">作品名稱 *</Label>
+      <FormField label="作品名稱" required htmlFor="title_zh">
         <Input
           id="title_zh"
           value={titleZh}
@@ -153,10 +151,9 @@ export default function WorkForm({ mode, initial, studios = [] }: WorkFormProps)
           required
           disabled={pending}
         />
-      </div>
+      </FormField>
 
-      <div className="space-y-1.5">
-        <Label htmlFor="title_en">英文名</Label>
+      <FormField label="英文名" htmlFor="title_en">
         <Input
           id="title_en"
           value={titleEn}
@@ -164,10 +161,9 @@ export default function WorkForm({ mode, initial, studios = [] }: WorkFormProps)
           placeholder="例：Avengers / Spirited Away"
           disabled={pending}
         />
-      </div>
+      </FormField>
 
-      <div className="space-y-1.5">
-        <Label htmlFor="work_kind">類型</Label>
+      <FormField label="類型" htmlFor="work_kind">
         <Select value={workKind} onValueChange={setWorkKind} disabled={pending}>
           <SelectTrigger id="work_kind">
             <SelectValue placeholder="請選擇" />
@@ -180,7 +176,7 @@ export default function WorkForm({ mode, initial, studios = [] }: WorkFormProps)
             ))}
           </SelectContent>
         </Select>
-      </div>
+      </FormField>
 
       <p className="text-xs text-muted-foreground">
         年份、地區、通路等資訊請在每張海報單獨設定（每張海報可能對應不同

@@ -30,11 +30,11 @@ import PromoImagePicker, {
 } from "@/components/PromoImagePicker";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { FormField } from "@/components/ui/form-field";
 import {
   Select,
   SelectContent,
@@ -368,7 +368,7 @@ export default function PosterForm({
       )}
 
       {/* ── 作品 & 群組 ─────────────────────────────────────────── */}
-      <FormField label="作品 *" error={errors.work_id?.message}>
+      <FormField label="作品" required error={errors.work_id?.message}>
         <Controller
           control={control}
           name="work_id"
@@ -409,7 +409,7 @@ export default function PosterForm({
       </FormField>
 
       {/* ── 基本資訊 ─────────────────────────────────────────────── */}
-      <FormField label="海報名稱 *" error={errors.poster_name?.message}>
+      <FormField label="海報名稱" required error={errors.poster_name?.message}>
         <Input
           {...register("poster_name")}
           placeholder="例：B1 原版 / IMAX 威秀獨家"
@@ -431,7 +431,7 @@ export default function PosterForm({
             )}
           />
         </FormField>
-        <FormField label="發行年份 *" error={errors.year?.message}>
+        <FormField label="發行年份" required error={errors.year?.message}>
           <Input
             type="number"
             min={1900}
@@ -444,7 +444,7 @@ export default function PosterForm({
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        <FormField label="地區 *" error={errors.region?.message}>
+        <FormField label="地區" required error={errors.region?.message}>
           <Controller
             control={control}
             name="region"
@@ -497,7 +497,7 @@ export default function PosterForm({
 
       {/* ── 尺寸（CUSTOM 時展開 width/height/unit）─────────────── */}
       <div className="grid grid-cols-2 gap-3">
-        <FormField label="尺寸 *" error={errors.size_type?.message}>
+        <FormField label="尺寸" required error={errors.size_type?.message}>
           <Controller
             control={control}
             name="size_type"
@@ -551,7 +551,7 @@ export default function PosterForm({
 
       {isCustomSize && (
         <div className="grid grid-cols-3 gap-2 p-3 rounded border border-border bg-secondary/30">
-          <FormField label="寬 *">
+          <FormField label="寬" required>
             <Input
               type="number"
               step="0.1"
@@ -560,7 +560,7 @@ export default function PosterForm({
               disabled={pending}
             />
           </FormField>
-          <FormField label="高 *">
+          <FormField label="高" required>
             <Input
               type="number"
               step="0.1"
@@ -569,7 +569,7 @@ export default function PosterForm({
               disabled={pending}
             />
           </FormField>
-          <FormField label="單位 *">
+          <FormField label="單位" required>
             <Controller
               control={control}
               name="size_unit"
@@ -607,7 +607,7 @@ export default function PosterForm({
 
       {/* ── 通路 ─────────────────────────────────────────────────── */}
       <FormField
-        label="通路類型 *"
+        label="通路類型" required
         error={errors.channel_category?.message}
       >
         <Controller
@@ -846,30 +846,6 @@ export default function PosterForm({
         新建海報預設 is_placeholder = true（先用通用剪影顯示）。
       </p>
     </form>
-  );
-}
-
-function FormField({
-  label,
-  helper,
-  error,
-  children,
-}: {
-  label: string;
-  helper?: string;
-  error?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="space-y-1.5">
-      <Label>{label}</Label>
-      {children}
-      {error ? (
-        <p className="text-xs text-destructive">{error}</p>
-      ) : helper ? (
-        <p className="text-xs text-muted-foreground">{helper}</p>
-      ) : null}
-    </div>
   );
 }
 
