@@ -1,6 +1,7 @@
 import PageShell from "@/components/PageShell";
 import PosterForm from "../new/PosterForm";
 import PosterImageUploader from "@/components/PosterImageUploader";
+import PromoImageUploader from "@/components/PromoImageUploader";
 import { getServerSupabase } from "@/lib/auth-cache";
 import { notFound } from "next/navigation";
 import { UNNAMED_POSTER } from "@/lib/keys";
@@ -23,7 +24,7 @@ export default async function EditPosterPage({
         // were dropped in 20260429150000 — no longer selected. New fields:
         // cinema_release_types, premium_format, cinema_name, custom_width,
         // custom_height, size_unit, channel_note.
-        "id, work_id, work_kind, parent_group_id, poster_name, year, poster_release_date, region, poster_release_type, size_type, custom_width, custom_height, size_unit, channel_category, channel_type, channel_name, channel_note, cinema_release_types, premium_format, cinema_name, is_exclusive, exclusive_name, material_type, version_label, source_url, source_platform, source_note, is_placeholder, poster_url, thumbnail_url"
+        "id, work_id, work_kind, parent_group_id, poster_name, year, poster_release_date, region, poster_release_type, size_type, custom_width, custom_height, size_unit, channel_category, channel_type, channel_name, channel_note, cinema_release_types, premium_format, cinema_name, is_exclusive, exclusive_name, material_type, version_label, source_url, source_platform, source_note, is_placeholder, poster_url, thumbnail_url, promo_image_url, promo_thumbnail_url"
       )
       .eq("id", id)
       .single(),
@@ -46,6 +47,21 @@ export default async function EditPosterPage({
             posterId={poster.id}
             currentImageUrl={poster.thumbnail_url ?? poster.poster_url}
             isPlaceholder={poster.is_placeholder}
+          />
+        </section>
+
+        <section>
+          <h2 className="text-xs uppercase tracking-wider text-muted-foreground mb-3">
+            宣傳圖片（選填）
+          </h2>
+          <p className="text-xs text-muted-foreground mb-3 leading-relaxed">
+            影院宣傳 DM、IG 活動圖、票券優惠等，補充說明這張海報的取得方式。
+          </p>
+          <PromoImageUploader
+            posterId={poster.id}
+            currentImageUrl={
+              poster.promo_thumbnail_url ?? poster.promo_image_url ?? null
+            }
           />
         </section>
 

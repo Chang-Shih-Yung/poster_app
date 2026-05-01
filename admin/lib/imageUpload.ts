@@ -114,3 +114,68 @@ function loadImage(src: string): Promise<HTMLImageElement> {
     img.src = src;
   });
 }
+
+/**
+ * Result of uploading a promo image — slimmer than UploadResult because
+ * promo images don't get blurhash (not animated into the main feed) and
+ * we don't track size separately for audit purposes.
+ */
+export type PromoUploadResult = {
+  promoImageUrl: string;
+  promoThumbnailUrl: string;
+};
+
+/**
+ * Pipeline for uploading a poster's promo image (cinema flyer / IG
+ * campaign shot / etc.). Mirrors uploadPosterImage minus the blurhash:
+ *   1. Compress main (long edge ≤ 1600px)
+ *   2. Compress thumbnail (long edge ≤ 400px)
+ *   3. Upload to ${posterId}/promo_main_${ts}.jpg + promo_thumb_${ts}.jpg
+ *
+ * Same bucket as the main poster image. The `promo_` filename prefix
+ * makes it easy to spot in the Storage browser.
+ */
+export async function uploadPromoImage(
+  file: File,
+  posterId: string
+): Promise<PromoUploadResult> {
+  const main = await imageCompression(file, {
+    maxSizeMB: 2,
+    maxWidthOrHeight: 1600,
+    useWebWorker: true,
+    fileType: "image/jpeg",
+    initialQuality: 0.85,
+  });
+
+  const thumb = await imageCompression(file, {
+    maxSizeMB: 0.4,
+    maxWidthOrHeight: 400,
+    useWebWorker: true,
+    fileType: "image/jpeg",
+    initialQuality: 0.75,
+  });
+
+  const supabase = createClient();
+  const ts = Date.now();
+  const mainPath = `${posterId}/promo_main_${ts}.jpg`;
+  const thumbPath = `${posterId}/promo_thumb_${ts}.jpg`;
+
+  const [mainUp, thumbUp] = await Promise.all([
+    supabase.storage.from(POSTERS_BUCKET).upload(mainPath, main, {
+      contentType: "image/jpeg",
+      upsert: true,
+    }),
+    supabase.storage.from(POSTERS_BUCKET).upload(thumbPath, thumb, {
+      contentType: "image/jpeg",
+      upsert: true,
+    }),
+  ]);
+
+  if (mainUp.error) throw mainUp.error;
+  if (thumbUp.error) throw thumbUp.error;
+
+  return {
+    promoImageUrl: supabase.storage.from(POSTERS_BUCKET).getPublicUrl(mainPath).data.publicUrl,
+    promoThumbnailUrl: supabase.storage.from(POSTERS_BUCKET).getPublicUrl(thumbPath).data.publicUrl,
+  };
+}

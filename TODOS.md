@@ -60,3 +60,32 @@
 **Priority:** P1（admin 任何新海報的 enum 值都是新值，Flutter 顯示會醜）
 **Depends on:** 無
 **Reference:** GBrain page `poster-app-schema-v2-partner-spec` 有完整 mapping 表
+
+---
+
+## P2 — Flutter 端：新增「宣傳圖片」欄位（promo_image_url）
+
+**What:** Admin 已加海報的「宣傳圖片」（影院 DM / IG 活動圖等取得方式佐證）。
+DB 端 posters + submissions 都加好欄位、admin 編輯頁可上傳。Flutter app
+這邊還沒同步：(1) submission_page 沒上傳欄位，(2) Poster 模型沒讀，
+(3) 詳情頁沒顯示。
+
+**Why:** 合夥人 spec — 海報的取得方式有時要附宣傳圖（影院 lobby 海報、
+IG 活動截圖、票券優惠 DM）。Admin 自己建的海報有了，使用者透過 Flutter
+提交時也要能附這張圖，否則 review queue 看不到背景脈絡。
+
+**File scope (Flutter side `lib/`):**
+- `data/models/poster.dart` — 加 `promoImageUrl` / `promoThumbnailUrl` 欄位
+- `data/models/submission.dart` — 同上
+- `features/submission/submission_page.dart` — 加第二張圖的 picker（optional）
+- `features/posters/poster_detail_page.dart`（或現有的 detail widget）—
+  非空時顯示宣傳圖 section
+- `data/repositories/submission_repository.dart` — submit 時帶這兩欄
+
+**Storage shape**：跟 admin 一樣，bucket `posters`、key `${posterId}/promo_main_*.jpg`
+跟 `${posterId}/promo_thumb_*.jpg`。Flutter 用 image_picker + flutter_image_compress
+就好，不用 blurhash。
+
+**Effort:** M (~1 小時：model + repository + submission_page 上傳欄位 + detail 顯示)
+**Priority:** P2（admin 端先 ship 給合夥人 demo；Flutter 等需要使用者也能附時再做）
+**Depends on:** 無

@@ -333,6 +333,95 @@ export async function attachImage(
 }
 
 /**
+ * Attach a promotional image (cinema flyer / IG campaign / ticket
+ * bundle ad) to a poster. Same Storage origin guard as attachImage so
+ * a compromised admin can't inject arbitrary content URLs.
+ *
+ * `null` URLs are NOT supported here — use detachPromoImage to clear.
+ */
+export async function attachPromoImage(
+  id: string,
+  payload: {
+    promo_image_url: string;
+    promo_thumbnail_url: string;
+  }
+): Promise<ActionResult> {
+  try {
+    const { supabase, user } = await requireAdmin();
+    assertStorageUrl(payload.promo_image_url, "promo_image_url");
+    assertStorageUrl(payload.promo_thumbnail_url, "promo_thumbnail_url");
+    const { data: existing, error: lookupErr } = await supabase
+      .from("posters")
+      .select("work_id, promo_image_url, promo_thumbnail_url")
+      .eq("id", id)
+      .maybeSingle();
+    if (lookupErr) throw lookupErr;
+    const { error } = await supabase
+      .from("posters")
+      .update({
+        promo_image_url: payload.promo_image_url,
+        promo_thumbnail_url: payload.promo_thumbnail_url,
+      })
+      .eq("id", id);
+    if (error) throw error;
+    revalidatePosterSurfaces(existing?.work_id ?? undefined, id);
+    void logAudit(supabase, user, {
+      action: "attach_promo_image",
+      target_kind: "image",
+      target_id: id,
+      payload: {
+        previous_url: existing?.promo_image_url ?? null,
+        previous_thumbnail: existing?.promo_thumbnail_url ?? null,
+        new_url: payload.promo_image_url,
+        new_thumbnail: payload.promo_thumbnail_url,
+      },
+    });
+    return ok(undefined);
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/**
+ * Clear the promo image (sets both URLs to null). Storage objects are
+ * left in the bucket — same policy as attachImage / replacements: we
+ * never delete uploaded blobs, only un-link them. Run a Storage GC
+ * sweep separately if you care about cost.
+ */
+export async function detachPromoImage(id: string): Promise<ActionResult> {
+  try {
+    const { supabase, user } = await requireAdmin();
+    const { data: existing, error: lookupErr } = await supabase
+      .from("posters")
+      .select("work_id, promo_image_url, promo_thumbnail_url")
+      .eq("id", id)
+      .maybeSingle();
+    if (lookupErr) throw lookupErr;
+    const { error } = await supabase
+      .from("posters")
+      .update({
+        promo_image_url: null,
+        promo_thumbnail_url: null,
+      })
+      .eq("id", id);
+    if (error) throw error;
+    revalidatePosterSurfaces(existing?.work_id ?? undefined, id);
+    void logAudit(supabase, user, {
+      action: "detach_promo_image",
+      target_kind: "image",
+      target_id: id,
+      payload: {
+        previous_url: existing?.promo_image_url ?? null,
+        previous_thumbnail: existing?.promo_thumbnail_url ?? null,
+      },
+    });
+    return ok(undefined);
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/**
  * Whitelist of columns the poster metadata form is allowed to write.
  * Anything outside this list (e.g. id, work_id, status, is_placeholder,
  * poster_url, thumbnail_url, created_at) is silently stripped so a
