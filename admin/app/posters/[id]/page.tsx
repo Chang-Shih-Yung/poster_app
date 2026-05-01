@@ -18,14 +18,14 @@ export default async function EditPosterPage({
   // System columns (created_at / updated_at / uploader_id / updated_by /
   // view_count / favorite_count / status / is_public) are read here and
   // displayed in the read-only stats card below the metadata form.
+  // SELECT * — historically we listed every column explicitly, but
+  // after several ALTER TABLE waves the PostgREST schema cache is the
+  // weakest link: any single typo or stale entry causes the entire
+  // request to fail with PGRST204. `*` sidesteps that — it returns
+  // whatever the DB actually has, no name validation. Pulls maybe a
+  // few extra unused bytes (tags, blurhash, etc.) which is fine.
   const [posterRes, worksRes] = await Promise.all([
-    supabase
-      .from("posters")
-      .select(
-        "id, work_id, work_kind, parent_group_id, poster_name, year, poster_release_date, region, poster_release_type, size_type, custom_width, custom_height, size_unit, channel_category, channel_type, channel_name, channel_note, cinema_release_types, premium_format, cinema_name, is_exclusive, exclusive_name, material_type, version_label, source_url, source_platform, source_note, is_placeholder, poster_url, thumbnail_url, promo_image_url, promo_thumbnail_url, status, is_public, created_at, updated_at, uploader_id, updated_by, view_count, favorite_count, price_type, price_amount, set_id"
-      )
-      .eq("id", id)
-      .single(),
+    supabase.from("posters").select("*").eq("id", id).single(),
     supabase.from("works").select("id, title_zh, title_en, studio").order("studio").order("title_zh"),
   ]);
   // Surface query errors instead of silently 404-ing — schema-cache miss
