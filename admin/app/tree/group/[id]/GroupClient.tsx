@@ -32,7 +32,6 @@ import {
   moveGroup,
 } from "@/app/actions/groups";
 import {
-  createPoster,
   renamePoster,
   deletePoster,
   movePoster,
@@ -326,8 +325,13 @@ export default function GroupClient({
                 {
                   icon: <FilePlus2 className="w-4 h-4" />,
                   label: "新增海報（單張）",
-                  hint: "直接放在這個群組裡",
-                  onClick: () => addSheets.openForm("poster"),
+                  hint: "進入完整表單填寫所有欄位再建立",
+                  onClick: () => {
+                    addSheets.close();
+                    router.push(
+                      `/posters/new?work_id=${group.work_id}&parent_group_id=${group.id}`
+                    );
+                  },
                 },
                 {
                   icon: <Layers className="w-4 h-4" />,
@@ -373,40 +377,9 @@ export default function GroupClient({
         }
       />
 
-      <FormSheet
-        open={addSheets.formKind === "poster"}
-        onOpenChange={addSheets.setFormOpen("poster")}
-        title="新增海報"
-        description={`會放在「${group.name}」群組裡。`}
-        fields={[
-          {
-            key: "name",
-            kind: "text",
-            label: "海報名稱",
-            placeholder: "例：B1 原版",
-            required: true,
-          },
-        ]}
-        submitLabel="新增"
-        onSubmit={(values) =>
-          runFormAction(
-            () =>
-              createPoster({
-                work_id: group.work_id,
-                parent_group_id: group.id,
-                poster_name: values.name,
-                // Partner-spec required fields. Tree quick-add gathers
-                // only the name; admin edits the rest later.
-                year: new Date().getFullYear(),
-                region: "TW",
-                size_type: "A4",
-                channel_category: "other",
-              }),
-            addSheets.close,
-            { successToast: `已新增海報「${values.name}」` }
-          )
-        }
-      />
+      {/* 海報 quick-add sheet 已移除：點「新增海報（單張）」直接 router
+          push 到 /posters/new?work_id=...&parent_group_id=...，admin 在
+          完整 PosterForm 填好所有 spec 欄位再按建立。 */}
     </TreeShell>
   );
 }

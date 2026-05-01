@@ -32,7 +32,6 @@ import {
   moveGroup,
 } from "@/app/actions/groups";
 import {
-  createPoster,
   renamePoster,
   deletePoster,
   movePoster,
@@ -271,8 +270,11 @@ export default function WorkClient({
                 {
                   icon: <FilePlus2 className="w-4 h-4" />,
                   label: "新增海報（單張）",
-                  hint: "直接掛在這個作品下，不放進群組",
-                  onClick: () => addSheets.openForm("poster"),
+                  hint: "進入完整表單填寫所有欄位再建立",
+                  onClick: () => {
+                    addSheets.close();
+                    router.push(`/posters/new?work_id=${work.id}`);
+                  },
                 },
                 {
                   icon: <Layers className="w-4 h-4" />,
@@ -318,40 +320,10 @@ export default function WorkClient({
         }
       />
 
-      <FormSheet
-        open={addSheets.formKind === "poster"}
-        onOpenChange={addSheets.setFormOpen("poster")}
-        title="新增海報"
-        description={`會直屬於「${work.title_zh}」（不放在群組裡）。`}
-        fields={[
-          {
-            key: "name",
-            kind: "text",
-            label: "海報名稱",
-            placeholder: "例：B1 原版",
-            required: true,
-          },
-        ]}
-        submitLabel="新增"
-        onSubmit={(values) =>
-          runFormAction(
-            () =>
-              createPoster({
-                work_id: work.id,
-                parent_group_id: null,
-                poster_name: values.name,
-                // Partner-spec required fields. Tree quick-add gathers
-                // only the name; admin edits the rest later via /posters/[id].
-                year: new Date().getFullYear(),
-                region: "TW",
-                size_type: "A4",
-                channel_category: "other",
-              }),
-            addSheets.close,
-            { successToast: `已新增海報「${values.name}」` }
-          )
-        }
-      />
+      {/* 海報 quick-add sheet 已移除：點「新增海報（單張）」直接 router
+          push 到 /posters/new?work_id=...，admin 在完整 PosterForm 填好
+          所有 spec 欄位再按建立。原本只收 name + auto-fill defaults 不
+          符合合夥人 2026-05-02 spec。 */}
     </TreeShell>
   );
 }

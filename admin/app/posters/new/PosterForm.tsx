@@ -103,6 +103,9 @@ type PosterFormProps = {
   works: WorkOption[];
   initial?: InitialPoster;
   defaultWorkId?: string;
+  /** Pre-fill parent_group_id when admin came from a tree quick-add inside
+   *  a group. NONE sentinel ("__none__") OR group uuid. */
+  defaultParentGroupId?: string;
 };
 
 // Sentinel "no value" because Radix Select rejects empty string item values.
@@ -182,6 +185,7 @@ export default function PosterForm({
   works,
   initial,
   defaultWorkId,
+  defaultParentGroupId,
 }: PosterFormProps) {
   const router = useRouter();
   const [groupOptions, setGroupOptions] = useState<FlattenedGroup[]>([]);
@@ -203,7 +207,8 @@ export default function PosterForm({
     resolver: zodResolver(schema),
     defaultValues: {
       work_id: initial?.work_id ?? defaultWorkId ?? "",
-      parent_group_id: initial?.parent_group_id ?? NONE,
+      parent_group_id:
+        initial?.parent_group_id ?? defaultParentGroupId ?? NONE,
       poster_name: initial?.poster_name ?? "",
       year: initial?.year != null ? String(initial.year) : "",
       poster_release_date: initial?.poster_release_date ?? "",

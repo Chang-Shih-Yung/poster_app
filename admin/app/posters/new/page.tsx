@@ -7,9 +7,9 @@ export const dynamic = "force-dynamic";
 export default async function NewPosterPage({
   searchParams,
 }: {
-  searchParams: Promise<{ work_id?: string }>;
+  searchParams: Promise<{ work_id?: string; parent_group_id?: string }>;
 }) {
-  const { work_id } = await searchParams;
+  const { work_id, parent_group_id } = await searchParams;
   const supabase = await getServerSupabase();
   const { data: works } = await supabase
     .from("works")
@@ -26,7 +26,12 @@ export default async function NewPosterPage({
         <p className="text-sm text-muted-foreground mb-4">
           只填 metadata；圖片在建立後到編輯頁上傳。
         </p>
-        <PosterForm mode="create" works={works ?? []} defaultWorkId={work_id} />
+        <PosterForm
+          mode="create"
+          works={works ?? []}
+          defaultWorkId={work_id}
+          defaultParentGroupId={parent_group_id}
+        />
       </div>
     </PageShell>
   );
