@@ -220,17 +220,21 @@ export async function linkPosters(input: {
     if (!self) throw new Error("找不到海報");
     if (!sib) throw new Error("找不到要連結的海報");
 
-    let targetSetId = (sib.set_id as string | null) ?? null;
+    // 兩邊各自的 set_id（可能 null）
+    const selfSetId = (self.set_id as string | null) ?? null;
+    const sibSetId = (sib.set_id as string | null) ?? null;
 
-    if (
-      self.set_id &&
-      targetSetId &&
-      self.set_id !== targetSetId
-    ) {
+    // 跨 set merge 風險防呆 — 兩邊都已有不同 set 不準靜悄悄合併
+    if (selfSetId && sibSetId && selfSetId !== sibSetId) {
       throw new Error(
         "這張海報已經屬於別的組合，要先在這張海報上把組合解除才能加入新組合"
       );
     }
+
+    // 偏好任何一邊既有的 set（fix multi-link bug：先前只看 sib，
+    // 連續加第二張時 self 已有 set_id 卻又被視為「兩者都沒」→ 建新 set
+    // 把 self 從第一個 set 拔走，留下孤兒）
+    let targetSetId = sibSetId ?? selfSetId ?? null;
 
     if (!targetSetId) {
       // 兩者都沒 set — 建一個 auto-named set 把兩者放進去。
@@ -251,8 +255,8 @@ export async function linkPosters(input: {
 
     // self 加入 target set（含 self 已經在 same set 的 idempotent case）
     const idsToUpdate: string[] = [];
-    if (self.set_id !== targetSetId) idsToUpdate.push(self.id as string);
-    if (sib.set_id !== targetSetId) idsToUpdate.push(sib.id as string);
+    if (selfSetId !== targetSetId) idsToUpdate.push(self.id as string);
+    if (sibSetId !== targetSetId) idsToUpdate.push(sib.id as string);
     if (idsToUpdate.length > 0) {
       const { error: updErr } = await supabase
         .from("posters")

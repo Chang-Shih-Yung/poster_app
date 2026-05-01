@@ -1,7 +1,6 @@
 "use client";
 
 import * as React from "react";
-import { Loader2, X, Search, ImageOff, Image as ImageIcon } from "lucide-react";
 import { toast } from "sonner";
 import {
   listSiblings,
@@ -10,40 +9,40 @@ import {
   unlinkPoster,
   type SiblingPoster,
 } from "@/app/actions/poster-sets";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import {
+  MultiSelectDropdown,
+  type MultiSelectItem,
+} from "@/components/ui/multi-select";
 import { UNNAMED_POSTER } from "@/lib/keys";
 
 /**
- * Spec #14 —「海報發行組合」UX。Admin 不思考 set 物件，他思考的是
- * 「這張跟那張是一組」。這個元件把 sibling-shaped 的 mental model
- * 直接當主介面：
+ * Spec #14 —「海報發行組合」UX。Admin 的心智模型：「這張跟那幾張是
+ * 一組」，不思考 set 物件。元件用 MultiSelectDropdown（跟「發行類型」
+ * cinema_release_types 同款）讓 admin 一次挑多張同組合的海報；後端
+ * 用 poster_sets 表當底層存儲，自動 union/cleanup（admin 看不到 set）。
  *
- *   1. Toggle 是 / 否
- *   2. 是 → 跳出搜尋框 + 該海報目前的同組合夥伴 list
- *   3. 搜尋並挑一張海報 → 立刻送 server action linkPosters，連結進
- *      同 set（或自動建一個 set 把兩者放進去）
- *   4. 每個 sibling 旁邊有 × 可以單獨踢出
+ * UX 流程：
+ *   1. 「是 / 否」toggle button
+ *   2. 是 → 跳出 MultiSelectDropdown 含 search、checkbox、badge 顯示已選
+ *   3. 勾／取消勾 → onChange diff → linkPosters / unlinkPoster (sequential
+ *      避免多筆同時建 set 的 race)
+ *   4. 切回「否」→ unlinkPoster(self)，整張海報退出組合
  *
- * 只在 mode="edit" 用。create mode（海報還沒 ID）不能掛 sibling，
- * 元件以唯讀提示「先建好海報才能加入組合」呈現，admin 建好回到編輯
- * 頁再加。
+ * Create mode（posterId=null）看不到 picker，秀提示「建立後回編輯頁」。
  */
 export default function PosterCombinationField({
   posterId,
   disabled,
 }: {
-  /** null = create mode，元件會顯示 disabled 提示。 */
+  /** null = create mode；元件顯示 disabled 提示。 */
   posterId: string | null;
   disabled?: boolean;
 }) {
   const isCreateMode = !posterId;
 
   const [siblings, setSiblings] = React.useState<SiblingPoster[]>([]);
-  const [loaded, setLoaded] = React.useState(false);
+  const [pool, setPool] = React.useState<SiblingPoster[]>([]);
   const [busy, setBusy] = React.useState(false);
-  // toggle: 是（屬於組合）/ 否（單張）
-  // 預設由 siblings.length > 0 推得，但 admin 可以手動把它打開準備加
   const [yesMode, setYesMode] = React.useState(false);
 
   const refresh = React.useCallback(async () => {
@@ -51,49 +50,64 @@ export default function PosterCombinationField({
     const r = await listSiblings(posterId);
     if (r.ok) {
       setSiblings(r.data);
-      setLoaded(true);
-      // 如果有 siblings，自動進入「是」模式
       if (r.data.length > 0) setYesMode(true);
     }
   }, [posterId]);
 
+  // Initial load — siblings + pool of all posters for the picker
   React.useEffect(() => {
-    if (posterId) void refresh();
+    if (!posterId) return;
+    void refresh();
+    void (async () => {
+      const r = await listAllPostersForPicker(posterId);
+      if (r.ok) setPool(r.data);
+    })();
   }, [posterId, refresh]);
 
-  async function onAddSibling(siblingId: string) {
+  /** Sync siblings to a new selected-id list. Diff added vs removed,
+   *  call linkPosters / unlinkPoster sequentially. Sequential matters:
+   *  the first link may create the set; subsequent links rely on
+   *  self.set_id being populated to merge into the same set. */
+  async function applySelection(newIds: string[]) {
     if (!posterId) return;
-    setBusy(true);
-    const r = await linkPosters({
-      poster_id: posterId,
-      sibling_id: siblingId,
-    });
-    setBusy(false);
-    if (!r.ok) {
-      toast.error(r.error);
-      return;
-    }
-    toast.success("已加入組合");
-    await refresh();
-  }
+    const oldIds = siblings.map((s) => s.id);
+    const added = newIds.filter((id) => !oldIds.includes(id));
+    const removed = oldIds.filter((id) => !newIds.includes(id));
+    if (added.length === 0 && removed.length === 0) return;
 
-  async function onRemoveSibling(siblingId: string) {
     setBusy(true);
-    // 把對方踢出 set。對方那張 unlink 後，如果 set 只剩 self 一張，
-    // server 會自動清理：self 也會 set_id = null + set 刪掉。
-    const r = await unlinkPoster(siblingId);
-    setBusy(false);
-    if (!r.ok) {
-      toast.error(r.error);
-      return;
+    let okCount = 0;
+    let firstError: string | null = null;
+    for (const id of added) {
+      const r = await linkPosters({ poster_id: posterId, sibling_id: id });
+      if (r.ok) okCount++;
+      else if (!firstError) firstError = r.error;
     }
-    toast.success("已從組合移除");
+    for (const id of removed) {
+      const r = await unlinkPoster(id);
+      if (r.ok) okCount++;
+      else if (!firstError) firstError = r.error;
+    }
+    setBusy(false);
+
+    if (firstError) {
+      toast.error(firstError);
+    } else if (added.length > 0 && removed.length > 0) {
+      toast.success(`已加入 ${added.length} 張、移除 ${removed.length} 張`);
+    } else if (added.length > 0) {
+      toast.success(`已加入 ${added.length} 張到組合`);
+    } else if (removed.length > 0) {
+      toast.success(`已移除 ${removed.length} 張`);
+    }
     await refresh();
   }
 
   async function onSetToNo() {
-    if (!posterId || siblings.length === 0) {
-      // 沒 sibling 直接收起來就好
+    if (!posterId) {
+      setYesMode(false);
+      return;
+    }
+    if (siblings.length === 0) {
       setYesMode(false);
       return;
     }
@@ -124,6 +138,16 @@ export default function PosterCombinationField({
     );
   }
 
+  // Items for MultiSelectDropdown — show "name · work" so admin can
+  // disambiguate two posters with the same name across different works.
+  const items: MultiSelectItem[] = pool.map((p) => ({
+    value: p.id,
+    label: `${p.poster_name ?? UNNAMED_POSTER}${
+      p.work_title_zh ? ` · ${p.work_title_zh}` : ""
+    }`,
+  }));
+  const value = siblings.map((s) => s.id);
+
   return (
     <div className="space-y-3">
       {/* 是 / 否 toggle */}
@@ -144,34 +168,17 @@ export default function PosterCombinationField({
         </ToggleButton>
       </div>
 
-      {/* 是模式：sibling list + picker */}
+      {/* 是 → 多選下拉（跟發行類型同款 MultiSelectDropdown） */}
       {yesMode && (
-        <>
-          {loaded && siblings.length > 0 && (
-            <div className="space-y-1.5">
-              <div className="text-xs text-muted-foreground">
-                同組合的海報（{siblings.length} 張）
-              </div>
-              <ul className="space-y-1">
-                {siblings.map((s) => (
-                  <SiblingRow
-                    key={s.id}
-                    sibling={s}
-                    onRemove={() => onRemoveSibling(s.id)}
-                    disabled={busy || disabled}
-                  />
-                ))}
-              </ul>
-            </div>
-          )}
-
-          <SiblingPicker
-            posterId={posterId!}
-            existingIds={new Set(siblings.map((s) => s.id))}
-            onPick={onAddSibling}
-            disabled={busy || disabled}
-          />
-        </>
+        <MultiSelectDropdown
+          items={items}
+          value={value}
+          onChange={applySelection}
+          placeholder="選擇同組合的海報…（可複選）"
+          searchPlaceholder="搜尋海報名稱或作品…"
+          emptyText="找不到符合的海報"
+          disabled={busy || disabled}
+        />
       )}
     </div>
   );
@@ -202,165 +209,5 @@ function ToggleButton({
     >
       {children}
     </button>
-  );
-}
-
-function SiblingRow({
-  sibling,
-  onRemove,
-  disabled,
-}: {
-  sibling: SiblingPoster;
-  onRemove: () => void;
-  disabled?: boolean;
-}) {
-  return (
-    <li className="flex items-center gap-2 px-2 py-1.5 rounded-md border border-border bg-secondary/30">
-      <Thumb url={sibling.thumbnail_url} />
-      <div className="flex-1 min-w-0 text-sm">
-        <div className="truncate text-foreground">
-          {sibling.poster_name ?? UNNAMED_POSTER}
-        </div>
-        <div className="truncate text-xs text-muted-foreground">
-          {sibling.work_title_zh ?? "—"}
-        </div>
-      </div>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        onClick={onRemove}
-        disabled={disabled}
-        className="h-7 w-7 text-muted-foreground hover:text-destructive"
-        aria-label="從組合移除"
-      >
-        <X className="h-4 w-4" />
-      </Button>
-    </li>
-  );
-}
-
-function Thumb({ url }: { url: string | null }) {
-  if (url) {
-    return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img
-        src={url}
-        alt=""
-        className="w-8 h-10 object-cover rounded border border-border shrink-0"
-      />
-    );
-  }
-  return (
-    <span className="w-8 h-10 flex items-center justify-center rounded bg-muted text-muted-foreground border border-border shrink-0">
-      <ImageOff className="w-3.5 h-3.5" />
-    </span>
-  );
-}
-
-/**
- * Inline searchable picker. Loads all posters once via server action,
- * filters in-memory by name / work title. Click a row to add as sibling.
- */
-function SiblingPicker({
-  posterId,
-  existingIds,
-  onPick,
-  disabled,
-}: {
-  posterId: string;
-  existingIds: Set<string>;
-  onPick: (id: string) => void;
-  disabled?: boolean;
-}) {
-  const [pool, setPool] = React.useState<SiblingPoster[]>([]);
-  const [poolLoaded, setPoolLoaded] = React.useState(false);
-  const [query, setQuery] = React.useState("");
-
-  React.useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const r = await listAllPostersForPicker(posterId);
-      if (!cancelled && r.ok) {
-        setPool(r.data);
-        setPoolLoaded(true);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [posterId]);
-
-  const q = query.trim().toLowerCase();
-  const filtered = React.useMemo(() => {
-    let list = pool.filter((p) => !existingIds.has(p.id));
-    if (q) {
-      list = list.filter(
-        (p) =>
-          (p.poster_name ?? "").toLowerCase().includes(q) ||
-          (p.work_title_zh ?? "").toLowerCase().includes(q)
-      );
-    }
-    return list.slice(0, 30); // cap render — 大量 list 會卡
-  }, [pool, existingIds, q]);
-
-  return (
-    <div className="space-y-2">
-      <div className="text-xs text-muted-foreground">加入同組合的海報</div>
-      <div className="relative">
-        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-        <Input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="搜尋海報名稱或作品…"
-          className="pl-8 h-9"
-          disabled={disabled}
-        />
-      </div>
-      {!poolLoaded ? (
-        <div className="flex items-center gap-2 text-xs text-muted-foreground py-2">
-          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-          載入海報清單中…
-        </div>
-      ) : filtered.length === 0 ? (
-        <div className="text-xs text-muted-foreground py-2">
-          {q ? `找不到符合「${query}」的海報` : "沒有可加入的海報"}
-        </div>
-      ) : (
-        <ul className="max-h-64 overflow-y-auto space-y-1 rounded-md border border-border p-1">
-          {filtered.map((p) => (
-            <li key={p.id}>
-              <button
-                type="button"
-                onClick={() => onPick(p.id)}
-                disabled={disabled}
-                className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left hover:bg-secondary/60 disabled:opacity-60 transition-colors"
-              >
-                {p.thumbnail_url ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={p.thumbnail_url}
-                    alt=""
-                    className="w-8 h-10 object-cover rounded border border-border shrink-0"
-                  />
-                ) : (
-                  <span className="w-8 h-10 flex items-center justify-center rounded bg-muted text-muted-foreground border border-border shrink-0">
-                    <ImageIcon className="w-3.5 h-3.5" />
-                  </span>
-                )}
-                <div className="flex-1 min-w-0 text-sm">
-                  <div className="truncate text-foreground">
-                    {p.poster_name ?? UNNAMED_POSTER}
-                  </div>
-                  <div className="truncate text-xs text-muted-foreground">
-                    {p.work_title_zh ?? "—"}
-                  </div>
-                </div>
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
   );
 }
