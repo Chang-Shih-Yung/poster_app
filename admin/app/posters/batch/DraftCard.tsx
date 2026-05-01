@@ -177,7 +177,7 @@ export function DraftCard({
             <Input
               value={draft.name}
               onChange={(e) => onChange({ name: e.target.value })}
-              placeholder="海報名稱（必填）*"
+              placeholder="海報名稱 *"
               disabled={disabled}
               className={cn(
                 "h-9",
@@ -284,7 +284,7 @@ export function DraftCard({
                 />
               </div>
               <div className="space-y-1">
-                <Label className="text-xs">發行年份</Label>
+                <Label className="text-xs">發行年份 *</Label>
                 <Input
                   type="number"
                   min={1900}
@@ -299,7 +299,7 @@ export function DraftCard({
 
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-1">
-                <Label className="text-xs">地區</Label>
+                <Label className="text-xs">地區 *</Label>
                 <Select
                   value={draft.region}
                   onValueChange={(v) => onChange({ region: v })}
@@ -563,7 +563,7 @@ export function DraftCard({
             </div>
 
             <div className="space-y-1">
-              <Label className="text-xs">宣傳圖片（選填）</Label>
+              <Label className="text-xs">宣傳圖片</Label>
               <PromoImagePicker
                 existingUrl={null}
                 state={{

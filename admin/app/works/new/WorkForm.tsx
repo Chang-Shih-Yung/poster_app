@@ -102,7 +102,7 @@ export default function WorkForm({ mode, initial, studios = [] }: WorkFormProps)
             disabled={pending}
           >
             <SelectTrigger id="studio">
-              <SelectValue placeholder="（選填）請選擇分類" />
+              <SelectValue placeholder="請選擇分類" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="">（未分類）</SelectItem>

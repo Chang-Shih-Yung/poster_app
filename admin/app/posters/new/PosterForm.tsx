@@ -759,10 +759,10 @@ export default function PosterForm({
         />
       </FormField>
 
-      <FormField label="宣傳圖片（選填）">
-        <p className="text-xs text-muted-foreground mb-2 leading-relaxed">
-          影院 DM、IG 活動圖、票券優惠等取得方式佐證。可空白。
-        </p>
+      <FormField
+        label="宣傳圖片"
+        helper="影院 DM、IG 活動圖、票券優惠等取得方式佐證"
+      >
         <PromoImagePicker
           existingUrl={existingPromoUrl}
           state={promoState}

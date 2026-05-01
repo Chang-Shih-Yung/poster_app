@@ -177,7 +177,7 @@ export default function WorksList({
               disabled={pending}
             >
               <SelectTrigger>
-                <SelectValue placeholder="（選填）所屬分類" />
+                <SelectValue placeholder="所屬分類" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="">（未分類）</SelectItem>
