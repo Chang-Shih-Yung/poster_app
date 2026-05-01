@@ -53,7 +53,11 @@ export default function WorkForm({ mode, initial, studios = [] }: WorkFormProps)
     e.preventDefault();
     setError(null);
     if (!titleZh.trim()) {
-      setError("作品名稱必填");
+      setError("作品台灣官方名稱必填");
+      return;
+    }
+    if (!titleEn.trim()) {
+      setError("作品英文官方名稱必填");
       return;
     }
     startTransition(async () => {
@@ -142,7 +146,7 @@ export default function WorkForm({ mode, initial, studios = [] }: WorkFormProps)
         )}
       </FormField>
 
-      <FormField label="作品名稱" required htmlFor="title_zh">
+      <FormField label="作品台灣官方名稱" required htmlFor="title_zh">
         <Input
           id="title_zh"
           value={titleZh}
@@ -153,12 +157,13 @@ export default function WorkForm({ mode, initial, studios = [] }: WorkFormProps)
         />
       </FormField>
 
-      <FormField label="英文名" htmlFor="title_en">
+      <FormField label="作品英文官方名稱" required htmlFor="title_en">
         <Input
           id="title_en"
           value={titleEn}
           onChange={(e) => setTitleEn(e.target.value)}
           placeholder="例：Avengers / Spirited Away"
+          required
           disabled={pending}
         />
       </FormField>

@@ -19,6 +19,7 @@ import {
   SOURCE_PLATFORMS,
   MATERIAL_TYPES,
   WORK_KINDS,
+  PRICE_TYPES,
 } from "@/lib/enums";
 import { flattenGroupTree, type FlattenedGroup } from "@/lib/groupTree";
 import { DEFAULT_REGION } from "@/lib/keys";
@@ -45,6 +46,8 @@ import {
 import { MultiSelectDropdown } from "@/components/ui/multi-select";
 import { WorkPicker, type WorkOption } from "@/components/WorkPicker";
 import { GroupPicker } from "@/components/GroupPicker";
+import { SetPicker } from "@/components/SetPicker";
+import { listPosterSets, type PosterSet } from "@/app/actions/poster-sets";
 import { DatePicker } from "@/components/DatePicker";
 import { AlertTriangle, Loader2 } from "lucide-react";
 
@@ -80,6 +83,11 @@ type InitialPoster = {
   // Public visibility — admin can ship a poster but keep it hidden from
   // the Flutter feed (per partner spec). Default true on create.
   is_public?: boolean | null;
+  // 售價 (#13 spec)
+  price_type?: string | null;
+  price_amount?: number | string | null;
+  // 套票組合 (#14 spec)
+  set_id?: string | null;
   // Promo image (cinema flyer / IG campaign / etc.) — optional second image.
   // Edit mode prefills the picker with this; create mode always starts empty.
   promo_image_url?: string | null;
@@ -135,7 +143,23 @@ const schema = z
     source_platform: z.string(),
     source_note: z.string(),
     is_public: z.boolean(),
+    // 售價 — type 是 sentinel/value，amount 是 numeric string（解析在 submit）
+    price_type: z.string(),
+    price_amount: z.string(),
+    // 套票 id（NONE 或 uuid）
+    set_id: z.string(),
   })
+  // price_type='paid' 時 price_amount 必填且為正數
+  .refine(
+    (data) =>
+      data.price_type !== "paid" ||
+      (/^\d+(\.\d+)?$/.test(data.price_amount.trim()) &&
+        Number(data.price_amount) > 0),
+    {
+      message: "選「金額」時，請填入大於 0 的售價",
+      path: ["price_amount"],
+    }
+  )
   // CUSTOM size requires width + height + unit
   .refine(
     (data) =>
@@ -206,6 +230,10 @@ export default function PosterForm({
       source_note: initial?.source_note ?? "",
       // Default true for new rows; preserve current state on edit.
       is_public: initial?.is_public ?? true,
+      price_type: initial?.price_type ?? NONE,
+      price_amount:
+        initial?.price_amount != null ? String(initial.price_amount) : "",
+      set_id: initial?.set_id ?? NONE,
     },
   });
 
@@ -215,6 +243,18 @@ export default function PosterForm({
   const channelCategory = watch("channel_category");
   const cinemaReleaseTypes = watch("cinema_release_types");
   const posterReleaseDate = watch("poster_release_date");
+  const priceType = watch("price_type");
+
+  // Load poster_sets for the SetPicker dropdown. Refetched after a new
+  // set is created from the inline footer.
+  const [posterSets, setPosterSets] = useState<PosterSet[]>([]);
+  async function refetchPosterSets() {
+    const r = await listPosterSets();
+    if (r.ok) setPosterSets(r.data);
+  }
+  useEffect(() => {
+    refetchPosterSets();
+  }, []);
 
   // Auto-fill year from poster_release_date when date changes
   useEffect(() => {
@@ -307,6 +347,13 @@ export default function PosterForm({
       source_platform: fromSentinel(values.source_platform),
       source_note: values.source_note.trim() || null,
       is_public: values.is_public,
+      // 售價：'gift' 不帶金額；'paid' 必有金額；NONE = null
+      price_type: fromSentinel(values.price_type),
+      price_amount:
+        values.price_type === "paid" && values.price_amount.trim()
+          ? Number(values.price_amount)
+          : null,
+      set_id: fromSentinel(values.set_id),
     };
 
     startTransition(async () => {
@@ -810,6 +857,71 @@ export default function PosterForm({
 
       <FormField label="備註">
         <Textarea {...register("source_note")} disabled={pending} />
+      </FormField>
+
+      {/* ── 售價（#13 spec） ─────────────────────────────────────── */}
+      <div className="grid grid-cols-2 gap-3">
+        <FormField label="售價類型">
+          <Controller
+            control={control}
+            name="price_type"
+            render={({ field }) => (
+              <Select
+                value={field.value}
+                onValueChange={field.onChange}
+                disabled={pending}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="—" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NONE}>—</SelectItem>
+                  {PRICE_TYPES.map((p) => (
+                    <SelectItem key={p.value} value={p.value}>
+                      {p.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          />
+        </FormField>
+        {priceType === "paid" && (
+          <FormField
+            label="售價（TWD）"
+            required
+            error={errors.price_amount?.message}
+          >
+            <Input
+              type="number"
+              step="1"
+              min="0"
+              {...register("price_amount")}
+              placeholder="例：188"
+              disabled={pending}
+            />
+          </FormField>
+        )}
+      </div>
+
+      {/* ── 套票組合（#14 spec） ─────────────────────────────────── */}
+      <FormField
+        label="所屬套票"
+        helper="N 張海報一起發行的套票（例：影城套票、IG 活動組合）"
+      >
+        <Controller
+          control={control}
+          name="set_id"
+          render={({ field }) => (
+            <SetPicker
+              sets={posterSets}
+              value={field.value}
+              onChange={field.onChange}
+              onSetCreated={() => refetchPosterSets()}
+              disabled={pending}
+            />
+          )}
+        />
       </FormField>
 
       {/* ── 公開狀態 ─────────────────────────────────────────────── */}

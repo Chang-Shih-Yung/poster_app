@@ -160,6 +160,13 @@ export const SOURCE_PLATFORMS = [
   { value: "other",            label: "其他" },
 ] as const;
 
+// price_type_enum — 2026-05-02 spec #13. 'gift' = 贈品（無價）；'paid' =
+// 金額（搭配 posters.price_amount，預設 TWD）。
+export const PRICE_TYPES = [
+  { value: "gift", label: "贈品" },
+  { value: "paid", label: "金額" },
+] as const;
+
 // material_type — partner's 2026-05-02 spec simplified to 4 values.
 // Column is `text` (no DB enum), so legacy rows storing thick_paper / foil
 // / fabric still display as their raw value but UI no longer offers them

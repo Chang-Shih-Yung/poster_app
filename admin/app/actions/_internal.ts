@@ -56,7 +56,7 @@ export async function logAudit(
   user: User | null,
   opts: {
     action: string;
-    target_kind: "work" | "poster" | "group" | "studio" | "image";
+    target_kind: "work" | "poster" | "group" | "studio" | "image" | "poster_set";
     target_id?: string | null;
     payload?: Record<string, unknown> | null;
   }

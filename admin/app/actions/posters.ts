@@ -59,6 +59,11 @@ export async function createPoster(input: {
   // Other
   is_exclusive?: boolean;
   is_public?: boolean;
+  // 售價 (#13 spec)
+  price_type?: string | null;       // 'gift' | 'paid' | null
+  price_amount?: number | null;     // only meaningful when price_type='paid'
+  // 套票組合 (#14 spec)
+  set_id?: string | null;
   exclusive_name?: string | null;
   material_type?: string | null;
   version_label?: string | null;
@@ -130,6 +135,9 @@ export async function createPoster(input: {
         // is_public defaults to true (DB default also true) — admin can
         // toggle off in the form to hide a row from the Flutter feed.
         is_public: input.is_public ?? true,
+        price_type: input.price_type ?? null,
+        price_amount: input.price_amount ?? null,
+        set_id: input.set_id ?? null,
         exclusive_name: input.exclusive_name ?? null,
         material_type: input.material_type ?? null,
         version_label: input.version_label ?? null,
@@ -467,6 +475,10 @@ const POSTER_METADATA_ALLOWED = new Set([
   // is_public is a partner-spec field — admin can ship 海報 but keep
   // hidden from the public Flutter feed (is_public=false).
   "is_public",
+  // 售價 + 套票（2026-05-02 spec wave 3）
+  "price_type",
+  "price_amount",
+  "set_id",
   // collector flags (signed / numbered / edition_number / linen_backed /
   // licensed) intentionally REMOVED — DB columns dropped in 20260429150000.
 ]);
