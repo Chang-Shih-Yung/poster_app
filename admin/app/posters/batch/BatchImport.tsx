@@ -792,7 +792,7 @@ export default function BatchImport({
 
         {incompleteCount > 0 && (
           <p className="text-xs text-destructive">
-            還有 {incompleteCount} 張缺少「名稱」或「作品」，全部填完才能建立
+            還有 {incompleteCount} 張未填完必填欄位
           </p>
         )}
         {readyCount === 0 &&
