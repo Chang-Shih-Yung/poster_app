@@ -58,6 +58,7 @@ export async function createPoster(input: {
   size_unit?: string | null;
   // Other
   is_exclusive?: boolean;
+  is_public?: boolean;
   exclusive_name?: string | null;
   material_type?: string | null;
   version_label?: string | null;
@@ -126,6 +127,9 @@ export async function createPoster(input: {
         custom_height: input.custom_height ?? null,
         size_unit: input.size_unit ?? null,
         is_exclusive: input.is_exclusive ?? false,
+        // is_public defaults to true (DB default also true) — admin can
+        // toggle off in the form to hide a row from the Flutter feed.
+        is_public: input.is_public ?? true,
         exclusive_name: input.exclusive_name ?? null,
         material_type: input.material_type ?? null,
         version_label: input.version_label ?? null,
@@ -460,6 +464,9 @@ const POSTER_METADATA_ALLOWED = new Set([
   "source_note",
   "batch_id",
   "parent_group_id",
+  // is_public is a partner-spec field — admin can ship 海報 but keep
+  // hidden from the public Flutter feed (is_public=false).
+  "is_public",
   // collector flags (signed / numbered / edition_number / linen_backed /
   // licensed) intentionally REMOVED — DB columns dropped in 20260429150000.
 ]);

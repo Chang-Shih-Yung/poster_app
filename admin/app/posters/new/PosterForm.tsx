@@ -77,6 +77,9 @@ type InitialPoster = {
   source_note: string | null;
   is_placeholder: boolean;
   parent_group_id?: string | null;
+  // Public visibility — admin can ship a poster but keep it hidden from
+  // the Flutter feed (per partner spec). Default true on create.
+  is_public?: boolean | null;
   // Promo image (cinema flyer / IG campaign / etc.) — optional second image.
   // Edit mode prefills the picker with this; create mode always starts empty.
   promo_image_url?: string | null;
@@ -131,6 +134,7 @@ const schema = z
     source_url: z.string(),
     source_platform: z.string(),
     source_note: z.string(),
+    is_public: z.boolean(),
   })
   // CUSTOM size requires width + height + unit
   .refine(
@@ -200,6 +204,8 @@ export default function PosterForm({
       source_url: initial?.source_url ?? "",
       source_platform: initial?.source_platform ?? NONE,
       source_note: initial?.source_note ?? "",
+      // Default true for new rows; preserve current state on edit.
+      is_public: initial?.is_public ?? true,
     },
   });
 
@@ -300,6 +306,7 @@ export default function PosterForm({
       source_url: values.source_url.trim() || null,
       source_platform: fromSentinel(values.source_platform),
       source_note: values.source_note.trim() || null,
+      is_public: values.is_public,
     };
 
     startTransition(async () => {
@@ -803,6 +810,31 @@ export default function PosterForm({
 
       <FormField label="備註">
         <Textarea {...register("source_note")} disabled={pending} />
+      </FormField>
+
+      {/* ── 公開狀態 ─────────────────────────────────────────────── */}
+      <FormField
+        label="是否公開"
+        helper="關閉後，這張海報不會出現在 Flutter app 的公開 feed（admin 仍可看見）"
+      >
+        <Controller
+          control={control}
+          name="is_public"
+          render={({ field }) => (
+            <label className="flex items-center gap-3 select-none cursor-pointer">
+              <input
+                type="checkbox"
+                checked={field.value}
+                onChange={(e) => field.onChange(e.target.checked)}
+                disabled={pending}
+                className="h-4 w-4 rounded border-input"
+              />
+              <span className="text-sm">
+                {field.value ? "已公開" : "未公開（admin 限定）"}
+              </span>
+            </label>
+          )}
+        />
       </FormField>
 
       {/* ── 送出 ─────────────────────────────────────────────────── */}
