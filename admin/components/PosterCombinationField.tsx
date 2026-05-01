@@ -26,34 +26,42 @@ import {
 import { UNNAMED_POSTER } from "@/lib/keys";
 
 /**
- * Spec #14 —「海報發行組合」UX。Admin 的心智模型：「這張跟那幾張是
- * 一組」，不思考 set 物件。元件用 MultiSelectDropdown（跟「發行類型」
- * cinema_release_types 同款）讓 admin 一次挑多張同組合的海報；後端
- * 用 poster_sets 表當底層存儲，自動 union/cleanup（admin 看不到 set）。
+ * Spec #14 —「海報發行組合」UX。兩種 mode：
  *
- * UX 流程：
- *   1. 「是 / 否」toggle button
- *   2. 是 → 跳出 MultiSelectDropdown 含 search、checkbox、badge 顯示已選
- *   3. 勾／取消勾 → onChange diff → linkPosters / unlinkPoster (sequential
- *      避免多筆同時建 set 的 race)
- *   4. 切回「否」→ unlinkPoster(self)，整張海報退出組合
+ * Edit mode（posterId 已存在）：
+ *   - 元件自己 fetch siblings，diff onChange 即時呼 linkPosters /
+ *     unlinkPoster server actions
+ *   - 切「否」會解除自己的組合（含二次確認）
  *
- * Create mode（posterId=null）看不到 picker，秀提示「建立後回編輯頁」。
+ * Create mode（posterId=null，但 pendingIds + onPendingChange 給了）：
+ *   - 純表單 staging，不打 server。Admin 勾選的 sibling id 暫存在
+ *     parent (PosterForm) state；submit 拿到新海報 id 後才呼
+ *     linkPosters 逐一連結
+ *   - 切「否」就清空 pending 清單（沒寫 DB 沒東西要解除）
+ *   - Pool（候選海報清單）由 listAllPostersForPicker 拿（excludeId=null）
  */
 export default function PosterCombinationField({
   posterId,
   disabled,
+  pendingIds,
+  onPendingChange,
 }: {
-  /** null = create mode；元件顯示 disabled 提示。 */
+  /** edit mode 帶 poster id；create mode 傳 null + pendingIds props */
   posterId: string | null;
   disabled?: boolean;
+  /** Create mode 暫存的 sibling ids（受控）。Edit mode 忽略。 */
+  pendingIds?: string[];
+  onPendingChange?: (next: string[]) => void;
 }) {
   const isCreateMode = !posterId;
 
   const [siblings, setSiblings] = React.useState<SiblingPoster[]>([]);
   const [pool, setPool] = React.useState<SiblingPoster[]>([]);
   const [busy, setBusy] = React.useState(false);
-  const [yesMode, setYesMode] = React.useState(false);
+  // 是否屬於組合 — create mode 從 pendingIds 推；edit mode 從 siblings 推
+  const [yesMode, setYesMode] = React.useState(
+    isCreateMode ? (pendingIds?.length ?? 0) > 0 : false
+  );
   // AlertDialog 二次確認 state — 跟「砍 group / 砍分類」其他破壞性動作
   // 用同款 shadcn 對話框，不再用瀏覽器原生 window.confirm（iOS Safari
   // PWA 模式下會被無聲忽略）。
@@ -68,21 +76,25 @@ export default function PosterCombinationField({
     }
   }, [posterId]);
 
-  // Initial load — siblings + pool of all posters for the picker
+  // Initial load — siblings (edit mode only) + pool (both modes)
   React.useEffect(() => {
-    if (!posterId) return;
-    void refresh();
+    if (posterId) void refresh();
     void (async () => {
       const r = await listAllPostersForPicker(posterId);
       if (r.ok) setPool(r.data);
     })();
   }, [posterId, refresh]);
 
-  /** Sync siblings to a new selected-id list. Diff added vs removed,
-   *  call linkPosters / unlinkPoster sequentially. Sequential matters:
-   *  the first link may create the set; subsequent links rely on
-   *  self.set_id being populated to merge into the same set. */
+  /** Sync siblings to a new selected-id list.
+   *  - Create mode：純更新 parent-supplied pendingIds，沒有 server call。
+   *  - Edit mode：diff added/removed，sequential 呼 linkPosters /
+   *    unlinkPoster（first link 可能建 set，後續靠 self.set_id 已存在
+   *    自動 merge 進同一個 set）。 */
   async function applySelection(newIds: string[]) {
+    if (isCreateMode) {
+      onPendingChange?.(newIds);
+      return;
+    }
     if (!posterId) return;
     const oldIds = siblings.map((s) => s.id);
     const added = newIds.filter((id) => !oldIds.includes(id));
@@ -116,8 +128,17 @@ export default function PosterCombinationField({
     await refresh();
   }
 
-  /** 「否」按下：沒 sibling 就直接切；有就 open 二次確認對話框。 */
+  /** 「否」按下：
+   *  - Create mode：清空 pendingIds（沒寫 DB，不需要確認）
+   *  - Edit mode 沒 sibling：直接切
+   *  - Edit mode 有 sibling：open 二次確認對話框
+   */
   function onSetToNo() {
+    if (isCreateMode) {
+      onPendingChange?.([]);
+      setYesMode(false);
+      return;
+    }
     if (!posterId || siblings.length === 0) {
       setYesMode(false);
       return;
@@ -141,14 +162,6 @@ export default function PosterCombinationField({
     await refresh();
   }
 
-  if (isCreateMode) {
-    return (
-      <div className="text-sm text-muted-foreground rounded-md border border-dashed border-input bg-secondary/30 p-3">
-        建立海報後，回到編輯頁就能在這裡加入「同組合的其他海報」。
-      </div>
-    );
-  }
-
   // Items for MultiSelectDropdown — show "name · work" so admin can
   // disambiguate two posters with the same name across different works.
   const items: MultiSelectItem[] = pool.map((p) => ({
@@ -157,7 +170,8 @@ export default function PosterCombinationField({
       p.work_title_zh ? ` · ${p.work_title_zh}` : ""
     }`,
   }));
-  const value = siblings.map((s) => s.id);
+  // Edit mode 顯示已連結的 siblings；create mode 顯示 parent 給的 pendingIds
+  const value = isCreateMode ? pendingIds ?? [] : siblings.map((s) => s.id);
 
   return (
     <div className="space-y-3">

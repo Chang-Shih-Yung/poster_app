@@ -23,9 +23,6 @@ export default async function NewPosterPage({
         <h1 className="hidden md:block text-2xl font-semibold tracking-tight mb-2">
           新增海報
         </h1>
-        <p className="text-sm text-muted-foreground mb-4">
-          只填 metadata；圖片在建立後到編輯頁上傳。
-        </p>
         <PosterForm
           mode="create"
           works={works ?? []}

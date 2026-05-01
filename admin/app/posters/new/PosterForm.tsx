@@ -23,6 +23,14 @@ import { flattenGroupTree, type FlattenedGroup } from "@/lib/groupTree";
 import { DEFAULT_REGION } from "@/lib/keys";
 import { createPoster, updatePosterMetadata } from "@/app/actions/posters";
 import PromoImageGallery from "@/components/PromoImageGallery";
+import PromoImagePicker, {
+  EMPTY_PROMO_STATE,
+  type PromoImagePickerState,
+} from "@/components/PromoImagePicker";
+import { uploadPosterImage } from "@/lib/imageUpload";
+import { attachImage } from "@/app/actions/posters";
+import { linkPosters } from "@/app/actions/poster-sets";
+import { describeError } from "@/lib/errors";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -195,6 +203,18 @@ export default function PosterForm({
   // 不再經過 RHF state 或 onSubmit。create mode 看不到（沒 ID），admin
   // 建好海報後在編輯頁加。
   // （unsaved-changes guard 在 useForm 之後 wire — 需要 isDirty 等 state）
+
+  // 主海報圖（create mode only）— 暫存 File，submit 時 createPoster
+  // 拿到 id 後跑 uploadPosterImage + attachImage，跟 batch 同一個 pipeline。
+  // Edit mode 不在這裡管，由 /posters/[id]/page.tsx 的 PosterImageUploader
+  // 元件處理（即時上傳/換圖）。
+  const [mainImageState, setMainImageState] =
+    useState<PromoImagePickerState>(EMPTY_PROMO_STATE);
+
+  // 海報發行組合（create mode only）— 暫存 sibling ids，submit 時拿到
+  // 新海報 id 後逐筆呼 linkPosters。Edit mode 由 PosterCombinationField
+  // 自己管（即時 link / unlink）。
+  const [pendingSiblingIds, setPendingSiblingIds] = useState<string[]>([]);
 
   const {
     register,
@@ -391,15 +411,82 @@ export default function PosterForm({
         targetId = initial!.id;
       }
 
-      // 宣傳圖片現在走 PromoImageGallery 直接呼 server action，不再用
-      // form submit 帶 file。Create flow 結束直接跳列表；admin 想加
-      // 宣傳圖回編輯頁加。
+      // 主海報圖（create mode 才會有暫存 File）— 跟 batch 同 pipeline:
+      // uploadPosterImage 壓縮 + 上 Storage → attachImage 寫 DB。失敗
+      // 不 rollback metadata（poster 仍建好），warn user 並導去編輯頁
+      // 重試。
+      if (mode === "create" && mainImageState.file) {
+        try {
+          const uploaded = await uploadPosterImage(
+            mainImageState.file,
+            targetId
+          );
+          const ar = await attachImage(targetId, {
+            poster_url: uploaded.posterUrl,
+            thumbnail_url: uploaded.thumbnailUrl,
+            blurhash: uploaded.blurhash,
+            image_size_bytes: uploaded.imageSizeBytes,
+          });
+          if (!ar.ok) throw new Error(ar.error);
+        } catch (imgErr) {
+          toast.warning(
+            `海報已建立，但圖片上傳失敗：${describeError(imgErr)}。請進編輯頁重試上傳。`,
+            { duration: 12000 }
+          );
+          router.push(`/posters/${targetId}`);
+          return;
+        }
+      }
+
+      // 海報發行組合（create mode）— 拿到新海報 id 後逐筆連結 sibling。
+      // Sequential 必要：第一筆會 create set，後續仰賴 self.set_id 已
+      // 寫入 → linkPosters 內部會 merge 進同一個 set。
+      if (mode === "create" && pendingSiblingIds.length > 0) {
+        let linkFails = 0;
+        for (const sid of pendingSiblingIds) {
+          const r = await linkPosters({
+            poster_id: targetId,
+            sibling_id: sid,
+          });
+          if (!r.ok) linkFails++;
+        }
+        if (linkFails > 0) {
+          toast.warning(
+            `海報已建立，但 ${linkFails} 張組合連結失敗。請進編輯頁重試。`,
+            { duration: 10000 }
+          );
+        }
+      }
+
+      // 宣傳圖片走 PromoImageGallery 直接呼 server action（edit mode），
+      // create mode 留給 admin 進編輯頁加（多檔 staging 較複雜，下一輪做）。
       router.push("/posters");
     });
   }
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+      {/* ── 真實海報圖（spec — 兩種 mode 統一在表單內處理） ──────── */}
+      {/*
+       * Create mode：暫存 File 到 mainImageState，submit 時 createPoster
+       *   → uploadPosterImage → attachImage（跟批量同 pipeline）。
+       * Edit mode：即時上傳（File 拿到就跑 upload + attach）— 跟舊
+       *   PosterImageUploader 同行為，只是搬進表單裡而非另一個 section。
+       *   （edit 頁已經有現成 PosterImageUploader 在頂部，這裡保留 pure
+       *    create-staging 行為以避免重複上傳路徑；edit 頁的圖片 section
+       *    後續另外 unify。）
+       */}
+      {mode === "create" && (
+        <FormField label="真實海報圖">
+          <PromoImagePicker
+            existingUrl={null}
+            state={mainImageState}
+            onChange={setMainImageState}
+            disabled={pending}
+          />
+        </FormField>
+      )}
+
       {serverError && (
         <Card className="border-destructive/40 bg-destructive/10">
           <CardContent className="p-3 flex items-start gap-2 text-sm text-destructive">
@@ -807,15 +894,19 @@ export default function PosterForm({
       </div>
 
       {/* ── #14 海報發行組合 ─────────────────────────────────────── */}
-      {/* 「是 / 否」+ sibling picker — 不思考 set 物件，直接挑同組合的
-          其他海報；後端用 poster_sets 表做底層存儲。create mode 看不到
-          picker（沒 ID 不能掛 sibling），元件會顯示提示。 */}
+      {/* 「是 / 否」+ sibling picker — admin 不思考 set 物件，直接挑同
+          組合的其他海報。create mode 暫存到 pendingSiblingIds，submit 後
+          才 linkPosters；edit mode 即時寫 DB。 */}
       <FormField
         label="海報發行組合"
         helper="是 = 跟其他海報是同一發行組合（套票、IG 活動套組等）；否 = 單張獨立發行"
       >
         <PosterCombinationField
           posterId={mode === "edit" ? initial!.id : null}
+          pendingIds={mode === "create" ? pendingSiblingIds : undefined}
+          onPendingChange={
+            mode === "create" ? setPendingSiblingIds : undefined
+          }
           disabled={pending}
         />
       </FormField>
