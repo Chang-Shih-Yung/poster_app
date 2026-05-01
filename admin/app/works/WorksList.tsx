@@ -66,6 +66,11 @@ export default function WorksList({
   const [error, setError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [newStudio, setNewStudio] = useState("");
+  // "select" 模式：從既有 studio 下拉挑；"custom" 模式：自由打字建新分類
+  // （跟 WorkForm 的 pattern 一致 — 點下拉「其他（輸入新分類）…」會切到 custom）
+  const [newStudioMode, setNewStudioMode] = useState<"select" | "custom">(
+    "select"
+  );
   const [newTitle, setNewTitle] = useState("");
   const [pendingDelete, setPendingDelete] = useState<Work | null>(null);
   const [pending, startTransition] = useTransition();
@@ -151,6 +156,7 @@ export default function WorksList({
       }
       setAdding(false);
       setNewStudio("");
+      setNewStudioMode("select");
       setNewTitle("");
       toast.success(`已新增「${newTitle}」`);
     });
@@ -171,25 +177,64 @@ export default function WorksList({
       {adding && (
         <Card className="mb-3">
           <CardContent className="p-3 space-y-2">
-            <Select
-              // Radix Select rejects empty-string values; sentinel-roundtrip
-              // mirrors the WorkForm pattern.
-              value={newStudio === "" ? "__none__" : newStudio}
-              onValueChange={(v) => setNewStudio(v === "__none__" ? "" : v)}
-              disabled={pending}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="所屬分類" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__none__">（未分類）</SelectItem>
-                {studios.map((s) => (
-                  <SelectItem key={s} value={s}>
-                    {s}
+            {newStudioMode === "select" ? (
+              <Select
+                // Radix Select rejects empty-string values; sentinel-roundtrip
+                // mirrors the WorkForm pattern. "__custom__" → 切到自由輸入。
+                value={newStudio === "" ? "__none__" : newStudio}
+                onValueChange={(v) => {
+                  if (v === "__custom__") {
+                    setNewStudioMode("custom");
+                    setNewStudio("");
+                  } else if (v === "__none__") {
+                    setNewStudio("");
+                  } else {
+                    setNewStudio(v);
+                  }
+                }}
+                disabled={pending}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="所屬分類" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">（未分類）</SelectItem>
+                  {studios.map((s) => (
+                    <SelectItem key={s} value={s}>
+                      {s}
+                    </SelectItem>
+                  ))}
+                  <SelectItem value="__custom__">
+                    其他（輸入新分類）…
                   </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+                </SelectContent>
+              </Select>
+            ) : (
+              <div className="flex gap-2">
+                <Input
+                  autoFocus
+                  value={newStudio}
+                  onChange={(e) => setNewStudio(e.target.value)}
+                  placeholder="新分類名稱"
+                  disabled={pending}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="shrink-0"
+                  onClick={() => {
+                    setNewStudioMode("select");
+                    // 如果輸入的字串剛好是既有 studio 就保留，否則清空
+                    // 讓 Select 顯示 placeholder。
+                    if (!studios.includes(newStudio)) setNewStudio("");
+                  }}
+                  disabled={pending}
+                >
+                  取消
+                </Button>
+              </div>
+            )}
             <Input
               value={newTitle}
               onChange={(e) => setNewTitle(e.target.value)}
@@ -200,6 +245,7 @@ export default function WorksList({
                 if (e.key === "Escape") {
                   setAdding(false);
                   setNewStudio("");
+                  setNewStudioMode("select");
                   setNewTitle("");
                 }
               }}
@@ -219,6 +265,7 @@ export default function WorksList({
                 onClick={() => {
                   setAdding(false);
                   setNewStudio("");
+                  setNewStudioMode("select");
                   setNewTitle("");
                 }}
                 disabled={pending}
