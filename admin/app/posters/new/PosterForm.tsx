@@ -8,11 +8,9 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/client";
 import {
   REGIONS,
-  RELEASE_TYPES,
   SIZE_TYPES,
   SIZE_UNITS,
   CHANNEL_CATEGORIES,
-  CHANNEL_TYPES,
   CINEMA_RELEASE_TYPES,
   PREMIUM_FORMATS,
   CINEMA_NAMES,
@@ -238,7 +236,9 @@ export default function PosterForm({
   });
 
   const workId = watch("work_id");
-  const isExclusive = watch("is_exclusive");
+  // is_exclusive watcher removed — 獨家欄位 not in spec, UI dropped.
+  // The form state still carries is_exclusive (via RHF) so existing values
+  // get preserved on edit; we just don't render the toggle.
   const sizeType = watch("size_type");
   const channelCategory = watch("channel_category");
   const cinemaReleaseTypes = watch("cinema_release_types");
@@ -501,7 +501,7 @@ export default function PosterForm({
       </FormField>
 
       <div className="grid grid-cols-2 gap-3">
-        <FormField label="發行精確日期" helper="填日期後年份自動帶入">
+        <FormField label="海報發行日" helper="填日期後年份自動帶入">
           <Controller
             control={control}
             name="poster_release_date"
@@ -514,7 +514,7 @@ export default function PosterForm({
             )}
           />
         </FormField>
-        <FormField label="發行年份" required error={errors.year?.message}>
+        <FormField label="海報發行年份" required error={errors.year?.message}>
           <Input
             type="number"
             min={1900}
@@ -527,7 +527,7 @@ export default function PosterForm({
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        <FormField label="地區" required error={errors.region?.message}>
+        <FormField label="海報發行地" required error={errors.region?.message}>
           <Controller
             control={control}
             name="region"
@@ -556,9 +556,9 @@ export default function PosterForm({
             DB 欄位保留（不破壞舊資料），新表單送 null。*/}
       </div>
 
-      {/* ── 尺寸（CUSTOM 時展開 width/height/unit）─────────────── */}
+      {/* ── 規格（CUSTOM 時展開 width/height/unit）─────────────── */}
       <div className="grid grid-cols-2 gap-3">
-        <FormField label="尺寸" required error={errors.size_type?.message}>
+        <FormField label="海報發行規格" required error={errors.size_type?.message}>
           <Controller
             control={control}
             name="size_type"
@@ -583,7 +583,7 @@ export default function PosterForm({
             )}
           />
         </FormField>
-        <FormField label="材質">
+        <FormField label="海報發行材質">
           <Controller
             control={control}
             name="material_type"
@@ -658,17 +658,14 @@ export default function PosterForm({
         </div>
       )}
 
-      <FormField label="版本標記">
-        <Input
-          {...register("version_label")}
-          placeholder="例：v2、25 週年、一刷"
-          disabled={pending}
-        />
-      </FormField>
+      {/* 「版本標記」(version_label)、「獨家」(is_exclusive/exclusive_name)、
+          「通路名稱」(channel_name)、「通路補充說明」(channel_note)、
+          「通路細分」(channel_type) 都不在合夥人 2026-05-02 spec 表內，
+          UI 移除。DB 欄位保留（不破壞舊資料 + 不寫值就是 null）。 */}
 
       {/* ── 通路 ─────────────────────────────────────────────────── */}
       <FormField
-        label="通路類型" required
+        label="海報發行通路" required
         error={errors.channel_category?.message}
       >
         <Controller
@@ -746,7 +743,7 @@ export default function PosterForm({
             </FormField>
           )}
 
-          <FormField label="影城">
+          <FormField label="海報發行影城">
             <Controller
               control={control}
               name="cinema_name"
@@ -774,122 +771,12 @@ export default function PosterForm({
         </>
       )}
 
-      {/* Non-cinema channel_type */}
-      {!isCinema && channelCategory !== NONE && (
-        <FormField label="通路細分">
-          <Controller
-            control={control}
-            name="channel_type"
-            render={({ field }) => (
-              <Select
-                value={field.value}
-                onValueChange={field.onChange}
-                disabled={pending}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="—" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={NONE}>—</SelectItem>
-                  {CHANNEL_TYPES.map((r) => (
-                    <SelectItem key={r.value} value={r.value}>
-                      {r.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-          />
-        </FormField>
-      )}
+      {/* 「通路細分」(channel_type)、「通路名稱」(channel_name)、
+          「通路補充說明」(channel_note) 都不在 spec — UI 移除，DB 欄位保留。 */}
 
-      <FormField label="通路名稱" helper="例：威秀影城、東寶、誠品畫廊">
-        <Input
-          {...register("channel_name")}
-          placeholder="例：威秀影城"
-          disabled={pending}
-        />
-      </FormField>
-
-      <FormField label="通路補充說明">
-        <Textarea
-          {...register("channel_note")}
-          placeholder="例：威秀獨家加贈卡套、限前 100 名"
-          disabled={pending}
-          rows={2}
-        />
-      </FormField>
-
-      <FormField
-        label="宣傳圖片"
-        helper="影院 DM、IG 活動圖、票券優惠等取得方式佐證"
-      >
-        <PromoImagePicker
-          existingUrl={existingPromoUrl}
-          state={promoState}
-          onChange={setPromoState}
-          disabled={pending}
-        />
-      </FormField>
-
-      <label className="flex items-center gap-2 text-sm text-foreground">
-        <input
-          type="checkbox"
-          {...register("is_exclusive")}
-          className="h-4 w-4 rounded border-input"
-        />
-        <span>獨家</span>
-      </label>
-
-      {isExclusive && (
-        <FormField label="獨家名稱">
-          <Input
-            {...register("exclusive_name")}
-            placeholder="例：威秀影城"
-            disabled={pending}
-          />
-        </FormField>
-      )}
-
-      {/* ── 來源 ─────────────────────────────────────────────────── */}
+      {/* ── #13 海報發行售價 ─────────────────────────────────────── */}
       <div className="grid grid-cols-2 gap-3">
-        <FormField label="來源平台">
-          <Controller
-            control={control}
-            name="source_platform"
-            render={({ field }) => (
-              <Select
-                value={field.value}
-                onValueChange={field.onChange}
-                disabled={pending}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="—" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={NONE}>—</SelectItem>
-                  {SOURCE_PLATFORMS.map((r) => (
-                    <SelectItem key={r.value} value={r.value}>
-                      {r.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-          />
-        </FormField>
-        <FormField label="來源網址">
-          <Input type="url" {...register("source_url")} disabled={pending} />
-        </FormField>
-      </div>
-
-      <FormField label="備註">
-        <Textarea {...register("source_note")} disabled={pending} />
-      </FormField>
-
-      {/* ── 售價（#13 spec） ─────────────────────────────────────── */}
-      <div className="grid grid-cols-2 gap-3">
-        <FormField label="售價類型">
+        <FormField label="海報發行售價">
           <Controller
             control={control}
             name="price_type"
@@ -916,7 +803,7 @@ export default function PosterForm({
         </FormField>
         {priceType === "paid" && (
           <FormField
-            label="售價（TWD）"
+            label="售價金額（TWD）"
             required
             error={errors.price_amount?.message}
           >
@@ -932,10 +819,10 @@ export default function PosterForm({
         )}
       </div>
 
-      {/* ── 套票組合（#14 spec） ─────────────────────────────────── */}
+      {/* ── #14 海報發行組合 ─────────────────────────────────────── */}
       <FormField
-        label="所屬套票"
-        helper="N 張海報一起發行的套票（例：影城套票、IG 活動組合）"
+        label="海報發行組合"
+        helper="N 張海報一起發行的套票（影城套票、IG 活動組合等）。空白＝不屬於任何組合"
       >
         <Controller
           control={control}
@@ -949,6 +836,56 @@ export default function PosterForm({
               disabled={pending}
             />
           )}
+        />
+      </FormField>
+
+      {/* ── #15 #16 資料來源平台 + 連結 ──────────────────────────── */}
+      <div className="grid grid-cols-2 gap-3">
+        <FormField label="資料來源平台">
+          <Controller
+            control={control}
+            name="source_platform"
+            render={({ field }) => (
+              <Select
+                value={field.value}
+                onValueChange={field.onChange}
+                disabled={pending}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="—" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NONE}>—</SelectItem>
+                  {SOURCE_PLATFORMS.map((r) => (
+                    <SelectItem key={r.value} value={r.value}>
+                      {r.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          />
+        </FormField>
+        <FormField label="資料來源連結">
+          <Input type="url" {...register("source_url")} disabled={pending} />
+        </FormField>
+      </div>
+
+      {/* ── #17 資料來源補充說明 ─────────────────────────────────── */}
+      <FormField label="資料來源補充說明">
+        <Textarea {...register("source_note")} disabled={pending} />
+      </FormField>
+
+      {/* ── #18 海報發行資訊（圖檔）─────────────────────────────── */}
+      <FormField
+        label="海報發行資訊"
+        helper="影院 DM、IG 活動圖、票券優惠等取得方式佐證"
+      >
+        <PromoImagePicker
+          existingUrl={existingPromoUrl}
+          state={promoState}
+          onChange={setPromoState}
+          disabled={pending}
         />
       </FormField>
 

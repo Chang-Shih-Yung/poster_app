@@ -15,11 +15,9 @@ import {
   SIZE_TYPES,
   SIZE_UNITS,
   CHANNEL_CATEGORIES,
-  CHANNEL_TYPES,
   CINEMA_RELEASE_TYPES,
   PREMIUM_FORMATS,
   CINEMA_NAMES,
-  RELEASE_TYPES,
   MATERIAL_TYPES,
   SOURCE_PLATFORMS,
   PRICE_TYPES,
@@ -307,7 +305,7 @@ export function DraftCard({
             )}
 
             <div className="grid grid-cols-2 gap-2">
-              <FormField label="發行日期" size="compact">
+              <FormField label="海報發行日" size="compact">
                 <DatePicker
                   value={draft.poster_release_date}
                   onChange={(v) => {
@@ -319,7 +317,7 @@ export function DraftCard({
                   className="h-9"
                 />
               </FormField>
-              <FormField label="發行年份" required size="compact">
+              <FormField label="海報發行年份" required size="compact">
                 <Input
                   type="number"
                   min={1900}
@@ -332,7 +330,7 @@ export function DraftCard({
               </FormField>
             </div>
 
-            <FormField label="地區" required size="compact">
+            <FormField label="海報發行地" required size="compact">
               <Select
                 value={draft.region}
                 onValueChange={(v) => onChange({ region: v })}
@@ -353,9 +351,9 @@ export function DraftCard({
                 發行類型只存在於影城條件多選（見下方 cinema_release_types）。
                 poster_release_type DB 欄位保留（不破壞舊資料），新海報會送 NONE。*/}
 
-            {/* 尺寸 + 材質 */}
+            {/* 規格 + 材質 */}
             <div className="grid grid-cols-2 gap-2">
-              <FormField label="尺寸" required size="compact">
+              <FormField label="海報發行規格" required size="compact">
                 <Select
                   value={draft.size_type}
                   onValueChange={(v) => onChange({ size_type: v })}
@@ -373,7 +371,7 @@ export function DraftCard({
                   </SelectContent>
                 </Select>
               </FormField>
-              <FormField label="材質" size="compact">
+              <FormField label="海報發行材質" size="compact">
                 <Select
                   value={draft.material_type}
                   onValueChange={(v) => onChange({ material_type: v })}
@@ -441,8 +439,8 @@ export function DraftCard({
               </div>
             )}
 
-            {/* 通路類型 */}
-            <FormField label="通路類型" required size="compact">
+            {/* 海報發行通路 */}
+            <FormField label="海報發行通路" required size="compact">
               <Select
                 value={draft.channel_category}
                 onValueChange={(v) =>
@@ -504,7 +502,7 @@ export function DraftCard({
                     </Select>
                   </FormField>
                 )}
-                <FormField label="影城" size="compact">
+                <FormField label="海報發行影城" size="compact">
                   <Select
                     value={draft.cinema_name}
                     onValueChange={(v) => onChange({ cinema_name: v })}
@@ -525,132 +523,16 @@ export function DraftCard({
               </>
             )}
 
-            {/* Non-cinema channel_type */}
-            {draft.channel_category !== "cinema" &&
-              draft.channel_category !== NONE && (
-                <FormField label="通路細分" size="compact">
-                  <Select
-                    value={draft.channel_type}
-                    onValueChange={(v) => onChange({ channel_type: v })}
-                  >
-                    <SelectTrigger className="h-9">
-                      <SelectValue placeholder="—" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={NONE}>—</SelectItem>
-                      {CHANNEL_TYPES.map((r) => (
-                        <SelectItem key={r.value} value={r.value}>
-                          {r.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </FormField>
-              )}
+            {/* 「通路細分」(channel_type)、「通路名稱」(channel_name)、
+                「通路補充說明」(channel_note)、「獨家」(is_exclusive +
+                exclusive_name)、「版本標記」(version_label) 都不在合夥人
+                2026-05-02 spec — UI 全部移除，DB 欄位保留（不破壞舊資料）。
+                Spec 順序對齊：13 售價 → 14 組合 → 15 平台 → 16 連結 →
+                17 補充說明 → 18 圖檔 → 26 公開 */}
 
-            <FormField label="通路名稱" size="compact">
-              <Input
-                value={draft.channel_name}
-                onChange={(e) => onChange({ channel_name: e.target.value })}
-                placeholder="例：威秀影城"
-                className="h-9"
-              />
-            </FormField>
-
-            <FormField label="通路補充說明" size="compact">
-              <Textarea
-                value={draft.channel_note}
-                onChange={(e) => onChange({ channel_note: e.target.value })}
-                placeholder="例：威秀獨家加贈卡套"
-                rows={2}
-              />
-            </FormField>
-
-            <FormField label="宣傳圖片" size="compact">
-              <PromoImagePicker
-                existingUrl={null}
-                state={{
-                  file: draft.promoFile,
-                  // Batch import is create-only; markedForRemoval doesn't
-                  // apply (no existing image to remove). Picker keeps the
-                  // flag to preserve its API; we feed false here.
-                  markedForRemoval: false,
-                }}
-                onChange={(s: PromoImagePickerState) =>
-                  onChange({ promoFile: s.file })
-                }
-                disabled={draft.status !== "idle"}
-                compact
-              />
-            </FormField>
-
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={draft.is_exclusive}
-                onChange={(e) => onChange({ is_exclusive: e.target.checked })}
-                className="h-4 w-4 rounded border-input"
-              />
-              獨家
-            </label>
-            {draft.is_exclusive && (
-              <Input
-                value={draft.exclusive_name}
-                onChange={(e) => onChange({ exclusive_name: e.target.value })}
-                placeholder="獨家名稱"
-                className="h-9"
-              />
-            )}
-
-            <FormField label="版本標記" size="compact">
-              <Input
-                value={draft.version_label}
-                onChange={(e) => onChange({ version_label: e.target.value })}
-                placeholder="例：v2、25 週年"
-                className="h-9"
-              />
-            </FormField>
-
+            {/* ── #13 海報發行售價 ──────────────────────────────── */}
             <div className="grid grid-cols-2 gap-2">
-              <FormField label="來源平台" size="compact">
-                <Select
-                  value={draft.source_platform}
-                  onValueChange={(v) => onChange({ source_platform: v })}
-                >
-                  <SelectTrigger className="h-9">
-                    <SelectValue placeholder="—" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={NONE}>—</SelectItem>
-                    {SOURCE_PLATFORMS.map((r) => (
-                      <SelectItem key={r.value} value={r.value}>
-                        {r.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </FormField>
-              <FormField label="來源網址" size="compact">
-                <Input
-                  type="url"
-                  value={draft.source_url}
-                  onChange={(e) => onChange({ source_url: e.target.value })}
-                  className="h-9"
-                />
-              </FormField>
-            </div>
-
-            <FormField label="備註" size="compact">
-              <Textarea
-                value={draft.source_note}
-                onChange={(e) => onChange({ source_note: e.target.value })}
-                rows={2}
-              />
-            </FormField>
-
-            {/* ── 售價（#13） ───────────────────────────────────── */}
-            <div className="grid grid-cols-2 gap-2">
-              <FormField label="售價類型" size="compact">
+              <FormField label="海報發行售價" size="compact">
                 <Select
                   value={draft.price_type}
                   onValueChange={(v) =>
@@ -675,7 +557,7 @@ export function DraftCard({
                 </Select>
               </FormField>
               {draft.price_type === "paid" && (
-                <FormField label="售價（TWD）" required size="compact">
+                <FormField label="售價金額（TWD）" required size="compact">
                   <Input
                     type="number"
                     step="1"
@@ -691,8 +573,12 @@ export function DraftCard({
               )}
             </div>
 
-            {/* ── 套票組合（#14） ───────────────────────────────── */}
-            <FormField label="所屬套票" size="compact">
+            {/* ── #14 海報發行組合 ──────────────────────────────── */}
+            <FormField
+              label="海報發行組合"
+              helper="N 張一起發行的套票（空白＝不屬於任何組合）"
+              size="compact"
+            >
               <SetPicker
                 sets={posterSets}
                 value={draft.set_id}
@@ -702,7 +588,62 @@ export function DraftCard({
               />
             </FormField>
 
-            {/* ── 是否公開（#26） ───────────────────────────────── */}
+            {/* ── #15 #16 來源平台 + 連結 ──────────────────────── */}
+            <div className="grid grid-cols-2 gap-2">
+              <FormField label="資料來源平台" size="compact">
+                <Select
+                  value={draft.source_platform}
+                  onValueChange={(v) => onChange({ source_platform: v })}
+                >
+                  <SelectTrigger className="h-9">
+                    <SelectValue placeholder="—" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={NONE}>—</SelectItem>
+                    {SOURCE_PLATFORMS.map((r) => (
+                      <SelectItem key={r.value} value={r.value}>
+                        {r.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FormField>
+              <FormField label="資料來源連結" size="compact">
+                <Input
+                  type="url"
+                  value={draft.source_url}
+                  onChange={(e) => onChange({ source_url: e.target.value })}
+                  className="h-9"
+                />
+              </FormField>
+            </div>
+
+            {/* ── #17 資料來源補充說明 ─────────────────────────── */}
+            <FormField label="資料來源補充說明" size="compact">
+              <Textarea
+                value={draft.source_note}
+                onChange={(e) => onChange({ source_note: e.target.value })}
+                rows={2}
+              />
+            </FormField>
+
+            {/* ── #18 海報發行資訊（圖檔）──────────────────────── */}
+            <FormField label="海報發行資訊" size="compact">
+              <PromoImagePicker
+                existingUrl={null}
+                state={{
+                  file: draft.promoFile,
+                  markedForRemoval: false,
+                }}
+                onChange={(s: PromoImagePickerState) =>
+                  onChange({ promoFile: s.file })
+                }
+                disabled={draft.status !== "idle"}
+                compact
+              />
+            </FormField>
+
+            {/* ── #26 是否公開 ─────────────────────────────────── */}
             <label className="flex items-center gap-2 text-sm select-none cursor-pointer">
               <input
                 type="checkbox"
