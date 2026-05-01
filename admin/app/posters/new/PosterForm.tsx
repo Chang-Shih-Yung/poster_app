@@ -31,6 +31,17 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { FormField } from "@/components/ui/form-field";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { useUnsavedChangesGuard } from "@/components/useUnsavedChangesGuard";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -179,6 +190,7 @@ export default function PosterForm({
   // 宣傳圖片改 1:N gallery — 由 PromoImageGallery 自己 fetch / mutate，
   // 不再經過 RHF state 或 onSubmit。create mode 看不到（沒 ID），admin
   // 建好海報後在編輯頁加。
+  // （unsaved-changes guard 在 useForm 之後 wire — 需要 isDirty 等 state）
 
   const {
     register,
@@ -186,7 +198,7 @@ export default function PosterForm({
     control,
     watch,
     setValue,
-    formState: { errors },
+    formState: { errors, isDirty, isSubmitSuccessful },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
@@ -222,6 +234,14 @@ export default function PosterForm({
         initial?.price_amount != null ? String(initial.price_amount) : "",
     },
   });
+
+  // 防呆：表單有未儲存修改時，攔截 in-app navigation（mobile 滑回、
+  // 點 BottomTab、breadcrumb link 等）。pending=true 期間（正在儲存）
+  // 不擋 — startTransition 內部會 router.push 那條路不該被攔。submit
+  // 成功後 isSubmitSuccessful 變 true，guard 自動解除。
+  const guard = useUnsavedChangesGuard(
+    isDirty && !pending && !isSubmitSuccessful
+  );
 
   const workId = watch("work_id");
   // is_exclusive watcher removed — 獨家欄位 not in spec, UI dropped.
@@ -884,6 +904,35 @@ export default function PosterForm({
       <p className="text-xs text-muted-foreground pt-2">
         新建海報預設 is_placeholder = true（先用通用剪影顯示）。
       </p>
+
+      {/* 離開頁面前的 unsaved-changes 二次確認 — 跟 BatchImport 同款
+          shadcn AlertDialog，避免 admin 改了一半的表單被靜悄悄丟掉。 */}
+      <AlertDialog
+        open={guard.pending}
+        onOpenChange={(open) => {
+          if (!open) guard.cancel();
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>確定離開？</AlertDialogTitle>
+            <AlertDialogDescription>
+              這張海報有尚未儲存的修改，離開後會消失。要離開請確認，否則點「留在頁面」回去按「{mode === "create" ? "建立" : "儲存"}」。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={guard.cancel}>
+              留在頁面
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={guard.confirm}
+            >
+              捨棄並離開
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </form>
   );
 }

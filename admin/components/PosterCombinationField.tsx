@@ -13,6 +13,16 @@ import {
   MultiSelectDropdown,
   type MultiSelectItem,
 } from "@/components/ui/multi-select";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { UNNAMED_POSTER } from "@/lib/keys";
 
 /**
@@ -44,6 +54,10 @@ export default function PosterCombinationField({
   const [pool, setPool] = React.useState<SiblingPoster[]>([]);
   const [busy, setBusy] = React.useState(false);
   const [yesMode, setYesMode] = React.useState(false);
+  // AlertDialog 二次確認 state — 跟「砍 group / 砍分類」其他破壞性動作
+  // 用同款 shadcn 對話框，不再用瀏覽器原生 window.confirm（iOS Safari
+  // PWA 模式下會被無聲忽略）。
+  const [confirmRemoveSelfOpen, setConfirmRemoveSelfOpen] = React.useState(false);
 
   const refresh = React.useCallback(async () => {
     if (!posterId) return;
@@ -102,22 +116,19 @@ export default function PosterCombinationField({
     await refresh();
   }
 
-  async function onSetToNo() {
-    if (!posterId) {
+  /** 「否」按下：沒 sibling 就直接切；有就 open 二次確認對話框。 */
+  function onSetToNo() {
+    if (!posterId || siblings.length === 0) {
       setYesMode(false);
       return;
     }
-    if (siblings.length === 0) {
-      setYesMode(false);
-      return;
-    }
-    if (
-      !window.confirm(
-        `這張海報目前跟 ${siblings.length} 張海報是同組合，切換到「否」會把這張踢出組合。確定？`
-      )
-    ) {
-      return;
-    }
+    setConfirmRemoveSelfOpen(true);
+  }
+
+  /** AlertDialog 確認後的實際移除動作。 */
+  async function confirmRemoveSelf() {
+    setConfirmRemoveSelfOpen(false);
+    if (!posterId) return;
     setBusy(true);
     const r = await unlinkPoster(posterId);
     setBusy(false);
@@ -180,6 +191,31 @@ export default function PosterCombinationField({
           disabled={busy || disabled}
         />
       )}
+
+      {/* 切到「否」+ 已有 sibling → AlertDialog 二次確認 */}
+      <AlertDialog
+        open={confirmRemoveSelfOpen}
+        onOpenChange={setConfirmRemoveSelfOpen}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>從組合移除這張海報？</AlertDialogTitle>
+            <AlertDialogDescription>
+              {`這張海報目前跟 ${siblings.length} 張海報是同組合，切換到「否」會把這張踢出組合。`}
+              其他海報的組合不受影響；如果剩下不足 2 張，整個組合會自動解散。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={confirmRemoveSelf}
+            >
+              確認移除
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
