@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { PackagePlus, Loader2 } from "lucide-react";
+import { PackagePlus, Loader2, Settings } from "lucide-react";
 import { toast } from "sonner";
 import {
   createPosterSet,
@@ -104,18 +104,35 @@ export function SetPicker({
         emptyText="找不到符合的套票"
         disabled={disabled}
         footer={(close) => (
-          <CommandItem
-            value="__action_new_set__"
-            keywords={["新增套票 new add"]}
-            onSelect={() => {
-              close();
-              setCreateOpen(true);
-            }}
-            className="text-primary"
-          >
-            <PackagePlus className="mr-2 h-4 w-4" />
-            <span>新增套票…</span>
-          </CommandItem>
+          <>
+            <CommandItem
+              value="__action_new_set__"
+              keywords={["新增套票 new add"]}
+              onSelect={() => {
+                close();
+                setCreateOpen(true);
+              }}
+              className="text-primary"
+            >
+              <PackagePlus className="mr-2 h-4 w-4" />
+              <span>新增套票…</span>
+            </CommandItem>
+            <CommandItem
+              value="__action_manage_sets__"
+              keywords={["管理 manage sets edit delete"]}
+              onSelect={() => {
+                close();
+                // Hard navigation — keeps the user's current form state
+                // safe (Next preserves popovers' parent state on
+                // back-nav, but just in case admin returns via /sets→
+                // back, the form is rehydrated by RHF defaults).
+                window.location.href = "/sets";
+              }}
+            >
+              <Settings className="mr-2 h-4 w-4" />
+              <span>管理套票（重新命名 / 刪除）…</span>
+            </CommandItem>
+          </>
         )}
       />
 

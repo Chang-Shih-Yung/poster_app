@@ -19,6 +19,7 @@ export default async function Nav() {
         <NavLink href="/tree">目錄</NavLink>
         <NavLink href="/works">所有作品</NavLink>
         <NavLink href="/posters">所有海報</NavLink>
+        <NavLink href="/sets">套票</NavLink>
         <NavLink href="/upload-queue">待補圖</NavLink>
       </div>
       <div className="flex items-center gap-3">
