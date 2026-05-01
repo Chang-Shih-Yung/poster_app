@@ -190,7 +190,7 @@ export function DraftCard({
             <Input
               value={draft.name}
               onChange={(e) => onChange({ name: e.target.value })}
-              placeholder="海報名稱"
+              placeholder="海報官方名稱"
               disabled={disabled}
               // Name is optional now — no orange "missing" border. We could
               // surface other missing required fields (work / year / region /
@@ -255,7 +255,9 @@ export function DraftCard({
         {/* ── Expanded fields ────────────────────────────────────────── */}
         {expanded && draft.status === "idle" && (
           <div className="space-y-3 pt-1 border-t border-border">
-            <FormField label="作品" required size="compact">
+            {/* spec #1 — 作品台灣官方名稱（必填）= 選中的作品 title_zh
+               admin 點下拉可挑既有作品，或從「+ 新增作品…」inline 建。 */}
+            <FormField label="作品台灣官方名稱" required size="compact">
               <WorkPicker
                 works={works}
                 value={draft.work_id}
@@ -267,6 +269,29 @@ export function DraftCard({
                 triggerClassName="h-9"
               />
             </FormField>
+
+            {/* spec #2 — 作品英文官方名稱（必填）= 選中作品的 title_en。
+                Read-only 顯示（要改在「+ 新增作品」dialog 內或 /works/[id]）。
+                如果作品的 title_en 是空（spec wave 3 後新作品強制 title_en
+                必填，舊作品可能空），秀紅字提示。 */}
+            {draft.work_id && (() => {
+              const w = works.find((x) => x.id === draft.work_id);
+              const titleEn = w?.title_en?.trim() ?? "";
+              return (
+                <FormField label="作品英文官方名稱" required size="compact">
+                  <div
+                    className={cn(
+                      "h-9 px-3 flex items-center text-sm rounded-md border bg-muted/30",
+                      titleEn
+                        ? "text-foreground border-border"
+                        : "text-destructive border-destructive/30"
+                    )}
+                  >
+                    {titleEn || "（此作品尚未填英文名，請至作品設定補上）"}
+                  </div>
+                </FormField>
+              );
+            })()}
 
             {draft.work_id && (
               <FormField label="群組" size="compact">

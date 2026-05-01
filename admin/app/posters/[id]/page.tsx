@@ -26,7 +26,7 @@ export default async function EditPosterPage({
       )
       .eq("id", id)
       .single(),
-    supabase.from("works").select("id, title_zh, studio").order("studio").order("title_zh"),
+    supabase.from("works").select("id, title_zh, title_en, studio").order("studio").order("title_zh"),
   ]);
   // Surface query errors instead of silently 404-ing — schema-cache miss
   // (PGRST204) and other Supabase errors used to look like "row not found"

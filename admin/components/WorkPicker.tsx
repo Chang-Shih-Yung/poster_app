@@ -32,6 +32,7 @@ import { WORK_KINDS } from "@/lib/enums";
 export type WorkOption = {
   id: string;
   title_zh: string;
+  title_en: string | null;
   studio: string | null;
 };
 

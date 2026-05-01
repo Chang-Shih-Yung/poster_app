@@ -616,7 +616,7 @@ export default function BatchImport({
             套用到全部卡片
           </p>
 
-          <FormField label="作品" size="compact">
+          <FormField label="作品台灣官方名稱" size="compact">
             <WorkPicker
               works={works}
               value={applyWorkId}

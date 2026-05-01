@@ -14,7 +14,7 @@ export default async function BatchImportPage({
   const supabase = await getServerSupabase();
   const { data: works } = await supabase
     .from("works")
-    .select("id, title_zh, studio")
+    .select("id, title_zh, title_en, studio")
     .order("studio")
     .order("title_zh");
 

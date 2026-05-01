@@ -422,8 +422,13 @@ export default function PosterForm({
         </Card>
       )}
 
-      {/* ── 作品 & 群組 ─────────────────────────────────────────── */}
-      <FormField label="作品" required error={errors.work_id?.message}>
+      {/* ── 作品 (spec #1+#2) & 群組 ──────────────────────────────── */}
+      {/* spec #1 — 作品台灣官方名稱（必填）= 選中作品的 title_zh */}
+      <FormField
+        label="作品台灣官方名稱"
+        required
+        error={errors.work_id?.message}
+      >
         <Controller
           control={control}
           name="work_id"
@@ -441,6 +446,25 @@ export default function PosterForm({
           )}
         />
       </FormField>
+
+      {/* spec #2 — 作品英文官方名稱（必填）= 選中作品的 title_en，read-only */}
+      {workId && (() => {
+        const w = works.find((x) => x.id === workId);
+        const titleEn = w?.title_en?.trim() ?? "";
+        return (
+          <FormField label="作品英文官方名稱" required>
+            <div
+              className={`h-10 px-3 flex items-center text-sm rounded-md border bg-muted/30 ${
+                titleEn
+                  ? "text-foreground border-border"
+                  : "text-destructive border-destructive/30"
+              }`}
+            >
+              {titleEn || "（此作品尚未填英文名，請改用「+ 新增作品」或至作品設定補上）"}
+            </div>
+          </FormField>
+        );
+      })()}
 
       {initial?.work_kind && workId && (
         <WorkKindReadOnly workKind={initial.work_kind} />
@@ -468,7 +492,7 @@ export default function PosterForm({
       </FormField>
 
       {/* ── 基本資訊 ─────────────────────────────────────────────── */}
-      <FormField label="海報名稱" error={errors.poster_name?.message}>
+      <FormField label="海報官方名稱" error={errors.poster_name?.message}>
         <Input
           {...register("poster_name")}
           placeholder="例：B1 原版 / IMAX 威秀獨家"
