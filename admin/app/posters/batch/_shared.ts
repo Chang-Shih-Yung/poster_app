@@ -63,6 +63,10 @@ export type DraftPoster = {
   source_platform: string;
   source_note: string;
   channel_note: string;
+  // Promo image (cinema flyer / IG campaign / etc.) — optional second
+  // image picked alongside the main poster image. Uploaded after the
+  // posters row is created (needs the id for the Storage path).
+  promoFile: File | null;
   status: DraftStatus;
   errorMsg?: string;
   createdPosterId?: string;
@@ -101,6 +105,7 @@ export function newDraft(
     source_platform: NONE,
     source_note: "",
     channel_note: "",
+    promoFile: null,
     status: "idle",
   };
 }

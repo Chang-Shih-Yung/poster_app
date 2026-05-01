@@ -3,6 +3,8 @@
 import imageCompression from "browser-image-compression";
 import { encode as encodeBlurhash } from "blurhash";
 import { createClient } from "./supabase/client";
+import { attachPromoImage, detachPromoImage } from "@/app/actions/posters";
+import type { PromoImagePickerState } from "@/components/PromoImagePicker";
 
 /**
  * Result of uploading one image to the posters bucket. URLs are public
@@ -178,4 +180,42 @@ export async function uploadPromoImage(
     promoImageUrl: supabase.storage.from(POSTERS_BUCKET).getPublicUrl(mainPath).data.publicUrl,
     promoThumbnailUrl: supabase.storage.from(POSTERS_BUCKET).getPublicUrl(thumbPath).data.publicUrl,
   };
+}
+
+/**
+ * Apply a PromoImagePicker state to a poster row. Encapsulates the
+ * upload-or-detach branch that PosterForm and BatchImport otherwise
+ * have to repeat.
+ *
+ *   - state.file present              → upload + attachPromoImage
+ *   - state.markedForRemoval && existingUrl → detachPromoImage
+ *   - neither                          → noop (returns ok)
+ *
+ * Caller is expected to pass `existingUrl: null` for newly-created
+ * posters. Errors propagate through the standard ActionResult shape so
+ * the parent UI can surface them inline.
+ */
+export async function applyPromoImageChange(
+  posterId: string,
+  state: PromoImagePickerState,
+  existingUrl: string | null
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (state.file) {
+    try {
+      const r = await uploadPromoImage(state.file, posterId);
+      const ar = await attachPromoImage(posterId, {
+        promo_image_url: r.promoImageUrl,
+        promo_thumbnail_url: r.promoThumbnailUrl,
+      });
+      if (!ar.ok) return ar;
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    }
+  }
+  if (state.markedForRemoval && existingUrl) {
+    const r = await detachPromoImage(posterId);
+    if (!r.ok) return r;
+  }
+  return { ok: true };
 }

@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { flattenGroupTree, type FlattenedGroup } from "@/lib/groupTree";
 import { SIZE_TYPES, CHANNEL_CATEGORIES, REGIONS } from "@/lib/enums";
 import { DEFAULT_REGION } from "@/lib/keys";
-import { uploadPosterImage } from "@/lib/imageUpload";
+import { uploadPosterImage, applyPromoImageChange } from "@/lib/imageUpload";
 import { describeError } from "@/lib/errors";
 import { createPoster, attachImage } from "@/app/actions/posters";
 import { Button } from "@/components/ui/button";
@@ -447,6 +447,22 @@ export default function BatchImport({
               image_size_bytes: uploaded.imageSizeBytes,
             });
             if (!ar.ok) throw new Error(ar.error);
+
+            // Promo image is optional — only fire if the admin attached
+            // one to this card. Failure here is treated identically to
+            // the main image failure: surface to the user, mark the card
+            // image_failed so they can retry from the edit page.
+            if (draft.promoFile) {
+              const promoR = await applyPromoImageChange(
+                posterId,
+                { file: draft.promoFile, markedForRemoval: false },
+                null
+              );
+              if (!promoR.ok) {
+                throw new Error(`宣傳圖：${promoR.error}`);
+              }
+            }
+
             updateDraft(draft.localId, { status: "done" });
             fullSuccessCount++;
           } catch (imgErr) {

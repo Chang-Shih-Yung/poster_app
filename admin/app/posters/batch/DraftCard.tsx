@@ -40,6 +40,9 @@ import { WorkPicker, type WorkOption } from "@/components/WorkPicker";
 import { GroupPicker } from "@/components/GroupPicker";
 import { DatePicker } from "@/components/DatePicker";
 import { MultiSelectDropdown } from "@/components/ui/multi-select";
+import PromoImagePicker, {
+  type PromoImagePickerState,
+} from "@/components/PromoImagePicker";
 import { cn } from "@/lib/utils";
 import { NONE, type DraftPoster } from "./_shared";
 
@@ -556,6 +559,25 @@ export function DraftCard({
                 onChange={(e) => onChange({ channel_note: e.target.value })}
                 placeholder="例：威秀獨家加贈卡套"
                 rows={2}
+              />
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-xs">宣傳圖片（選填）</Label>
+              <PromoImagePicker
+                existingUrl={null}
+                state={{
+                  file: draft.promoFile,
+                  // Batch import is create-only; markedForRemoval doesn't
+                  // apply (no existing image to remove). Picker keeps the
+                  // flag to preserve its API; we feed false here.
+                  markedForRemoval: false,
+                }}
+                onChange={(s: PromoImagePickerState) =>
+                  onChange({ promoFile: s.file })
+                }
+                disabled={draft.status !== "idle"}
+                compact
               />
             </div>
 

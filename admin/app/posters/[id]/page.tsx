@@ -1,7 +1,6 @@
 import PageShell from "@/components/PageShell";
 import PosterForm from "../new/PosterForm";
 import PosterImageUploader from "@/components/PosterImageUploader";
-import PromoImageUploader from "@/components/PromoImageUploader";
 import { getServerSupabase } from "@/lib/auth-cache";
 import { notFound } from "next/navigation";
 import { UNNAMED_POSTER } from "@/lib/keys";
@@ -52,23 +51,10 @@ export default async function EditPosterPage({
 
         <section>
           <h2 className="text-xs uppercase tracking-wider text-muted-foreground mb-3">
-            宣傳圖片（選填）
-          </h2>
-          <p className="text-xs text-muted-foreground mb-3 leading-relaxed">
-            影院宣傳 DM、IG 活動圖、票券優惠等，補充說明這張海報的取得方式。
-          </p>
-          <PromoImageUploader
-            posterId={poster.id}
-            currentImageUrl={
-              poster.promo_thumbnail_url ?? poster.promo_image_url ?? null
-            }
-          />
-        </section>
-
-        <section>
-          <h2 className="text-xs uppercase tracking-wider text-muted-foreground mb-3">
             Metadata
           </h2>
+          {/* Promo image is now an inline field inside PosterForm — no
+              separate section needed. */}
           <PosterForm mode="edit" works={works ?? []} initial={poster} />
         </section>
       </div>

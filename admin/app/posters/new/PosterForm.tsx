@@ -23,6 +23,12 @@ import {
 import { flattenGroupTree, type FlattenedGroup } from "@/lib/groupTree";
 import { DEFAULT_REGION } from "@/lib/keys";
 import { createPoster, updatePosterMetadata } from "@/app/actions/posters";
+import { applyPromoImageChange } from "@/lib/imageUpload";
+import PromoImagePicker, {
+  EMPTY_PROMO_STATE,
+  type PromoImagePickerState,
+} from "@/components/PromoImagePicker";
+import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -71,6 +77,10 @@ type InitialPoster = {
   source_note: string | null;
   is_placeholder: boolean;
   parent_group_id?: string | null;
+  // Promo image (cinema flyer / IG campaign / etc.) — optional second image.
+  // Edit mode prefills the picker with this; create mode always starts empty.
+  promo_image_url?: string | null;
+  promo_thumbnail_url?: string | null;
 };
 
 type PosterFormProps = {
@@ -144,6 +154,15 @@ export default function PosterForm({
   const [groupOptions, setGroupOptions] = useState<FlattenedGroup[]>([]);
   const [serverError, setServerError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  // Promo image picker state lives outside RHF — RHF doesn't model File
+  // gracefully, and the post-submit upload pipeline needs the raw File
+  // anyway. Edit mode preserves the existing URL so the picker shows it
+  // until the admin actively replaces or removes.
+  const [promoState, setPromoState] = useState<PromoImagePickerState>(
+    EMPTY_PROMO_STATE
+  );
+  const existingPromoUrl =
+    initial?.promo_thumbnail_url ?? initial?.promo_image_url ?? null;
 
   const {
     register,
@@ -283,22 +302,56 @@ export default function PosterForm({
     };
 
     startTransition(async () => {
-      const r =
-        mode === "create"
-          ? await createPoster({
-              work_id: values.work_id,
-              parent_group_id: fromSentinel(values.parent_group_id),
-              ...payload,
-            })
-          : await updatePosterMetadata(initial!.id, {
-              parent_group_id: fromSentinel(values.parent_group_id),
-              title: payload.poster_name,
-              ...payload,
-            });
-      if (!r.ok) {
-        setServerError(r.error);
-        return;
+      // Branch the write so TS sees create's typed return (with id) vs
+      // edit's untyped one. Storing targetId as we go keeps the post-write
+      // promo-image hook simple regardless of mode.
+      let targetId: string;
+      if (mode === "create") {
+        const r = await createPoster({
+          work_id: values.work_id,
+          parent_group_id: fromSentinel(values.parent_group_id),
+          ...payload,
+        });
+        if (!r.ok) {
+          setServerError(r.error);
+          return;
+        }
+        targetId = r.data.id;
+      } else {
+        const r = await updatePosterMetadata(initial!.id, {
+          parent_group_id: fromSentinel(values.parent_group_id),
+          title: payload.poster_name,
+          ...payload,
+        });
+        if (!r.ok) {
+          setServerError(r.error);
+          return;
+        }
+        targetId = initial!.id;
       }
+
+      // Promo image side-effect (after metadata write succeeded). Same
+      // pipeline regardless of mode. Failures here don't roll back the
+      // metadata write — partial success is better than losing a long
+      // form. Warn + send the user to the edit page so they can retry.
+      const hasPromoChange =
+        promoState.file || (promoState.markedForRemoval && existingPromoUrl);
+      if (hasPromoChange) {
+        const promoR = await applyPromoImageChange(
+          targetId,
+          promoState,
+          existingPromoUrl
+        );
+        if (!promoR.ok) {
+          toast.warning(
+            `海報資料已${mode === "create" ? "建立" : "儲存"}，但宣傳圖片處理失敗：${promoR.error}。請進編輯頁重試宣傳圖。`,
+            { duration: 12000 }
+          );
+          router.push(`/posters/${targetId}`);
+          return;
+        }
+      }
+
       router.push("/posters");
     });
   }
@@ -703,6 +756,18 @@ export default function PosterForm({
           placeholder="例：威秀獨家加贈卡套、限前 100 名"
           disabled={pending}
           rows={2}
+        />
+      </FormField>
+
+      <FormField label="宣傳圖片（選填）">
+        <p className="text-xs text-muted-foreground mb-2 leading-relaxed">
+          影院 DM、IG 活動圖、票券優惠等取得方式佐證。可空白。
+        </p>
+        <PromoImagePicker
+          existingUrl={existingPromoUrl}
+          state={promoState}
+          onChange={setPromoState}
+          disabled={pending}
         />
       </FormField>
 
