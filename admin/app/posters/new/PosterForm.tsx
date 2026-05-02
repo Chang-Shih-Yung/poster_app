@@ -22,6 +22,7 @@ import {
 import { flattenGroupTree, type FlattenedGroup } from "@/lib/groupTree";
 import { DEFAULT_REGION } from "@/lib/keys";
 import { createPoster, updatePosterMetadata } from "@/app/actions/posters";
+import { updateWork } from "@/app/actions/works";
 import PromoImageGallery from "@/components/PromoImageGallery";
 import PromoImagePicker, {
   EMPTY_PROMO_STATE,
@@ -126,6 +127,9 @@ const schema = z
   .object({
     work_id: z.string().min(1, "必須指定作品"),
     parent_group_id: z.string(),
+    // spec #2 — 作品英文官方名稱（必填）。海報層可編輯，submit 時 sync
+    // 回 works.title_en（如果跟原作品值不同），admin 不用跳出去改作品
+    work_title_en: z.string().trim().min(1, "作品英文官方名稱必填"),
     // poster_name is OPTIONAL per 2026-05-02 spec.
     poster_name: z.string().trim(),
     poster_release_date: z.string(), // YYYY-MM-DD or "" (optional)
@@ -235,6 +239,12 @@ export default function PosterForm({
       work_id: initial?.work_id ?? defaultWorkId ?? "",
       parent_group_id:
         initial?.parent_group_id ?? defaultParentGroupId ?? NONE,
+      // 從選中的作品拉 title_en 當初值；watcher 會在 workId 變動時 sync
+      work_title_en:
+        works.find(
+          (w) =>
+            w.id === (initial?.work_id ?? defaultWorkId)
+        )?.title_en?.trim() ?? "",
       poster_name: initial?.poster_name ?? "",
       year: initial?.year != null ? String(initial.year) : "",
       poster_release_date: initial?.poster_release_date ?? "",
@@ -293,6 +303,17 @@ export default function PosterForm({
       setValue("year", posterReleaseDate.slice(0, 4));
     }
   }, [posterReleaseDate, setValue]);
+
+  // 切換作品時把該作品的 title_en 帶進「作品英文官方名稱」欄位
+  // （admin 可以接著修改，submit 時若值跟 DB 不同會 updateWork 同步回去）
+  useEffect(() => {
+    if (!workId) return;
+    const w = works.find((x) => x.id === workId);
+    setValue("work_title_en", w?.title_en?.trim() ?? "", {
+      shouldDirty: false,
+    });
+    // workId 變動才觸發；works 變化（例如 inline 新建後 refetch）也要拉新值
+  }, [workId, works, setValue]);
 
   // Conditional logic flags
   const isCinema = channelCategory === "cinema";
@@ -415,6 +436,22 @@ export default function PosterForm({
           return;
         }
         targetId = initial!.id;
+      }
+
+      // spec #2 同步 — 如果 admin 在海報層改了 title_en，updateWork
+      // 把新值寫回作品（影響該作品下所有海報）。updateWork 接 partial
+      // patch 所以只傳 title_en。失敗 toast.warn 但不 rollback poster。
+      const currentWork = works.find((w) => w.id === values.work_id);
+      const dbTitleEn = currentWork?.title_en?.trim() ?? "";
+      const newTitleEn = values.work_title_en.trim();
+      if (newTitleEn !== dbTitleEn) {
+        const wr = await updateWork(values.work_id, { title_en: newTitleEn });
+        if (!wr.ok) {
+          toast.warning(
+            `海報已${mode === "create" ? "建立" : "儲存"}，但更新作品英文名失敗：${wr.error}。`,
+            { duration: 10000 }
+          );
+        }
       }
 
       // 主海報圖（create mode 才會有暫存 File）— 跟 batch 同 pipeline:
@@ -547,24 +584,23 @@ export default function PosterForm({
         />
       </FormField>
 
-      {/* spec #2 — 作品英文官方名稱（必填）= 選中作品的 title_en，read-only */}
-      {workId && (() => {
-        const w = works.find((x) => x.id === workId);
-        const titleEn = w?.title_en?.trim() ?? "";
-        return (
-          <FormField label="作品英文官方名稱" required>
-            <div
-              className={`h-10 px-3 flex items-center text-sm rounded-md border bg-muted/30 ${
-                titleEn
-                  ? "text-foreground border-border"
-                  : "text-destructive border-destructive/30"
-              }`}
-            >
-              {titleEn || "（此作品尚未填英文名，請改用「+ 新增作品」或至作品設定補上）"}
-            </div>
-          </FormField>
-        );
-      })()}
+      {/* spec #2 — 作品英文官方名稱（必填，可在海報層直接編輯）
+          切換作品時自動帶入該作品的 title_en；admin 在這裡改的話，
+          submit 時會跟 metadata 一起 updateWork 同步回 works 表。 */}
+      {workId && (
+        <FormField
+          label="作品英文官方名稱"
+          required
+          error={errors.work_title_en?.message}
+          helper="改這個會更新作品本身（影響該作品下所有海報）"
+        >
+          <Input
+            {...register("work_title_en")}
+            placeholder="例：The Boy and the Heron"
+            disabled={pending}
+          />
+        </FormField>
+      )}
 
       {initial?.work_kind && workId && (
         <WorkKindReadOnly workKind={initial.work_kind} />
