@@ -165,8 +165,16 @@ export default function StudiosClient({
           {
             key: "title",
             kind: "text",
-            label: "第一個作品",
+            label: "第一個作品（中文）",
             placeholder: "例：神隱少女",
+            required: true,
+          },
+          {
+            // spec #2 — 作品英文官方名稱（必填）
+            key: "title_en",
+            kind: "text",
+            label: "第一個作品（英文）",
+            placeholder: "例：Spirited Away",
             required: true,
           },
           {
@@ -183,6 +191,7 @@ export default function StudiosClient({
             () =>
               createWork({
                 title_zh: values.title,
+                title_en: values.title_en,
                 studio: values.studio,
                 work_kind: values.kind || "movie",
               }),

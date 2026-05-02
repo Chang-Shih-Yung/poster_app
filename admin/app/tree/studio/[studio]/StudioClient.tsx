@@ -15,7 +15,7 @@ import { WORK_KINDS } from "@/lib/enums";
 import { useTransitionAction } from "@/lib/clientActions";
 import { Button } from "@/components/ui/button";
 import {
-  renameWork,
+  updateWork,
   changeWorkKind,
   deleteWork,
   createWork,
@@ -54,8 +54,21 @@ const WORK_ACTIONS: ItemAction<Work>[] = [
         required: true,
         initialValue: w.title_zh,
       },
+      {
+        // spec #2 — 作品英文官方名稱（必填）。改用 updateWork 而非 renameWork。
+        key: "name_en",
+        kind: "text",
+        label: "英文名稱",
+        placeholder: "作品英文名",
+        required: true,
+        initialValue: w.title_en ?? "",
+      },
     ],
-    run: (w, values) => renameWork(w.id, values.name),
+    run: (w, values) =>
+      updateWork(w.id, {
+        title_zh: values.name,
+        title_en: values.name_en,
+      }),
   },
   {
     kind: "form",
@@ -238,6 +251,14 @@ export default function StudioClient({
             required: true,
           },
           {
+            // spec #2 — 作品英文官方名稱（必填）
+            key: "title_en",
+            kind: "text",
+            label: "英文名稱",
+            placeholder: "例：Spirited Away",
+            required: true,
+          },
+          {
             key: "kind",
             kind: "select",
             label: "類型",
@@ -251,6 +272,7 @@ export default function StudioClient({
             () =>
               createWork({
                 title_zh: values.title,
+                title_en: values.title_en,
                 studio: studio === NULL_STUDIO_KEY ? null : studio,
                 work_kind: values.kind || "movie",
               }),

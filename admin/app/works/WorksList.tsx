@@ -27,7 +27,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import {
-  renameWork,
+  updateWork,
   deleteWork,
   createWork,
   loadWorksPage,
@@ -62,7 +62,9 @@ export default function WorksList({
   const [rows, setRows] = useState<Work[]>(initial);
   const [cursor, setCursor] = useState<string | null>(initialCursor ?? null);
   const [editing, setEditing] = useState<string | null>(null);
+  // Inline rename — 中文 + 英文兩個欄位（spec #1 + #2 都必填）
   const [editValue, setEditValue] = useState("");
+  const [editValueEn, setEditValueEn] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [newStudio, setNewStudio] = useState("");
@@ -72,6 +74,7 @@ export default function WorksList({
     "select"
   );
   const [newTitle, setNewTitle] = useState("");
+  const [newTitleEn, setNewTitleEn] = useState("");
   const [pendingDelete, setPendingDelete] = useState<Work | null>(null);
   const [pending, startTransition] = useTransition();
   const [loadingMore, setLoadingMore] = useState(false);
@@ -99,14 +102,27 @@ export default function WorksList({
     })();
   }
 
-  function commitRename(work: Work, newTitle: string) {
-    if (!newTitle.trim() || newTitle === work.title_zh) {
+  function commitRename(work: Work, newTitle: string, newTitleEn: string) {
+    const trimmedZh = newTitle.trim();
+    const trimmedEn = newTitleEn.trim();
+    if (!trimmedZh || !trimmedEn) {
+      toast.error("中文 + 英文名稱皆必填");
+      return;
+    }
+    // 沒改任何東西就直接收掉，省一次 server round-trip
+    if (
+      trimmedZh === work.title_zh &&
+      trimmedEn === (work.title_en ?? "")
+    ) {
       setEditing(null);
       return;
     }
     const tid = toast.loading("儲存中…");
     startTransition(async () => {
-      const r = await renameWork(work.id, newTitle);
+      const r = await updateWork(work.id, {
+        title_zh: trimmedZh,
+        title_en: trimmedEn,
+      });
       toast.dismiss(tid);
       if (!r.ok) {
         setError(r.error);
@@ -140,11 +156,19 @@ export default function WorksList({
   }
 
   function createNew() {
-    if (!newTitle.trim()) return;
+    if (!newTitle.trim()) {
+      toast.error("作品中文名稱必填");
+      return;
+    }
+    if (!newTitleEn.trim()) {
+      toast.error("作品英文名稱必填");
+      return;
+    }
     const tid = toast.loading("新增中…");
     startTransition(async () => {
       const r = await createWork({
         title_zh: newTitle,
+        title_en: newTitleEn,
         studio: newStudio.trim() || null,
         work_kind: "movie",
       });
@@ -158,6 +182,7 @@ export default function WorksList({
       setNewStudio("");
       setNewStudioMode("select");
       setNewTitle("");
+      setNewTitleEn("");
       toast.success(`已新增「${newTitle}」`);
     });
   }
@@ -247,6 +272,23 @@ export default function WorksList({
                   setNewStudio("");
                   setNewStudioMode("select");
                   setNewTitle("");
+                  setNewTitleEn("");
+                }
+              }}
+            />
+            <Input
+              value={newTitleEn}
+              onChange={(e) => setNewTitleEn(e.target.value)}
+              placeholder="作品名稱（英文，spec 必填）"
+              disabled={pending}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") createNew();
+                if (e.key === "Escape") {
+                  setAdding(false);
+                  setNewStudio("");
+                  setNewStudioMode("select");
+                  setNewTitle("");
+                  setNewTitleEn("");
                 }
               }}
             />
@@ -254,7 +296,9 @@ export default function WorksList({
               <Button
                 size="sm"
                 onClick={createNew}
-                disabled={pending || !newTitle.trim()}
+                disabled={
+                  pending || !newTitle.trim() || !newTitleEn.trim()
+                }
               >
                 {pending && <Loader2 className="animate-spin" />}
                 {pending ? "建立中" : "建立"}
@@ -267,6 +311,7 @@ export default function WorksList({
                   setNewStudio("");
                   setNewStudioMode("select");
                   setNewTitle("");
+                  setNewTitleEn("");
                 }}
                 disabled={pending}
               >
@@ -313,13 +358,16 @@ export default function WorksList({
           works={rows}
           editing={editing}
           editValue={editValue}
+          editValueEn={editValueEn}
           busy={pending}
           onStartEdit={(w) => {
             setEditValue(w.title_zh);
+            setEditValueEn(w.title_en ?? "");
             setEditing(w.id);
           }}
           onCancelEdit={() => setEditing(null)}
           onChangeEdit={setEditValue}
+          onChangeEditEn={setEditValueEn}
           onCommitEdit={commitRename}
           onRemove={remove}
         />
@@ -370,21 +418,25 @@ function WorksSections({
   works,
   editing,
   editValue,
+  editValueEn,
   busy,
   onStartEdit,
   onCancelEdit,
   onChangeEdit,
+  onChangeEditEn,
   onCommitEdit,
   onRemove,
 }: {
   works: Work[];
   editing: string | null;
   editValue: string;
+  editValueEn: string;
   busy: boolean;
   onStartEdit: (w: Work) => void;
   onCancelEdit: () => void;
   onChangeEdit: (v: string) => void;
-  onCommitEdit: (w: Work, newTitle: string) => void;
+  onChangeEditEn: (v: string) => void;
+  onCommitEdit: (w: Work, newTitle: string, newTitleEn: string) => void;
   onRemove: (w: Work) => void;
 }) {
   const sections = new Map<string, Work[]>();
@@ -407,33 +459,53 @@ function WorksSections({
                 {items.map((w) => (
                   <li key={w.id}>
                     {editing === w.id ? (
-                      <div className="bg-secondary/40 py-2 px-3 flex gap-2">
+                      <div className="bg-secondary/40 py-2 px-3 space-y-2">
                         <Input
                           autoFocus
                           value={editValue}
                           onChange={(e) => onChangeEdit(e.target.value)}
-                          placeholder="作品中文名"
+                          placeholder="中文名稱"
                           disabled={busy}
                           onKeyDown={(e) => {
-                            if (e.key === "Enter") onCommitEdit(w, editValue);
+                            if (e.key === "Enter")
+                              onCommitEdit(w, editValue, editValueEn);
                             if (e.key === "Escape") onCancelEdit();
                           }}
                         />
-                        <Button
-                          size="sm"
-                          onClick={() => onCommitEdit(w, editValue)}
-                          disabled={busy || !editValue.trim()}
-                        >
-                          {busy ? "儲存中" : "確認"}
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={onCancelEdit}
+                        <Input
+                          value={editValueEn}
+                          onChange={(e) => onChangeEditEn(e.target.value)}
+                          placeholder="英文名稱（spec 必填）"
                           disabled={busy}
-                        >
-                          取消
-                        </Button>
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter")
+                              onCommitEdit(w, editValue, editValueEn);
+                            if (e.key === "Escape") onCancelEdit();
+                          }}
+                        />
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            onClick={() =>
+                              onCommitEdit(w, editValue, editValueEn)
+                            }
+                            disabled={
+                              busy ||
+                              !editValue.trim() ||
+                              !editValueEn.trim()
+                            }
+                          >
+                            {busy ? "儲存中" : "確認"}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={onCancelEdit}
+                            disabled={busy}
+                          >
+                            取消
+                          </Button>
+                        </div>
                       </div>
                     ) : (
                       <div className="flex items-center px-4 py-3 min-h-[60px]">
