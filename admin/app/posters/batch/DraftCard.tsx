@@ -575,6 +575,46 @@ export function DraftCard({
               </div>
             </FormField>
 
+            {/* ── 是否限量（合夥人後加） ─────────────────────── */}
+            <FormField label="是否限量" size="compact">
+              <div className="flex items-center gap-2 flex-wrap">
+                <label className="flex items-center gap-2 select-none cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={draft.is_limited}
+                    onChange={(e) =>
+                      onChange({
+                        is_limited: e.target.checked,
+                        ...(!e.target.checked && { limited_quantity: "" }),
+                      })
+                    }
+                    disabled={disabled}
+                    className="h-4 w-4 rounded border-input"
+                  />
+                  <span className="text-sm">
+                    {draft.is_limited ? "限量" : "非限量"}
+                  </span>
+                </label>
+                {draft.is_limited && (
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs text-muted-foreground">限量</span>
+                    <Input
+                      type="number"
+                      min="1"
+                      step="1"
+                      value={draft.limited_quantity}
+                      onChange={(e) =>
+                        onChange({ limited_quantity: e.target.value })
+                      }
+                      placeholder="例：100"
+                      className="h-9 w-24"
+                    />
+                    <span className="text-xs text-muted-foreground">張</span>
+                  </div>
+                )}
+              </div>
+            </FormField>
+
             {/* ── #15 #16 來源平台 + 連結 ──────────────────────── */}
             <div className="grid grid-cols-2 gap-2">
               <FormField label="資料來源平台" size="compact">

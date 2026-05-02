@@ -64,6 +64,9 @@ export async function createPoster(input: {
   price_amount?: number | null;     // only meaningful when price_type='paid'
   // 套票組合 (#14 spec)
   set_id?: string | null;
+  // 是否限量（額外欄位，spec 沒列但合夥人補的）
+  is_limited?: boolean;
+  limited_quantity?: number | null;  // only meaningful when is_limited=true
   exclusive_name?: string | null;
   material_type?: string | null;
   version_label?: string | null;
@@ -138,6 +141,8 @@ export async function createPoster(input: {
         price_type: input.price_type ?? null,
         price_amount: input.price_amount ?? null,
         set_id: input.set_id ?? null,
+        is_limited: input.is_limited ?? false,
+        limited_quantity: input.limited_quantity ?? null,
         exclusive_name: input.exclusive_name ?? null,
         material_type: input.material_type ?? null,
         version_label: input.version_label ?? null,
@@ -479,6 +484,9 @@ const POSTER_METADATA_ALLOWED = new Set([
   "price_type",
   "price_amount",
   "set_id",
+  // 是否限量
+  "is_limited",
+  "limited_quantity",
   // collector flags (signed / numbered / edition_number / linen_backed /
   // licensed) intentionally REMOVED — DB columns dropped in 20260429150000.
 ]);

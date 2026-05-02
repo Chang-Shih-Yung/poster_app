@@ -440,6 +440,12 @@ export default function BatchImport({
             set_id: fromSentinel(draft.set_id),
             // 是否公開（#26）
             is_public: draft.is_public,
+            // 是否限量（合夥人後加）
+            is_limited: draft.is_limited,
+            limited_quantity:
+              draft.is_limited && draft.limited_quantity.trim()
+                ? Number(draft.limited_quantity)
+                : null,
           });
           if (!r.ok) throw new Error(r.error);
           posterId = r.data.id;

@@ -74,6 +74,9 @@ export type DraftPoster = {
   set_id: string;
   // 是否公開（#26 spec）— DB 預設 true，admin 可關閉做「上架但不公開」
   is_public: boolean;
+  // 是否限量（合夥人後加）— is_limited=true 時 limited_quantity 才有意義
+  is_limited: boolean;
+  limited_quantity: string;  // numeric string，submit 時 parse 成 int
   status: DraftStatus;
   errorMsg?: string;
   createdPosterId?: string;
@@ -117,6 +120,8 @@ export function newDraft(
     price_amount: "",
     set_id: NONE,
     is_public: true,
+    is_limited: false,
+    limited_quantity: "",
     status: "idle",
   };
 }

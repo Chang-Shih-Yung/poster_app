@@ -102,6 +102,9 @@ type InitialPoster = {
   price_amount?: number | string | null;
   // 套票組合 (#14 spec)
   set_id?: string | null;
+  // 是否限量（合夥人後加）
+  is_limited?: boolean | null;
+  limited_quantity?: number | string | null;
   // Promo image (cinema flyer / IG campaign / etc.) — optional second image.
   // Edit mode prefills the picker with this; create mode always starts empty.
   promo_image_url?: string | null;
@@ -166,6 +169,9 @@ const schema = z
     // 售價 — type 是 sentinel/value，amount 是 numeric string（解析在 submit）
     price_type: z.string(),
     price_amount: z.string(),
+    // 是否限量
+    is_limited: z.boolean(),
+    limited_quantity: z.string(),
     // set_id 不在 zod 內 — 海報發行組合走 PosterCombinationField 直接呼
     // 叫 server action linkPosters / unlinkPoster，不經 form submit。
   })
@@ -178,6 +184,17 @@ const schema = z
     {
       message: "選「金額」時，請填入大於 0 的售價",
       path: ["price_amount"],
+    }
+  )
+  // is_limited=true 時 limited_quantity 必填且為正整數
+  .refine(
+    (data) =>
+      !data.is_limited ||
+      (/^\d+$/.test(data.limited_quantity.trim()) &&
+        Number(data.limited_quantity) > 0),
+    {
+      message: "選「限量」時，請填入大於 0 的張數",
+      path: ["limited_quantity"],
     }
   )
   // CUSTOM size requires width + height + unit
@@ -273,6 +290,11 @@ export default function PosterForm({
       price_type: initial?.price_type ?? NONE,
       price_amount:
         initial?.price_amount != null ? String(initial.price_amount) : "",
+      is_limited: initial?.is_limited ?? false,
+      limited_quantity:
+        initial?.limited_quantity != null
+          ? String(initial.limited_quantity)
+          : "",
     },
   });
 
@@ -293,6 +315,7 @@ export default function PosterForm({
   const cinemaReleaseTypes = watch("cinema_release_types");
   const posterReleaseDate = watch("poster_release_date");
   const priceType = watch("price_type");
+  const isLimited = watch("is_limited");
 
   // PosterCombinationField self-fetches its own data via server actions
   // (listSiblings / listAllPostersForPicker) — no parent-side cache needed.
@@ -404,6 +427,11 @@ export default function PosterForm({
       price_amount:
         values.price_type === "paid" && values.price_amount.trim()
           ? Number(values.price_amount)
+          : null,
+      is_limited: values.is_limited,
+      limited_quantity:
+        values.is_limited && values.limited_quantity.trim()
+          ? Number(values.limited_quantity)
           : null,
       // set_id 不在這個 payload — PosterCombinationField 直接呼叫
       // linkPosters / unlinkPoster 寫 DB，不經 form submit。
@@ -971,6 +999,47 @@ export default function PosterForm({
           }
           disabled={pending}
         />
+      </FormField>
+
+      {/* ── 是否限量（合夥人後加，不在 spec 表內） ────────────────── */}
+      <FormField
+        label="是否限量"
+        helper="勾選後填入限量發行張數"
+        error={errors.limited_quantity?.message}
+      >
+        <div className="flex items-center gap-3 flex-wrap">
+          <Controller
+            control={control}
+            name="is_limited"
+            render={({ field }) => (
+              <label className="flex items-center gap-2 select-none cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={field.value}
+                  onChange={(e) => field.onChange(e.target.checked)}
+                  disabled={pending}
+                  className="h-4 w-4 rounded border-input"
+                />
+                <span className="text-sm">{field.value ? "限量" : "非限量"}</span>
+              </label>
+            )}
+          />
+          {isLimited && (
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">限量</span>
+              <Input
+                type="number"
+                min="1"
+                step="1"
+                {...register("limited_quantity")}
+                placeholder="例：100"
+                disabled={pending}
+                className="w-28"
+              />
+              <span className="text-sm text-muted-foreground">張</span>
+            </div>
+          )}
+        </div>
       </FormField>
 
       {/* ── #15 #16 資料來源平台 + 連結 ──────────────────────────── */}

@@ -104,15 +104,16 @@ export const CINEMA_RELEASE_TYPES = [
 // premium_format_enum — only used when cinemaReleaseTypes contains
 // "premium_format_limited"
 export const PREMIUM_FORMATS = [
-  { value: "IMAX",     label: "IMAX" },
-  { value: "DOLBY",    label: "Dolby Cinema" },
-  { value: "DVA",      label: "Dolby Vision + Atmos (DVA)" },
-  { value: "4DX",      label: "4DX" },
-  { value: "ULTRA_4D", label: "Ultra 4D" },
-  { value: "SCREENX",  label: "ScreenX" },
-  { value: "D_BOX",    label: "D-Box" },
-  { value: "LUXE",     label: "LUXE" },
-  { value: "REALD_3D", label: "RealD 3D" },
+  { value: "IMAX",         label: "IMAX" },
+  { value: "DOLBY",        label: "Dolby Cinema" },
+  { value: "DVA",          label: "Dolby Vision + Atmos (DVA)" },
+  { value: "4DX",          label: "4DX" },
+  { value: "ULTRA_4D",     label: "Ultra 4D" },
+  { value: "SCREENX",      label: "ScreenX" },
+  { value: "D_BOX",        label: "D-Box" },
+  { value: "LUXE",         label: "LUXE" },
+  { value: "REALD_3D",     label: "RealD 3D" },
+  { value: "TITAN_SCREEN", label: "TITAN SCREEN" },
 ] as const;
 
 // channel_type — used when channelCategory != cinema.
