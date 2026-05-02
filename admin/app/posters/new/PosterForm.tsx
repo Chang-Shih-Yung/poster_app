@@ -40,6 +40,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { FormField } from "@/components/ui/form-field";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -105,6 +106,9 @@ type InitialPoster = {
   // 是否限量（合夥人後加）
   is_limited?: boolean | null;
   limited_quantity?: number | string | null;
+  // 是否有工藝（合夥人後加）
+  has_craft?: boolean | null;
+  craft_note?: string | null;
   // Promo image (cinema flyer / IG campaign / etc.) — optional second image.
   // Edit mode prefills the picker with this; create mode always starts empty.
   promo_image_url?: string | null;
@@ -172,6 +176,9 @@ const schema = z
     // 是否限量
     is_limited: z.boolean(),
     limited_quantity: z.string(),
+    // 是否有工藝
+    has_craft: z.boolean(),
+    craft_note: z.string(),
     // set_id 不在 zod 內 — 海報發行組合走 PosterCombinationField 直接呼
     // 叫 server action linkPosters / unlinkPoster，不經 form submit。
   })
@@ -195,6 +202,14 @@ const schema = z
     {
       message: "選「限量」時，請填入大於 0 的張數",
       path: ["limited_quantity"],
+    }
+  )
+  // has_craft=true 時 craft_note 必填（自由文字）
+  .refine(
+    (data) => !data.has_craft || data.craft_note.trim().length > 0,
+    {
+      message: "選「有工藝」時，請填寫工藝說明",
+      path: ["craft_note"],
     }
   )
   // CUSTOM size requires width + height + unit
@@ -295,6 +310,8 @@ export default function PosterForm({
         initial?.limited_quantity != null
           ? String(initial.limited_quantity)
           : "",
+      has_craft: initial?.has_craft ?? false,
+      craft_note: initial?.craft_note ?? "",
     },
   });
 
@@ -316,6 +333,7 @@ export default function PosterForm({
   const posterReleaseDate = watch("poster_release_date");
   const priceType = watch("price_type");
   const isLimited = watch("is_limited");
+  const hasCraft = watch("has_craft");
 
   // PosterCombinationField self-fetches its own data via server actions
   // (listSiblings / listAllPostersForPicker) — no parent-side cache needed.
@@ -432,6 +450,11 @@ export default function PosterForm({
       limited_quantity:
         values.is_limited && values.limited_quantity.trim()
           ? Number(values.limited_quantity)
+          : null,
+      has_craft: values.has_craft,
+      craft_note:
+        values.has_craft && values.craft_note.trim()
+          ? values.craft_note.trim()
           : null,
       // set_id 不在這個 payload — PosterCombinationField 直接呼叫
       // linkPosters / unlinkPoster 寫 DB，不經 form submit。
@@ -1013,12 +1036,10 @@ export default function PosterForm({
             name="is_limited"
             render={({ field }) => (
               <label className="flex items-center gap-2 select-none cursor-pointer">
-                <input
-                  type="checkbox"
+                <Checkbox
                   checked={field.value}
-                  onChange={(e) => field.onChange(e.target.checked)}
+                  onCheckedChange={(c) => field.onChange(c === true)}
                   disabled={pending}
-                  className="h-4 w-4 rounded border-input"
                 />
                 <span className="text-sm">{field.value ? "限量" : "非限量"}</span>
               </label>
@@ -1038,6 +1059,40 @@ export default function PosterForm({
               />
               <span className="text-sm text-muted-foreground">張</span>
             </div>
+          )}
+        </div>
+      </FormField>
+
+      {/* ── 是否有工藝（合夥人後加） ─────────────────────────────── */}
+      <FormField
+        label="是否有工藝"
+        helper="勾選後填寫工藝說明（自由文字，例：燙金、立體浮雕、特殊紙材）"
+        error={errors.craft_note?.message}
+      >
+        <div className="space-y-2">
+          <Controller
+            control={control}
+            name="has_craft"
+            render={({ field }) => (
+              <label className="flex items-center gap-2 select-none cursor-pointer">
+                <Checkbox
+                  checked={field.value}
+                  onCheckedChange={(c) => field.onChange(c === true)}
+                  disabled={pending}
+                />
+                <span className="text-sm">
+                  {field.value ? "有工藝" : "無工藝"}
+                </span>
+              </label>
+            )}
+          />
+          {hasCraft && (
+            <Textarea
+              {...register("craft_note")}
+              placeholder="例：燙金、立體浮雕、特殊紙材、絹印…"
+              disabled={pending}
+              rows={2}
+            />
           )}
         </div>
       </FormField>
@@ -1103,12 +1158,10 @@ export default function PosterForm({
           name="is_public"
           render={({ field }) => (
             <label className="flex items-center gap-3 select-none cursor-pointer">
-              <input
-                type="checkbox"
+              <Checkbox
                 checked={field.value}
-                onChange={(e) => field.onChange(e.target.checked)}
+                onCheckedChange={(c) => field.onChange(c === true)}
                 disabled={pending}
-                className="h-4 w-4 rounded border-input"
               />
               <span className="text-sm">
                 {field.value ? "已公開" : "未公開（admin 限定）"}

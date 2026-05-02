@@ -67,6 +67,9 @@ export async function createPoster(input: {
   // 是否限量（額外欄位，spec 沒列但合夥人補的）
   is_limited?: boolean;
   limited_quantity?: number | null;  // only meaningful when is_limited=true
+  // 是否有工藝（合夥人後加）
+  has_craft?: boolean;
+  craft_note?: string | null;        // only meaningful when has_craft=true
   exclusive_name?: string | null;
   material_type?: string | null;
   version_label?: string | null;
@@ -143,6 +146,8 @@ export async function createPoster(input: {
         set_id: input.set_id ?? null,
         is_limited: input.is_limited ?? false,
         limited_quantity: input.limited_quantity ?? null,
+        has_craft: input.has_craft ?? false,
+        craft_note: input.craft_note ?? null,
         exclusive_name: input.exclusive_name ?? null,
         material_type: input.material_type ?? null,
         version_label: input.version_label ?? null,
@@ -487,6 +492,9 @@ const POSTER_METADATA_ALLOWED = new Set([
   // 是否限量
   "is_limited",
   "limited_quantity",
+  // 是否有工藝
+  "has_craft",
+  "craft_note",
   // collector flags (signed / numbered / edition_number / linen_backed /
   // licensed) intentionally REMOVED — DB columns dropped in 20260429150000.
 ]);

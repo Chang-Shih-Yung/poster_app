@@ -77,6 +77,9 @@ export type DraftPoster = {
   // 是否限量（合夥人後加）— is_limited=true 時 limited_quantity 才有意義
   is_limited: boolean;
   limited_quantity: string;  // numeric string，submit 時 parse 成 int
+  // 是否有工藝（合夥人後加）— has_craft=true 時 craft_note 才有意義
+  has_craft: boolean;
+  craft_note: string;
   status: DraftStatus;
   errorMsg?: string;
   createdPosterId?: string;
@@ -122,6 +125,8 @@ export function newDraft(
     is_public: true,
     is_limited: false,
     limited_quantity: "",
+    has_craft: false,
+    craft_note: "",
     status: "idle",
   };
 }

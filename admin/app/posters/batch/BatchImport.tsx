@@ -446,6 +446,12 @@ export default function BatchImport({
               draft.is_limited && draft.limited_quantity.trim()
                 ? Number(draft.limited_quantity)
                 : null,
+            // 是否有工藝（合夥人後加）
+            has_craft: draft.has_craft,
+            craft_note:
+              draft.has_craft && draft.craft_note.trim()
+                ? draft.craft_note.trim()
+                : null,
           });
           if (!r.ok) throw new Error(r.error);
           posterId = r.data.id;

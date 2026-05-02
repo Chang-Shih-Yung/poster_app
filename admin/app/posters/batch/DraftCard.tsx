@@ -30,6 +30,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { FormField } from "@/components/ui/form-field";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -579,17 +580,15 @@ export function DraftCard({
             <FormField label="是否限量" size="compact">
               <div className="flex items-center gap-2 flex-wrap">
                 <label className="flex items-center gap-2 select-none cursor-pointer">
-                  <input
-                    type="checkbox"
+                  <Checkbox
                     checked={draft.is_limited}
-                    onChange={(e) =>
+                    onCheckedChange={(c) =>
                       onChange({
-                        is_limited: e.target.checked,
-                        ...(!e.target.checked && { limited_quantity: "" }),
+                        is_limited: c === true,
+                        ...(c !== true && { limited_quantity: "" }),
                       })
                     }
                     disabled={disabled}
-                    className="h-4 w-4 rounded border-input"
                   />
                   <span className="text-sm">
                     {draft.is_limited ? "限量" : "非限量"}
@@ -611,6 +610,37 @@ export function DraftCard({
                     />
                     <span className="text-xs text-muted-foreground">張</span>
                   </div>
+                )}
+              </div>
+            </FormField>
+
+            {/* ── 是否有工藝（合夥人後加） ────────────────────── */}
+            <FormField label="是否有工藝" size="compact">
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 select-none cursor-pointer">
+                  <Checkbox
+                    checked={draft.has_craft}
+                    onCheckedChange={(c) =>
+                      onChange({
+                        has_craft: c === true,
+                        ...(c !== true && { craft_note: "" }),
+                      })
+                    }
+                    disabled={disabled}
+                  />
+                  <span className="text-sm">
+                    {draft.has_craft ? "有工藝" : "無工藝"}
+                  </span>
+                </label>
+                {draft.has_craft && (
+                  <Textarea
+                    value={draft.craft_note}
+                    onChange={(e) =>
+                      onChange({ craft_note: e.target.value })
+                    }
+                    placeholder="例：燙金、立體浮雕、特殊紙材、絹印…"
+                    rows={2}
+                  />
                 )}
               </div>
             </FormField>
@@ -668,12 +698,10 @@ export function DraftCard({
 
             {/* ── #26 是否公開 ─────────────────────────────────── */}
             <label className="flex items-center gap-2 text-sm select-none cursor-pointer">
-              <input
-                type="checkbox"
+              <Checkbox
                 checked={draft.is_public}
-                onChange={(e) => onChange({ is_public: e.target.checked })}
+                onCheckedChange={(c) => onChange({ is_public: c === true })}
                 disabled={disabled}
-                className="h-4 w-4 rounded border-input"
               />
               <span>
                 {draft.is_public ? "公開" : "未公開（admin 限定）"}
